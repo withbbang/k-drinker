@@ -15,11 +15,11 @@
 
 ```bash
 # apps/web
-pnpm dev        # 개발 서버
+API_INTERNAL_URL=http://localhost:8080 pnpm dev   # 개발 서버 (이 변수 없으면 바로 종료)
 pnpm lint       # ESLint + Prettier 서식 검사
-pnpm format     # Prettier로 서식 정리
+pnpm format     # Prettier로 서식 정리 (.prettierrc.json)
 pnpm test       # Vitest (watch 아님, vitest run)
-pnpm build
+API_INTERNAL_URL=http://localhost:8080 pnpm build   # 이 변수 없으면 빌드 실패
 
 # apps/api
 ./gradlew bootRun
