@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @WebMvcTest(GlobalExceptionHandlerTest.TestController.class)
@@ -72,6 +73,27 @@ class GlobalExceptionHandlerTest {
 				.andExpect(jsonPath("$.error.fields[0].field").value("name"));
 	}
 
+	@Test
+	void 필수_파라미터가_없으면_400이다() throws Exception {
+		// when
+		var result = mockMvc.perform(get("/test/param"));
+
+		// then
+		result.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+	}
+
+	@Test
+	void 지원하지_않는_Content_Type이면_500이_아니라_400이다() throws Exception {
+		// when
+		var result = mockMvc.perform(
+				post("/test/validated").contentType(MediaType.TEXT_PLAIN).content("name"));
+
+		// then
+		result.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+	}
+
 	record NameRequest(@NotBlank String name) {
 	}
 
@@ -86,6 +108,10 @@ class GlobalExceptionHandlerTest {
 		@GetMapping("/test/business")
 		void business() {
 			throw new BusinessException(ErrorCode.AUTH_REQUIRED);
+		}
+
+		@GetMapping("/test/param")
+		void param(@RequestParam String q) {
 		}
 
 		@PostMapping("/test/validated")

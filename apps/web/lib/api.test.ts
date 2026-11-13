@@ -85,4 +85,51 @@ describe("apiFetch", () => {
       message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
     });
   });
+
+  it("throws COMMON_INTERNAL_ERROR when fetch itself rejects", async () => {
+    // given
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+    );
+
+    // when
+    const result = apiFetch("/api/v1/health");
+
+    // then
+    await expect(result).rejects.toMatchObject({
+      name: "ApiError",
+      code: "COMMON_INTERNAL_ERROR",
+      message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    });
+  });
+
+  it("rethrows AbortError so the query can be cancelled", async () => {
+    // given
+    const abort = new DOMException("aborted", "AbortError");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abort));
+
+    // when
+    const result = apiFetch("/api/v1/health");
+
+    // then
+    await expect(result).rejects.toBe(abort);
+  });
+
+  it("throws COMMON_INTERNAL_ERROR when JSON is not the response wrapper", async () => {
+    // given
+    stubFetch(
+      jsonResponse({ status: 500, error: "Internal Server Error" }, 500),
+    );
+
+    // when
+    const result = apiFetch("/api/v1/health");
+
+    // then
+    await expect(result).rejects.toMatchObject({
+      name: "ApiError",
+      code: "COMMON_INTERNAL_ERROR",
+      message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    });
+  });
 });

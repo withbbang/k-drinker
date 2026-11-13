@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -54,6 +55,10 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e) {
+		// 필수 파라미터 누락, 지원하지 않는 Content-Type 등 Spring MVC의 클라이언트 오류는 400으로 돌려준다.
+		if (e instanceof ErrorResponse errorResponse && errorResponse.getStatusCode().is4xxClientError()) {
+			return respond(ErrorCode.COMMON_VALIDATION_FAILED);
+		}
 		log.error("처리되지 않은 예외", e);
 		return respond(ErrorCode.COMMON_INTERNAL_ERROR);
 	}
