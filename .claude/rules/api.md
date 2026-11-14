@@ -16,3 +16,6 @@ paths:
 - 테스트: Service는 Mockito 단위 테스트, Controller는 `@WebMvcTest`, Repository는 `@DataJpaTest`. `@SpringBootTest`는 꼭 필요할 때만.
 - 난수: `java.security.SecureRandom` 을 빈으로 등록해 주입. `new Random()` 직접 생성 금지 → 테스트에서 시드 고정 불가.
 - Flyway 자바 마이그레이션(`db/migration/V*__*.java`)은 앱 코드(파싱·형식·통계)에 기대지 않고 로직을 자체에 고정한다. 적용된 마이그레이션은 고치지 말고 새 버전을 만든다.
+- 상태 변경: `Post.status`·`version`은 `updatable=false`라 엔티티 필드를 바꿔도 반영되지 않는다. `PostRepository.transition(id, from, to, expectedVersion, now)`로만 바꾸고, 다른 필드는 transition 전에 고친 뒤 transition 후 다시 조회한다.
+- 디스크 쓰기: 미디어 파일은 DB 커밋 뒤(`TransactionSynchronization.afterCommit`)에 공개 경로로 쓰고, 롤백되면 `afterCompletion`에서 지운다. 커밋 전에 공개 파일을 덮어쓰지 않는다.
+- 메모리: 운영 API는 `-Xmx512m` + `ExitOnOutOfMemoryError`. 사진 여러 장을 `byte[]`로 한꺼번에 들고 있지 말고, 한 장씩 읽고 처리한 뒤 놓는다.
