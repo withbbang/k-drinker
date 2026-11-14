@@ -57,7 +57,9 @@ public class Post {
 
 	private String hashtags;
 
+	/** transition 의 조건부 UPDATE 로만 바뀐다. 오래된 인스턴스가 덮어쓰지 못하도록 updatable=false. */
 	@Enumerated(EnumType.STRING)
+	@Column(updatable = false)
 	private PostStatus status;
 
 	@Enumerated(EnumType.STRING)
@@ -67,6 +69,7 @@ public class Post {
 	@Column(name = "failure_reason", length = 1000)
 	private String failureReason;
 
+	@Column(updatable = false)
 	private int version;
 
 	@Enumerated(EnumType.STRING)

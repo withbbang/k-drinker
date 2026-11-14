@@ -23,7 +23,7 @@ public class InstagramToken {
 	@Id
 	private Integer id;
 
-	@Column(name = "access_token")
+	@Column(name = "access_token", length = 1000)
 	private String accessToken;
 
 	@JdbcTypeCode(SqlTypes.TIMESTAMP)

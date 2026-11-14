@@ -58,6 +58,27 @@ class PostRepositoryTest {
 	}
 
 	@Test
+	void 오래된_인스턴스를_저장해도_전이된_상태와_버전을_덮어쓰지_않는다() {
+		// given
+		Post post = Post.receive(PostSource.TELEGRAM, "향이 좋다", null, CLOCK);
+		ReflectionTestUtils.setField(post, "status", PostStatus.PENDING_REVIEW);
+		Long id = postRepository.saveAndFlush(post).getId();
+		Post stale = postRepository.findById(id).orElseThrow();
+		postRepository.transition(id, PostStatus.PENDING_REVIEW, PostStatus.PUBLISHING, NOW.plusSeconds(60));
+
+		// when
+		stale.editCaption("수정한 캡션");
+		postRepository.saveAndFlush(stale);
+		em.clear();
+
+		// then
+		Post reloaded = postRepository.findById(id).orElseThrow();
+		assertThat(reloaded.getStatus()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(reloaded.getVersion()).isEqualTo(1);
+		assertThat(reloaded.getCaption()).isEqualTo("수정한 캡션");
+	}
+
+	@Test
 	void 사진은_position_순서로_조회된다() {
 		// given
 		Post post = postRepository.saveAndFlush(Post.receive(PostSource.SHARE, null, null, CLOCK));

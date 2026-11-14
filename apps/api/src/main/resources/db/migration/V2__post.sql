@@ -74,7 +74,7 @@ CREATE INDEX idx_post_photo_post_position ON post_photo (post_id, position);
 
 CREATE TABLE instagram_token (
     id            INT          NOT NULL,
-    access_token  VARCHAR(255) NOT NULL,
+    access_token  VARCHAR(1000) NOT NULL,
     expires_at    DATETIME(6)  NOT NULL,
     refreshed_at  DATETIME(6)  NOT NULL,
     PRIMARY KEY (id)
