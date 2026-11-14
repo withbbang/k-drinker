@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // 배포 이미지는 .next/standalone 의 server.js 만 실행한다 (deploy/compose.yml).
+  output: "standalone",
+  experimental: {
+    // /api/* 재작성 프록시는 요청 본문을 메모리에 버퍼링하며 기본 10MB에서 잘라 버린다.
+    // 사진 업로드(multipart)는 최대 210MB(apps/api application.yml의 max-request-size)라 여유 있게 올린다.
+    proxyClientMaxBodySize: "250mb",
+  },
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

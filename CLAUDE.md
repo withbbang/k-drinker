@@ -38,7 +38,7 @@ API_INTERNAL_URL=http://localhost:8080 pnpm build   # 이 변수 없으면 빌�
 - 커밋 전 바뀐 앱의 `lint`·`test` 통과. 커밋은 요청받았을 때만, 메시지는 **커밋 전에 `.gitmessage.txt`를 읽고** 그 정책대로 쓴다. 형식 `Type(scope) : 제목`, 타입 첫 글자 대문자 (예: `Feat : 로그인 기능 추가`). `-m`/`-F`는 템플릿을 거치지 않으니 직접 맞춘다. 위반 시 `.githooks/commit-msg`가 거부한다 (클론 후 1회: `git config --local commit.template ./.gitmessage.txt && git config --local core.hooksPath .githooks`).
 - 도메인 로직은 `apps/api` 한 곳에만. 프론트는 호출·표시만 한다.
 - `.env*` 파일은 읽지도 고치지도 않는다. 예시는 `.env.example`에만 쓴다. (훅으로 차단됨)
-- API 환경변수를 추가하면 `application.yml`·`apps/api/.env.example`(배포 설정이 생기면 그쪽 예시·문서도)을 함께 고친다.
+- API 환경변수를 추가하면 `application.yml`·`apps/api/.env.example`·`deploy/.env.example`·`deploy/compose.yml`(environment)·`deploy/README.md` 표를 함께 고친다.
 - API 응답 포맷·에러 코드는 `api-conventions` 스킬을 따른다. 임의로 새 포맷 만들지 않는다.
 - 텔레그램·캡션 문구를 바꾸면 `docs/telegram-messages.md`·`docs/instagram-caption.md`를 함께 고친다.
 - 모르는 라이브러리 API는 추측하지 말고 `node_modules` / Gradle 캐시의 실제 타입·소스를 읽는다.
