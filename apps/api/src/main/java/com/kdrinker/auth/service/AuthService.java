@@ -35,15 +35,15 @@ public class AuthService {
 	private final AuthSessionRepository sessionRepository;
 	private final AuthStateRepository stateRepository;
 	private final Clock clock;
-	// 유일한 인증 수단이므로 재현용 Random 빈과 분리해 항상 CSPRNG를 쓴다.
-	private final SecureRandom secureRandom = new SecureRandom();
+	private final SecureRandom secureRandom;
 	private final String secret;
 
 	public AuthService(AuthSessionRepository sessionRepository, AuthStateRepository stateRepository, Clock clock,
-			@Value("${app.auth.totp-secret}") String secret) {
+			SecureRandom secureRandom, @Value("${app.auth.totp-secret}") String secret) {
 		this.sessionRepository = sessionRepository;
 		this.stateRepository = stateRepository;
 		this.clock = clock;
+		this.secureRandom = secureRandom;
 		this.secret = requireValidSecret(secret);
 	}
 

@@ -1,7 +1,6 @@
 package com.kdrinker.common.config;
 
 import java.security.SecureRandom;
-import java.util.Random;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -9,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 public class RandomConfig {
 
 	@Bean
-	public Random random() {
+	public SecureRandom secureRandom() {
 		return new SecureRandom();
 	}
 

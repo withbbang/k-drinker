@@ -23,6 +23,7 @@ import com.kdrinker.common.ErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -277,7 +278,7 @@ class AuthServiceTest {
 	}
 
 	private AuthService serviceWith(String secret) {
-		return new AuthService(sessionRepository, stateRepository, clock, secret);
+		return new AuthService(sessionRepository, stateRepository, clock, new SecureRandom(), secret);
 	}
 
 	private void lockOut() {
