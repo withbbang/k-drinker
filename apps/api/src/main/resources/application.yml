@@ -5,3 +5,9 @@ spring:
     default: local
   jpa:
     open-in-view: false
+
+app:
+  auth:
+    enabled: true
+    totp-secret: ${TOTP_SECRET:}
+    cookie-secure: true
