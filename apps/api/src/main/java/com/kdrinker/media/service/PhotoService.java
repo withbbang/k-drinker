@@ -9,6 +9,7 @@ import com.kdrinker.media.PhotoTransformer;
 import com.kdrinker.post.entity.FitMode;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.repository.PostPhotoRepository;
+import java.io.UncheckedIOException;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -62,7 +63,14 @@ public class PhotoService {
 		}
 		return postPhotoRepository.findByPublicToken(token)
 				.map(PostPhoto::getRenderedPath)
-				.map(photoStorage::read);
+				.flatMap(path -> {
+					try {
+						return Optional.of(photoStorage.read(path));
+					} catch (UncheckedIOException e) {
+						// DB에는 있으나 파일이 없거나 읽을 수 없으면 없는 것으로 본다.
+						return Optional.empty();
+					}
+				});
 	}
 
 }

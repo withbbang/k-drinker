@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -59,7 +60,14 @@ public class PhotoStorage {
 		Path target = resolve(relativePath);
 		try {
 			Files.createDirectories(target.getParent());
-			Files.write(target, bytes);
+			// 같은 디렉터리의 임시 파일에 쓴 뒤 원자적으로 교체해, 읽는 쪽이 잘린 파일을 보지 않게 한다.
+			Path temp = Files.createTempFile(target.getParent(), ".tmp-", ".part");
+			try {
+				Files.write(temp, bytes);
+				Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} finally {
+				Files.deleteIfExists(temp);
+			}
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}

@@ -41,8 +41,23 @@ class MediaControllerTest {
 		// then
 		result.andExpect(status().isOk())
 				.andExpect(content().contentType(MediaType.IMAGE_JPEG))
-				.andExpect(header().string("Cache-Control", "max-age=31536000, public, immutable"))
+				.andExpect(header().string("Cache-Control", "no-cache, public"))
 				.andExpect(content().bytes(jpeg));
+	}
+
+	@Test
+	void 같은_ETag로_다시_요청하면_304다() throws Exception {
+		// given
+		byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF };
+		when(photoService.readRendered(TOKEN)).thenReturn(Optional.of(jpeg));
+		String etag = mockMvc.perform(get("/api/v1/media/" + TOKEN + ".jpg")).andReturn().getResponse()
+				.getHeader("ETag");
+
+		// when
+		var result = mockMvc.perform(get("/api/v1/media/" + TOKEN + ".jpg").header("If-None-Match", etag));
+
+		// then
+		result.andExpect(status().isNotModified());
 	}
 
 	@Test

@@ -34,6 +34,29 @@ class PhotoServiceTest {
 	}
 
 	@Test
+	void 형식이_틀린_토큰_여러_종류는_모두_비어_있고_DB를_조회하지_않는다() {
+		// when / then
+		assertThat(service.readRendered("abc")).isEmpty();
+		assertThat(service.readRendered("a".repeat(42))).isEmpty();
+		assertThat(service.readRendered("..%2F..%2Fetc%2Fpasswd")).isEmpty();
+		assertThat(service.readRendered("a".repeat(44))).isEmpty();
+		verifyNoInteractions(repository, storage);
+	}
+
+	@Test
+	void DB에는_있지만_파일이_없으면_비어_있다() {
+		// given
+		PostPhoto photo = PostPhoto.of(null, 0, "original/1/0.jpg", TOKEN, FitMode.CROP);
+		photo.attachRendered("rendered/" + TOKEN + ".jpg");
+		when(repository.findByPublicToken(TOKEN)).thenReturn(Optional.of(photo));
+		when(storage.read("rendered/" + TOKEN + ".jpg"))
+				.thenThrow(new java.io.UncheckedIOException(new java.nio.file.NoSuchFileException("x")));
+
+		// when / then
+		assertThat(service.readRendered(TOKEN)).isEmpty();
+	}
+
+	@Test
 	void DB에_있는_토큰이면_렌더링_파일을_읽는다() {
 		// given
 		PostPhoto photo = PostPhoto.of(null, 0, "original/1/0.jpg", TOKEN, FitMode.CROP);

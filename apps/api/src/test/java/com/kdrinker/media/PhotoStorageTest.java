@@ -32,6 +32,22 @@ class PhotoStorageTest {
 	}
 
 	@Test
+	void 렌더링_파일을_덮어써도_임시_파일이_남지_않는다() throws Exception {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+		storage.saveRendered(TOKEN, new byte[] { 1 });
+
+		// when
+		storage.saveRendered(TOKEN, new byte[] { 2, 3 });
+
+		// then
+		assertThat(storage.read("rendered/" + TOKEN + ".jpg")).containsExactly(2, 3);
+		try (var files = Files.list(dir.resolve("rendered"))) {
+			assertThat(files.toList()).hasSize(1);
+		}
+	}
+
+	@Test
 	void 저장된_경로가_MEDIA_DIR_밖을_가리키면_읽지_않는다() {
 		// given
 		PhotoStorage storage = new PhotoStorage(dir.toString());

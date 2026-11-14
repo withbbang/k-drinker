@@ -51,6 +51,16 @@ class GlobalExceptionHandlerTest {
 	}
 
 	@Test
+	void 업로드_크기_초과는_POST_PHOTO_TOO_LARGE_400이다() throws Exception {
+		// when
+		var result = mockMvc.perform(get("/test/too-large"));
+
+		// then
+		result.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("POST_PHOTO_TOO_LARGE"));
+	}
+
+	@Test
 	void BusinessException은_ErrorCode의_상태와_메시지로_변환된다() throws Exception {
 		// when
 		var result = mockMvc.perform(get("/test/business"));
@@ -108,6 +118,11 @@ class GlobalExceptionHandlerTest {
 		@GetMapping("/test/business")
 		void business() {
 			throw new BusinessException(ErrorCode.AUTH_REQUIRED);
+		}
+
+		@GetMapping("/test/too-large")
+		void tooLarge() {
+			throw new org.springframework.web.multipart.MaxUploadSizeExceededException(1L);
 		}
 
 		@GetMapping("/test/param")
