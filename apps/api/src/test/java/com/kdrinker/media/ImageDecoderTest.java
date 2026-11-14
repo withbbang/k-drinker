@@ -89,6 +89,73 @@ class ImageDecoderTest {
 				.extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.MEDIA_UNSUPPORTED_TYPE);
 	}
 
+	@Test
+	void 긴_변이_4320을_넘으면_서브샘플링해_읽는다() throws IOException {
+		// given
+		byte[] png = encode(new BufferedImage(4400, 100, BufferedImage.TYPE_INT_RGB), "png");
+
+		// when
+		BufferedImage decoded = decoder.decode(png);
+
+		// then
+		assertThat(Math.max(decoded.getWidth(), decoded.getHeight())).isLessThanOrEqualTo(4320);
+		assertThat(decoded.getWidth()).isEqualTo(2200);
+	}
+
+	@Test
+	void 서브샘플링_배율은_긴_변이_4320_이하가_되는_최소값이다() {
+		// when, then
+		assertThat(ImageDecoder.subsampling(4320, 100)).isEqualTo(1);
+		assertThat(ImageDecoder.subsampling(4321, 100)).isEqualTo(2);
+		assertThat(ImageDecoder.subsampling(9000, 6000)).isEqualTo(3);
+		assertThat(ImageDecoder.subsampling(100, 14000)).isEqualTo(4);
+	}
+
+	@Test
+	void EXIF_방향_6이면_왼쪽_위_표시가_오른쪽_위로_간다() throws IOException {
+		// given
+		byte[] jpeg = withOrientation(encode(markedImage(), "jpg"), 6);
+
+		// when
+		BufferedImage decoded = decoder.decode(jpeg);
+
+		// then
+		assertThat(isRed(decoded.getRGB(250, 50))).isTrue();
+		assertThat(isRed(decoded.getRGB(50, 50))).isFalse();
+		assertThat(isRed(decoded.getRGB(50, 350))).isFalse();
+	}
+
+	@Test
+	void EXIF_방향_2이면_좌우가_뒤집혀_표시가_오른쪽_위로_간다() throws IOException {
+		// given
+		byte[] jpeg = withOrientation(encode(markedImage(), "jpg"), 2);
+
+		// when
+		BufferedImage decoded = decoder.decode(jpeg);
+
+		// then
+		assertThat(decoded.getWidth()).isEqualTo(400);
+		assertThat(isRed(decoded.getRGB(350, 50))).isTrue();
+		assertThat(isRed(decoded.getRGB(50, 50))).isFalse();
+		assertThat(isRed(decoded.getRGB(50, 250))).isFalse();
+	}
+
+	/** 400x300 흰색, 왼쪽 위 100x100만 빨강. */
+	private static BufferedImage markedImage() {
+		BufferedImage img = new BufferedImage(400, 300, BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = img.createGraphics();
+		g.setColor(java.awt.Color.WHITE);
+		g.fillRect(0, 0, 400, 300);
+		g.setColor(java.awt.Color.RED);
+		g.fillRect(0, 0, 100, 100);
+		g.dispose();
+		return img;
+	}
+
+	private static boolean isRed(int rgb) {
+		return ((rgb >> 16) & 0xFF) > 180 && ((rgb >> 8) & 0xFF) < 100 && (rgb & 0xFF) < 100;
+	}
+
 	private static byte[] encode(BufferedImage image, String format) throws IOException {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		ImageIO.write(image, format, out);

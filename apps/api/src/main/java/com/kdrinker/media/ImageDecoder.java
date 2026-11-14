@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import org.springframework.stereotype.Component;
@@ -21,7 +22,10 @@ import org.springframework.stereotype.Component;
 public class ImageDecoder {
 
 	/** 디코딩 폭탄(작은 파일이 거대한 래스터로 풀리는 경우) 방지용 상한. */
-	static final long MAX_PIXELS = 50_000_000L;
+	static final long MAX_PIXELS = 250_000_000L;
+
+	/** 디코딩 결과의 긴 변 상한(출력 1080의 4배). 넘으면 서브샘플링으로 줄여 읽는다. */
+	static final int MAX_LONG_SIDE = 4320;
 
 	public BufferedImage decode(byte[] bytes) {
 		boolean jpeg = isJpeg(bytes);
@@ -31,10 +35,9 @@ public class ImageDecoder {
 		try {
 			BufferedImage image = read(bytes);
 			return jpeg ? applyOrientation(image, readOrientation(bytes)) : image;
+		} catch (BusinessException e) {
+			throw e;
 		} catch (IOException | RuntimeException e) {
-			if (e instanceof BusinessException be) {
-				throw be;
-			}
 			throw unsupported();
 		}
 	}
@@ -52,11 +55,22 @@ public class ImageDecoder {
 				if (pixels > MAX_PIXELS) {
 					throw unsupported();
 				}
-				return reader.read(0);
+				ImageReadParam param = reader.getDefaultReadParam();
+				int s = subsampling(reader.getWidth(0), reader.getHeight(0));
+				if (s > 1) {
+					param.setSourceSubsampling(s, s, 0, 0);
+				}
+				return reader.read(0, param);
 			} finally {
 				reader.dispose();
 			}
 		}
+	}
+
+	/** 디코딩된 긴 변이 MAX_LONG_SIDE 이하가 되는 가장 작은 서브샘플링 배율. */
+	static int subsampling(int width, int height) {
+		int longSide = Math.max(width, height);
+		return Math.max(1, (longSide + MAX_LONG_SIDE - 1) / MAX_LONG_SIDE);
 	}
 
 	private int readOrientation(byte[] bytes) {

@@ -71,6 +71,24 @@ class PhotoTransformerTest {
 		assertThat(isRed(out.getRGB(540, 5))).isTrue();
 	}
 
+	@Test
+	void 큰_원본을_줄여도_세밀한_줄무늬가_회색으로_평균된다() throws IOException {
+		// given: 1픽셀 간격 흑백 세로줄무늬 4320x5400 (4배 축소)
+		BufferedImage src = new BufferedImage(4320, 5400, BufferedImage.TYPE_INT_RGB);
+		for (int y = 0; y < src.getHeight(); y++) {
+			for (int x = 0; x < src.getWidth(); x++) {
+				src.setRGB(x, y, x % 2 == 0 ? 0xFFFFFF : 0x000000);
+			}
+		}
+
+		// when
+		BufferedImage out = decode(transformer.render(src, null, FitMode.CROP));
+
+		// then: 에일리어싱이면 흑/백으로 갈리고, 제대로 줄이면 중간 회색이다
+		int v = out.getRGB(540, 675) & 0xFF;
+		assertThat(v).isBetween(90, 165);
+	}
+
 	private static BufferedImage decode(byte[] jpeg) throws IOException {
 		return ImageIO.read(new ByteArrayInputStream(jpeg));
 	}

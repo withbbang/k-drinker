@@ -44,7 +44,7 @@ public class PhotoTransformer {
 
 	private void drawCrop(Graphics2D g, BufferedImage src, FocusBox focus) {
 		int[] r = cropRect(src.getWidth(), src.getHeight(), focus);
-		g.drawImage(src, 0, 0, WIDTH, HEIGHT, r[0], r[1], r[2], r[3], null);
+		g.drawImage(downscale(src.getSubimage(r[0], r[1], r[2] - r[0], r[3] - r[1]), WIDTH, HEIGHT), 0, 0, null);
 	}
 
 	/** 반환값은 {x1, y1, x2, y2}. 창이 원본 밖으로 나가면 경계 안으로 민다. */
@@ -83,7 +83,26 @@ public class PhotoTransformer {
 		double scale = Math.min((double) WIDTH / src.getWidth(), (double) HEIGHT / src.getHeight());
 		int fw = Math.max(1, (int) Math.round(src.getWidth() * scale));
 		int fh = Math.max(1, (int) Math.round(src.getHeight() * scale));
-		g.drawImage(src, (WIDTH - fw) / 2, (HEIGHT - fh) / 2, fw, fh, null);
+		g.drawImage(downscale(src, fw, fh), (WIDTH - fw) / 2, (HEIGHT - fh) / 2, null);
+	}
+
+	/** 목표 크기의 2배 이상인 동안 bilinear로 절반씩 줄이고, 마지막에 bicubic으로 정확한 크기에 맞춘다. */
+	static BufferedImage downscale(BufferedImage src, int tw, int th) {
+		BufferedImage cur = src;
+		while (cur.getWidth() / 2 >= tw && cur.getHeight() / 2 >= th) {
+			cur = resize(cur, cur.getWidth() / 2, cur.getHeight() / 2, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		}
+		return resize(cur, tw, th, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+	}
+
+	private static BufferedImage resize(BufferedImage src, int w, int h, Object interpolation) {
+		BufferedImage dst = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+		Graphics2D g = dst.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, interpolation);
+		g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+		g.drawImage(src, 0, 0, w, h, null);
+		g.dispose();
+		return dst;
 	}
 
 	private static double clamp(double v, double min, double max) {
