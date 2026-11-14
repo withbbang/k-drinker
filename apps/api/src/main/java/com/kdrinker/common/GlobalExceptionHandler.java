@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -46,6 +47,11 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler({ HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class })
 	public ResponseEntity<ApiResponse<Void>> handleUnreadable(Exception e) {
 		return respond(ErrorCode.COMMON_VALIDATION_FAILED);
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<ApiResponse<Void>> handleTooLarge(MaxUploadSizeExceededException e) {
+		return respond(ErrorCode.POST_PHOTO_TOO_LARGE);
 	}
 
 	@ExceptionHandler({ NoResourceFoundException.class, HttpRequestMethodNotSupportedException.class })

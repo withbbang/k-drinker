@@ -42,6 +42,17 @@ public class ImageDecoder {
 		}
 	}
 
+	/** 내용(매직 바이트)으로 확장자를 판별한다. "jpg" 또는 "png". 그 외는 MEDIA_UNSUPPORTED_TYPE. */
+	public String detectFormat(byte[] bytes) {
+		if (isJpeg(bytes)) {
+			return "jpg";
+		}
+		if (isPng(bytes)) {
+			return "png";
+		}
+		throw unsupported();
+	}
+
 	private BufferedImage read(byte[] bytes) throws IOException {
 		try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
 			Iterator<ImageReader> readers = ImageIO.getImageReaders(in);

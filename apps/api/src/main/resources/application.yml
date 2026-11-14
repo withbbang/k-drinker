@@ -5,8 +5,15 @@ spring:
     default: local
   jpa:
     open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 210MB
 
 app:
+  media:
+    dir: ${MEDIA_DIR:./.data/media}
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   auth:
     enabled: true
     totp-secret: ${TOTP_SECRET:}
