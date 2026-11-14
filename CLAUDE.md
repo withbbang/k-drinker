@@ -40,6 +40,7 @@ API_INTERNAL_URL=http://localhost:8080 pnpm build   # 이 변수 없으면 빌�
 - `.env*` 파일은 읽지도 고치지도 않는다. 예시는 `.env.example`에만 쓴다. (훅으로 차단됨)
 - API 환경변수를 추가하면 `application.yml`·`apps/api/.env.example`(배포 설정이 생기면 그쪽 예시·문서도)을 함께 고친다.
 - API 응답 포맷·에러 코드는 `api-conventions` 스킬을 따른다. 임의로 새 포맷 만들지 않는다.
+- 텔레그램·캡션 문구를 바꾸면 `docs/telegram-messages.md`·`docs/instagram-caption.md`를 함께 고친다.
 - 모르는 라이브러리 API는 추측하지 말고 `node_modules` / Gradle 캐시의 실제 타입·소스를 읽는다.
 
 ## 더 읽을 곳 (필요할 때만 로드됨)
@@ -48,4 +49,5 @@ API_INTERNAL_URL=http://localhost:8080 pnpm build   # 이 변수 없으면 빌�
 - 절차 → `/new-feature` (API→웹 기능 구현), `/review` (diff 점검), `/release` (배포 전 체크)
 - 참조 → `api-conventions` 스킬 (URL · 응답 래퍼 · 에러 코드 · 페이징)
 - 격리 작업 → `code-reviewer`, `test-runner` 서브에이전트 (`.claude/agents/`)
+- 문구 → `docs/telegram-messages.md` (텔레그램 메시지·버튼), `docs/instagram-caption.md` (캡션·해시태그 규칙)
 - 개인 메모 → `CLAUDE.local.md` (gitignore 됨)
