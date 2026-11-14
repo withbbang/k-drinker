@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldRetry } from "@/components/providers/QueryProvider";
+import { loginUrlFor, shouldRetry } from "@/components/providers/QueryProvider";
 import { ApiError } from "@/lib/api";
 
 describe("shouldRetry", () => {
@@ -27,5 +27,17 @@ describe("shouldRetry", () => {
 
     // then
     expect(retries).toEqual([true, true, true, false]);
+  });
+});
+
+describe("loginUrlFor", () => {
+  it("carries the current path and query as next", () => {
+    expect(loginUrlFor("/share", "?id=1")).toBe(
+      "/login?next=%2Fshare%3Fid%3D1",
+    );
+  });
+
+  it("omits next for the home path", () => {
+    expect(loginUrlFor("/", "")).toBe("/login");
   });
 });
