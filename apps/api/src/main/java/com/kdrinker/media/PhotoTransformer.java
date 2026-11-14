@@ -64,8 +64,16 @@ public class PhotoTransformer {
 		double top = clamp(cy - ch / 2, 0, h - ch);
 		int x1 = (int) Math.round(left);
 		int y1 = (int) Math.round(top);
-		int x2 = Math.min(w, (int) Math.round(left + cw));
-		int y2 = Math.min(h, (int) Math.round(top + ch));
+		int x2 = Math.max(x1 + 1, Math.min(w, (int) Math.round(left + cw)));
+		int y2 = Math.max(y1 + 1, Math.min(h, (int) Math.round(top + ch)));
+		if (x2 > w) {
+			x1 = w - 1;
+			x2 = w;
+		}
+		if (y2 > h) {
+			y1 = h - 1;
+			y2 = h;
+		}
 		return new int[] {x1, y1, x2, y2};
 	}
 

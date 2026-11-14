@@ -161,4 +161,37 @@ class SessionAuthFilterTest {
 		assertThat(response.getContentAsString(StandardCharsets.UTF_8)).contains("\"code\":\"AUTH_REQUIRED\"");
 	}
 
+	@Test
+	void 미디어_경로에_점점을_섞어_다른_경로로_우회하면_세션이_필요하다() throws ServletException, IOException {
+		// given
+		String[] uris = {"/api/v1/media/../posts/5", "/api/v1/media/%2e%2e/posts/5", "/api/v1/media/%2E%2E/posts/5",
+				"/api/v1/media/..%2fposts/5", "/api/v1/media/a;x=1", "/api/v1/media/a\\b"};
+
+		for (String uri : uris) {
+			MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
+			MockHttpServletResponse res = new MockHttpServletResponse();
+			MockFilterChain c = new MockFilterChain();
+
+			// when
+			filter.doFilter(request, res, c);
+
+			// then
+			assertThat(c.getRequest()).as(uri).isNull();
+			assertThat(res.getStatus()).as(uri).isEqualTo(401);
+		}
+	}
+
+	@Test
+	void 미디어_경로의_POST는_세션이_필요하다() throws ServletException, IOException {
+		// given
+		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/media/abc.jpg");
+
+		// when
+		filter.doFilter(request, response, chain);
+
+		// then
+		assertThat(chain.getRequest()).isNull();
+		assertThat(response.getStatus()).isEqualTo(401);
+	}
+
 }

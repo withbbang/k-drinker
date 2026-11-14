@@ -58,6 +58,32 @@ class PostRepositoryTest {
 	}
 
 	@Test
+	void 버전이_다르면_전이하지_않고_맞으면_전이하며_버전을_올린다() {
+		// given
+		Post post = Post.receive(PostSource.TELEGRAM, "향이 좋다", null, CLOCK);
+		ReflectionTestUtils.setField(post, "status", PostStatus.PENDING_REVIEW);
+		Long id = postRepository.saveAndFlush(post).getId();
+		Instant later = NOW.plusSeconds(60);
+
+		// when
+		int mismatch = postRepository.transition(id, PostStatus.PENDING_REVIEW, PostStatus.PUBLISHING, 5, later);
+		Post unchanged = postRepository.findById(id).orElseThrow();
+		PostStatus statusAfterMismatch = unchanged.getStatus();
+		long versionAfterMismatch = unchanged.getVersion();
+		int match = postRepository.transition(id, PostStatus.PENDING_REVIEW, PostStatus.PUBLISHING, 0, later);
+
+		// then
+		Post reloaded = postRepository.findById(id).orElseThrow();
+		assertThat(mismatch).isZero();
+		assertThat(statusAfterMismatch).isEqualTo(PostStatus.PENDING_REVIEW);
+		assertThat(versionAfterMismatch).isZero();
+		assertThat(match).isEqualTo(1);
+		assertThat(reloaded.getStatus()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(reloaded.getVersion()).isEqualTo(1);
+		assertThat(reloaded.getUpdatedAt()).isEqualTo(later);
+	}
+
+	@Test
 	void 오래된_인스턴스를_저장해도_전이된_상태와_버전을_덮어쓰지_않는다() {
 		// given
 		Post post = Post.receive(PostSource.TELEGRAM, "향이 좋다", null, CLOCK);

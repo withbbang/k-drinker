@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -57,13 +58,27 @@ public class SessionAuthFilter extends OncePerRequestFilter {
 
 	private static boolean isPublic(HttpServletRequest request) {
 		String method = request.getMethod();
-		String path = request.getRequestURI();
+		String uri = request.getRequestURI();
+		if (uri == null || isSuspicious(uri)) {
+			return false;
+		}
+		String contextPath = request.getContextPath();
+		String path = contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath)
+				? uri.substring(contextPath.length())
+				: uri;
 		if (PUBLIC_PREFIXES.stream().anyMatch(path::startsWith)) {
 			return "GET".equals(method);
 		}
 		return PUBLIC_PATHS.contains(path)
 				&& ("GET".equals(method) && path.equals(PUBLIC_PATHS.get(0))
 						|| "POST".equals(method) && path.equals(PUBLIC_PATHS.get(1)));
+	}
+
+	/** 경로 우회(.. · 인코딩된 점/슬래시 · 역슬래시 · 세미콜론)가 가능한 요청은 공개로 보지 않는다. */
+	private static boolean isSuspicious(String uri) {
+		String lower = uri.toLowerCase(Locale.ROOT);
+		return lower.contains("..") || lower.contains("%2e") || lower.contains("%2f") || lower.contains("\\")
+				|| lower.contains("%5c") || lower.contains(";");
 	}
 
 	private static String sessionToken(HttpServletRequest request) {

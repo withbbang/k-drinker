@@ -33,6 +33,23 @@ class PhotoTransformerTest {
 	}
 
 	@Test
+	void 극단적으로_가늘거나_납작한_원본도_1080x1350이다() throws IOException {
+		// given
+		int[][] sizes = {{3000, 1}, {1, 3000}};
+
+		for (int[] size : sizes) {
+			for (FitMode mode : FitMode.values()) {
+				// when
+				BufferedImage out = decode(transformer.render(solid(size[0], size[1], Color.GREEN), null, mode));
+
+				// then
+				assertThat(out.getWidth()).as("%dx%d %s", size[0], size[1], mode).isEqualTo(1080);
+				assertThat(out.getHeight()).as("%dx%d %s", size[0], size[1], mode).isEqualTo(1350);
+			}
+		}
+	}
+
+	@Test
 	void focus를_중심으로_자른다() throws IOException {
 		// given: 왼쪽 절반 빨강, 오른쪽 절반 파랑
 		BufferedImage src = redBlue(1000, 500);
