@@ -7,11 +7,18 @@ describe("safeNext", () => {
     expect(safeNext("/share?id=1")).toBe("/share?id=1");
   });
 
+  it("keeps a percent-encoded tab, which stays a path", () => {
+    expect(safeNext("/%09/evil.com")).toBe("/%09/evil.com");
+  });
+
   it.each([
     ["//evil.com"],
     ["/\\evil.com"],
     ["https://x"],
     ["javascript:alert(1)"],
+    ["/\t/evil.com"],
+    ["/\n/evil.com"],
+    ["/\r/evil.com"],
     ["share"],
     [""],
     [null],
