@@ -51,7 +51,7 @@ class PostControllerTest {
 	private void stubReceive() {
 		Post saved = Post.receive(PostSource.SHARE, "맛있다", null, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
 		ReflectionTestUtils.setField(saved, "id", 42L);
-		when(postIntakeService.receive(eq(PostSource.SHARE), any(), any(), any())).thenReturn(saved);
+		when(postIntakeService.receiveInputs(eq(PostSource.SHARE), any(), any(), any())).thenReturn(saved);
 	}
 
 	@Test

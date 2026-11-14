@@ -22,8 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnProperty("app.auth.enabled")
 public class SessionController {
 
-	private static final Duration COOKIE_LIFETIME = Duration.ofDays(90);
-
 	private final AuthService authService;
 	private final boolean cookieSecure;
 
@@ -35,7 +33,7 @@ public class SessionController {
 	@PostMapping
 	public ResponseEntity<Void> create(@Valid @RequestBody SessionCreateRequest request) {
 		String token = authService.login(request.code());
-		return withCookie(token, COOKIE_LIFETIME);
+		return withCookie(token, AuthService.SESSION_LIFETIME);
 	}
 
 	@DeleteMapping

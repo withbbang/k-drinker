@@ -22,3 +22,12 @@ app:
     enabled: true
     totp-secret: ${TOTP_SECRET:}
     cookie-secure: true
+  # P2/P3에서 사용. 지금은 비어 있어도 기동에 영향 없다.
+  telegram:
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    chat-id: ${TELEGRAM_CHAT_ID:}
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:}
+  instagram:
+    access-token: ${INSTAGRAM_ACCESS_TOKEN:}
+    user-id: ${INSTAGRAM_USER_ID:}

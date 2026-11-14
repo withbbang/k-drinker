@@ -51,7 +51,14 @@ public class GlobalExceptionHandler {
 
 	@ExceptionHandler(MaxUploadSizeExceededException.class)
 	public ResponseEntity<ApiResponse<Void>> handleTooLarge(MaxUploadSizeExceededException e) {
-		return respond(ErrorCode.POST_PHOTO_TOO_LARGE);
+		// 파일 하나가 한도를 넘은 경우(FileSizeLimitExceededException)만 사진 한 장 초과로 본다.
+		// Tomcat 내부 클래스에 컴파일 의존하지 않도록 원인 사슬의 클래스 이름으로 판별한다.
+		for (Throwable cause = e; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
+			if (cause.getClass().getSimpleName().equals("FileSizeLimitExceededException")) {
+				return respond(ErrorCode.POST_PHOTO_TOO_LARGE);
+			}
+		}
+		return respond(ErrorCode.POST_REQUEST_TOO_LARGE);
 	}
 
 	@ExceptionHandler({ NoResourceFoundException.class, HttpRequestMethodNotSupportedException.class })

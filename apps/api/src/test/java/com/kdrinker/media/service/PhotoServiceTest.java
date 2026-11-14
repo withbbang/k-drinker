@@ -1,7 +1,11 @@
 package com.kdrinker.media.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +17,8 @@ import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class PhotoServiceTest {
 
@@ -69,6 +75,70 @@ class PhotoServiceTest {
 
 		// then
 		assertThat(result).hasValueSatisfying(b -> assertThat(b).containsExactly(9));
+	}
+
+	private PostPhoto photoWithOriginal() throws Exception {
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(60, 40, java.awt.image.BufferedImage.TYPE_INT_RGB),
+				"jpg", out);
+		PostPhoto photo = PostPhoto.of(null, 0, "original/1/0.jpg", TOKEN, FitMode.CROP);
+		photo.attachRendered("rendered/" + TOKEN + ".jpg");
+		when(repository.findById(1L)).thenReturn(Optional.of(photo));
+		when(storage.read("original/1/0.jpg")).thenReturn(out.toByteArray());
+		return photo;
+	}
+
+	@Test
+	void 재렌더링은_커밋_뒤에_파일을_덮어쓴다() throws Exception {
+		// given
+		photoWithOriginal();
+		TransactionSynchronizationManager.initSynchronization();
+
+		try {
+			// when
+			service.rerender(1L, null, FitMode.PAD);
+
+			// then 커밋 전에는 공개 파일을 건드리지 않는다
+			verify(storage, never()).saveRendered(any(), any());
+			for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+				sync.afterCommit();
+			}
+			verify(storage).saveRendered(eq(TOKEN), any());
+		} finally {
+			TransactionSynchronizationManager.clearSynchronization();
+		}
+	}
+
+	@Test
+	void 재렌더링_트랜잭션이_롤백되면_파일은_그대로다() throws Exception {
+		// given
+		photoWithOriginal();
+		TransactionSynchronizationManager.initSynchronization();
+
+		try {
+			// when
+			service.rerender(1L, null, FitMode.PAD);
+			for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+				sync.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+			}
+
+			// then
+			verify(storage, never()).saveRendered(any(), any());
+		} finally {
+			TransactionSynchronizationManager.clearSynchronization();
+		}
+	}
+
+	@Test
+	void 트랜잭션이_없으면_재렌더링_파일을_바로_쓴다() throws Exception {
+		// given
+		photoWithOriginal();
+
+		// when
+		service.rerender(1L, null, FitMode.PAD);
+
+		// then
+		verify(storage).saveRendered(eq(TOKEN), any());
 	}
 
 	@Test

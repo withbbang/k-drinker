@@ -1,15 +1,13 @@
 package com.kdrinker.post.controller;
 
 import com.kdrinker.common.ApiResponse;
-import com.kdrinker.common.BusinessException;
-import com.kdrinker.common.ErrorCode;
 import com.kdrinker.post.dto.PostCreateResponse;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostSource;
+import com.kdrinker.post.service.PhotoInput;
 import com.kdrinker.post.service.PostIntakeService;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,17 +34,25 @@ public class PostController {
 			@RequestParam("source") PostSource source) {
 		List<MultipartFile> files = photos == null ? List.of() : photos;
 		PostIntakeService.validate(files.size(), memo, rating);
-		List<byte[]> bytes = new ArrayList<>();
-		for (MultipartFile file : files) {
-			try {
-				bytes.add(file.getBytes());
-			} catch (IOException e) {
-				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-			}
-		}
-		Post post = postIntakeService.receive(source, memo, rating, bytes);
+		List<PhotoInput> inputs = files.stream().map(PostController::toInput).toList();
+		Post post = postIntakeService.receiveInputs(source, memo, rating, inputs);
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(ApiResponse.success(new PostCreateResponse(post.getId(), post.getStatus().name())));
+	}
+
+	/** 업로드 파일을 읽는 시점까지 미루는 입력. 서비스가 한 장씩 읽는다. */
+	private static PhotoInput toInput(MultipartFile file) {
+		return new PhotoInput() {
+			@Override
+			public long size() {
+				return file.getSize();
+			}
+
+			@Override
+			public byte[] readAllBytes() throws IOException {
+				return file.getBytes();
+			}
+		};
 	}
 
 }

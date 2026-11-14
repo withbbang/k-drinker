@@ -8,16 +8,14 @@ import com.kdrinker.auth.repository.AuthSessionRepository;
 import com.kdrinker.auth.repository.AuthStateRepository;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
+import com.kdrinker.common.Hashes;
+import com.kdrinker.common.Tokens;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.HexFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -28,8 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty("app.auth.enabled")
 public class AuthService {
 
-	private static final Duration SESSION_LIFETIME = Duration.ofDays(90);
-	private static final int TOKEN_BYTES = 32;
+	public static final Duration SESSION_LIFETIME = Duration.ofDays(90);
 	private static final int MIN_SECRET_BYTES = 16;
 
 	private final AuthSessionRepository sessionRepository;
@@ -64,7 +61,7 @@ public class AuthService {
 		}
 
 		state.recordSuccess(step);
-		String token = newToken();
+		String token = Tokens.random(secureRandom);
 		sessionRepository.save(new AuthSession(sha256(token), now, now.plus(SESSION_LIFETIME)));
 		return token;
 	}
@@ -102,12 +99,6 @@ public class AuthService {
 				.orElseThrow(() -> new IllegalStateException("auth_state 행이 없습니다."));
 	}
 
-	private String newToken() {
-		byte[] bytes = new byte[TOKEN_BYTES];
-		secureRandom.nextBytes(bytes);
-		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-	}
-
 	private static String requireValidSecret(String secret) {
 		if (secret == null || secret.isBlank()) {
 			throw new IllegalStateException("인증이 켜져 있으면 TOTP_SECRET이 필요합니다.");
@@ -125,12 +116,7 @@ public class AuthService {
 	}
 
 	private static String sha256(String value) {
-		try {
-			MessageDigest digest = MessageDigest.getInstance("SHA-256");
-			return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException("SHA-256을 사용할 수 없습니다.");
-		}
+		return Hashes.sha256Hex(value.getBytes(StandardCharsets.UTF_8));
 	}
 
 }

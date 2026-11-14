@@ -1,10 +1,7 @@
 package com.kdrinker.media.controller;
 
+import com.kdrinker.common.Hashes;
 import com.kdrinker.media.service.PhotoService;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -29,21 +26,13 @@ public class MediaController {
 	@GetMapping("/{token}.jpg")
 	public ResponseEntity<byte[]> get(@PathVariable("token") String token, WebRequest request) {
 		return photoService.readRendered(token).map(bytes -> {
-			String etag = "\"" + sha256(bytes) + "\"";
+			String etag = "\"" + Hashes.sha256Hex(bytes) + "\"";
 			CacheControl cache = CacheControl.noCache().cachePublic();
 			if (request.checkNotModified(etag)) {
 				return ResponseEntity.status(304).eTag(etag).cacheControl(cache).<byte[]>build();
 			}
 			return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).eTag(etag).cacheControl(cache).body(bytes);
 		}).orElseGet(() -> ResponseEntity.notFound().build());
-	}
-
-	private static String sha256(byte[] bytes) {
-		try {
-			return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException(e);
-		}
 	}
 
 }

@@ -2,6 +2,7 @@ package com.kdrinker.post.service;
 
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
+import com.kdrinker.common.Tokens;
 import com.kdrinker.media.ImageDecoder;
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.media.PhotoTransformer;
@@ -12,17 +13,18 @@ import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.event.PostReceivedEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
-import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -59,53 +61,88 @@ public class PostIntakeService {
 		}
 	}
 
-	/**
-	 * 사진을 한 장씩 디코드해 CROP·focus 없음으로 렌더링한다. 디코드한 이미지는 바로 버려 한 번에 한 장만 메모리에 둔다.
-	 * 모든 사진이 성공한 뒤에야 게시물과 파일을 저장하므로, 중간에 실패하면 아무것도 남지 않는다.
-	 */
+	/** 바이트 배열 목록 버전. 텔레그램 봇처럼 이미 메모리에 있는 사진을 넘길 때 쓴다. */
 	@Transactional
 	public Post receive(PostSource source, String memo, BigDecimal rating, List<byte[]> photos) {
-		validate(photos.size(), memo, rating);
-		List<Prepared> prepared = new ArrayList<>();
-		for (byte[] original : photos) {
-			if (original.length > MAX_PHOTO_BYTES) {
-				throw new BusinessException(ErrorCode.POST_PHOTO_TOO_LARGE);
-			}
-			String format = imageDecoder.detectFormat(original);
-			BufferedImage image = imageDecoder.decode(original);
-			byte[] rendered = photoTransformer.render(image, null, FitMode.CROP);
-			prepared.add(new Prepared(original, format, rendered));
-		}
+		return receiveInputs(source, memo, rating, photos.stream().map(PhotoInput::of).toList());
+	}
 
-		Post post = postRepository.save(Post.receive(source, memo, rating, clock));
+	/**
+	 * 사진을 한 장씩 읽어 디코드·렌더링한 뒤 {MEDIA_DIR}/tmp/{random}/ 에 스테이징하고 바이트는 바로 버린다.
+	 * 모든 사진이 성공한 뒤에야 게시물을 저장하고 파일을 최종 경로로 옮기므로, 중간에 실패하면 아무것도 남지 않는다.
+	 * 커밋이 실패해 롤백되면 옮긴 파일도 지운다.
+	 */
+	@Transactional
+	public Post receiveInputs(PostSource source, String memo, BigDecimal rating, List<PhotoInput> photos) {
+		validate(photos.size(), memo, rating);
+		String stagingId = Tokens.random(secureRandom);
+		List<Staged> staged = new ArrayList<>();
 		List<String> written = new ArrayList<>();
 		try {
-			for (int i = 0; i < prepared.size(); i++) {
-				Prepared p = prepared.get(i);
-				String token = newToken();
-				String originalPath = photoStorage.saveOriginal(post.getId(), i, p.format(), p.original());
+			for (int i = 0; i < photos.size(); i++) {
+				staged.add(stage(stagingId, i, photos.get(i)));
+			}
+
+			Post post = postRepository.save(Post.receive(source, memo, rating, clock));
+			registerRollbackCleanup(written);
+			for (int i = 0; i < staged.size(); i++) {
+				Staged p = staged.get(i);
+				String originalPath = photoStorage.promote(p.originalStaged(),
+						PhotoStorage.originalPath(post.getId(), i, p.format()));
 				written.add(originalPath);
-				String renderedPath = photoStorage.saveRendered(token, p.rendered());
+				String renderedPath = photoStorage.promote(p.renderedStaged(), PhotoStorage.renderedPath(p.token()));
 				written.add(renderedPath);
-				PostPhoto photo = PostPhoto.of(post, i, originalPath, token, FitMode.CROP);
+				PostPhoto photo = PostPhoto.of(post, i, originalPath, p.token(), FitMode.CROP);
 				photo.attachRendered(renderedPath);
 				postPhotoRepository.save(photo);
 			}
 			events.publishEvent(new PostReceivedEvent(post.getId()));
+			return post;
 		} catch (RuntimeException e) {
 			written.forEach(photoStorage::deleteQuietly);
 			throw e;
+		} finally {
+			photoStorage.deleteStagingQuietly(stagingId);
 		}
-		return post;
 	}
 
-	private String newToken() {
-		byte[] bytes = new byte[32];
-		secureRandom.nextBytes(bytes);
-		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+	/** 사진 한 장을 읽어 스테이징한다. 원본 바이트는 이 메서드가 끝나면 참조가 사라진다. */
+	private Staged stage(String stagingId, int position, PhotoInput input) {
+		if (input.size() > MAX_PHOTO_BYTES) {
+			throw new BusinessException(ErrorCode.POST_PHOTO_TOO_LARGE);
+		}
+		byte[] original;
+		try {
+			original = input.readAllBytes();
+		} catch (IOException e) {
+			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+		}
+		if (original.length > MAX_PHOTO_BYTES) {
+			throw new BusinessException(ErrorCode.POST_PHOTO_TOO_LARGE);
+		}
+		String format = imageDecoder.detectFormat(original);
+		byte[] rendered = photoTransformer.render(imageDecoder.decode(original), null, FitMode.CROP);
+		String originalStaged = photoStorage.saveStaged(stagingId, position + "." + format, original);
+		String renderedStaged = photoStorage.saveStaged(stagingId, position + ".rendered.jpg", rendered);
+		return new Staged(format, Tokens.random(secureRandom), originalStaged, renderedStaged);
 	}
 
-	private record Prepared(byte[] original, String format, byte[] rendered) {
+	/** 커밋 단계에서 실패해 롤백되면 이미 옮긴 파일을 지운다. 트랜잭션 밖이면 등록하지 않는다. */
+	private void registerRollbackCleanup(List<String> written) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			return;
+		}
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCompletion(int status) {
+				if (status == STATUS_ROLLED_BACK) {
+					written.forEach(photoStorage::deleteQuietly);
+				}
+			}
+		});
+	}
+
+	private record Staged(String format, String token, String originalStaged, String renderedStaged) {
 	}
 
 }

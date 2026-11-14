@@ -24,20 +24,81 @@ public class PhotoStorage {
 		this.baseDir = Path.of(mediaDir).toAbsolutePath().normalize();
 	}
 
-	/** {MEDIA_DIR}/original/{postId}/{position}.{jpg|png} 에 원본을 쓰고 상대 경로를 돌려준다. */
-	public String saveOriginal(Long postId, int position, String format, byte[] bytes) {
+	private static final Pattern STAGED_NAME = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
+
+	/** DB에 저장하는 원본 상대 경로: original/{postId}/{position}.{jpg|png} */
+	public static String originalPath(Long postId, int position, String format) {
 		if (!"jpg".equals(format) && !"png".equals(format)) {
 			throw new IllegalArgumentException("지원하지 않는 형식");
 		}
-		return write("original/" + postId + "/" + position + "." + format, bytes);
+		return "original/" + postId + "/" + position + "." + format;
+	}
+
+	/** DB에 저장하는 렌더링 상대 경로: rendered/{token}.jpg */
+	public static String renderedPath(String token) {
+		if (token == null || !TOKEN_PATTERN.matcher(token).matches()) {
+			throw new IllegalArgumentException("토큰 형식이 올바르지 않음");
+		}
+		return "rendered/" + token + ".jpg";
+	}
+
+	/** {MEDIA_DIR}/original/{postId}/{position}.{jpg|png} 에 원본을 쓰고 상대 경로를 돌려준다. */
+	public String saveOriginal(Long postId, int position, String format, byte[] bytes) {
+		return write(originalPath(postId, position, format), bytes);
 	}
 
 	/** {MEDIA_DIR}/rendered/{token}.jpg 에 렌더링 결과를 쓰고(덮어쓰기 가능) 상대 경로를 돌려준다. */
 	public String saveRendered(String token, byte[] bytes) {
-		if (token == null || !TOKEN_PATTERN.matcher(token).matches()) {
-			throw new IllegalArgumentException("토큰 형식이 올바르지 않음");
+		return write(renderedPath(token), bytes);
+	}
+
+	/** {MEDIA_DIR}/tmp/{stagingId}/{name} 에 임시로 쓴다. 최종 위치로는 {@link #promote} 로 옮긴다. */
+	public String saveStaged(String stagingId, String name, byte[] bytes) {
+		if (stagingId == null || !TOKEN_PATTERN.matcher(stagingId).matches()
+				|| name == null || !STAGED_NAME.matcher(name).matches()) {
+			throw new IllegalArgumentException("스테이징 경로가 올바르지 않음");
 		}
-		return write("rendered/" + token + ".jpg", bytes);
+		return write("tmp/" + stagingId + "/" + name, bytes);
+	}
+
+	/** 스테이징 파일을 최종 경로로 원자적으로 옮긴다(같은 MEDIA_DIR 안이므로 rename). */
+	public String promote(String stagedPath, String finalPath) {
+		if (!stagedPath.startsWith("tmp/")) {
+			throw new IllegalArgumentException("스테이징 경로가 아님");
+		}
+		Path source = resolve(stagedPath);
+		Path target = resolve(finalPath);
+		try {
+			Files.createDirectories(target.getParent());
+			Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		return finalPath;
+	}
+
+	/** 스테이징 디렉터리를 통째로 지운다. 실패는 무시한다. */
+	public void deleteStagingQuietly(String stagingId) {
+		try {
+			if (stagingId == null || !TOKEN_PATTERN.matcher(stagingId).matches()) {
+				return;
+			}
+			Path dir = resolve("tmp/" + stagingId);
+			if (!Files.exists(dir)) {
+				return;
+			}
+			try (var paths = Files.walk(dir)) {
+				paths.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+					try {
+						Files.deleteIfExists(path);
+					} catch (IOException e) {
+						// 정리 실패는 무시한다.
+					}
+				});
+			}
+		} catch (IOException | RuntimeException e) {
+			// 정리 실패는 무시한다.
+		}
 	}
 
 	public byte[] read(String relativePath) {

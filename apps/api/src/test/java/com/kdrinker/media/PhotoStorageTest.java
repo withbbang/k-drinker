@@ -66,4 +66,45 @@ class PhotoStorageTest {
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
+	@Test
+	void 스테이징_파일을_최종_경로로_옮기면_원본_자리에서_사라진다() throws Exception {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+		String staged = storage.saveStaged(TOKEN, "0.jpg", new byte[] { 4, 5 });
+
+		// when
+		String moved = storage.promote(staged, PhotoStorage.originalPath(3L, 0, "jpg"));
+
+		// then
+		assertThat(moved).isEqualTo("original/3/0.jpg");
+		assertThat(storage.read(moved)).containsExactly(4, 5);
+		assertThat(Files.exists(dir.resolve(staged))).isFalse();
+	}
+
+	@Test
+	void 스테이징_디렉터리를_통째로_지운다() throws Exception {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+		storage.saveStaged(TOKEN, "0.jpg", new byte[] { 1 });
+		storage.saveStaged(TOKEN, "0.rendered.jpg", new byte[] { 2 });
+
+		// when
+		storage.deleteStagingQuietly(TOKEN);
+
+		// then
+		assertThat(Files.exists(dir.resolve("tmp/" + TOKEN))).isFalse();
+	}
+
+	@Test
+	void 스테이징_이름에_경로_조작이_있으면_거절한다() {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+
+		// when / then
+		assertThatThrownBy(() -> storage.saveStaged(TOKEN, "../x.jpg", new byte[] { 1 }))
+				.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> storage.saveStaged("../../x", "0.jpg", new byte[] { 1 }))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
+
 }

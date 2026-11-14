@@ -14,6 +14,8 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @Transactional(readOnly = true)
@@ -43,13 +45,24 @@ public class PhotoService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
 		byte[] original = photoStorage.read(photo.getOriginalPath());
 		byte[] rendered = photoTransformer.render(imageDecoder.decode(original), focus, mode);
-		photoStorage.saveRendered(photo.getPublicToken(), rendered);
 		if (focus == null) {
 			photo.changeFocus(null, null, null, null);
 		} else {
 			photo.changeFocus(focus.x(), focus.y(), focus.w(), focus.h());
 		}
 		photo.changeFitMode(mode);
+		// DB 변경이 커밋된 뒤에만 공개 파일을 덮어쓴다. 롤백되면 파일은 그대로다.
+		String token = photo.getPublicToken();
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+				@Override
+				public void afterCommit() {
+					photoStorage.saveRendered(token, rendered);
+				}
+			});
+		} else {
+			photoStorage.saveRendered(token, rendered);
+		}
 	}
 
 	public String publicUrl(PostPhoto photo) {
