@@ -13,7 +13,8 @@ public enum ErrorCode {
 	COMMON_INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."),
 	AUTH_REQUIRED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
 	AUTH_INVALID_CODE(HttpStatus.BAD_REQUEST, "OTP 코드가 올바르지 않습니다."),
-	AUTH_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도가 너무 많습니다. 15분 후 다시 시도해 주세요.");
+	AUTH_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도가 너무 많습니다. 15분 후 다시 시도해 주세요."),
+	MEDIA_UNSUPPORTED_TYPE(HttpStatus.BAD_REQUEST, "JPEG 또는 PNG 사진만 올릴 수 있습니다.");
 
 	private final HttpStatus status;
 	private final String message;
