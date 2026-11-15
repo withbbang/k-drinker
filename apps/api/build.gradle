@@ -24,6 +24,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'com.drewnoakes:metadata-extractor:2.22.0'
 	implementation 'org.apache.commons:commons-csv:1.14.1'
+	implementation 'com.anthropic:anthropic-java:3.3.0'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.h2database:h2'
 	runtimeOnly 'com.mysql:mysql-connector-j'
