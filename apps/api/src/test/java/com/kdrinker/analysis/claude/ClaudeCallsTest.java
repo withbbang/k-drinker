@@ -13,6 +13,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.anthropic.client.AnthropicClient;
+import com.anthropic.models.beta.messages.BetaMessage;
 import com.anthropic.models.beta.messages.BetaStopReason;
 import com.anthropic.models.beta.messages.StructuredContentBlock;
 import com.anthropic.models.beta.messages.StructuredMessage;
@@ -168,5 +169,60 @@ class ClaudeCallsTest {
 
 		assertThatThrownBy(() -> calls.structured(calls.base().addUserMessage("x"), Answer.class))
 				.isInstanceOf(ClaudeUnavailableException.class).hasCauseInstanceOf(IllegalArgumentException.class);
+	}
+
+	private ClaudeCalls withRawResponse(BetaStopReason stop) {
+		BetaMessage message = mock(BetaMessage.class);
+		when(message.stopReason()).thenReturn(Optional.ofNullable(stop));
+		AnthropicClient client = mock(AnthropicClient.class, org.mockito.Answers.RETURNS_DEEP_STUBS);
+		when(client.beta().messages().create(any(MessageCreateParams.class))).thenReturn(message);
+		return new ClaudeCalls(new ClaudeProperties("k", "claude-opus-5-5", Duration.ofSeconds(1), 0), client);
+	}
+
+	@Test
+	void 원본_호출은_pause_turn을_실패로_보지_않고_메시지를_돌려준다() {
+		// given
+		ClaudeCalls calls = withRawResponse(BetaStopReason.PAUSE_TURN);
+
+		// when
+		BetaMessage message = calls.create(calls.base().addUserMessage("x").build());
+
+		// then
+		assertThat(message.stopReason()).contains(BetaStopReason.PAUSE_TURN);
+	}
+
+	@Test
+	void 원본_호출도_refusal이면_실패한다() {
+		ClaudeCalls calls = withRawResponse(BetaStopReason.REFUSAL);
+
+		assertThatThrownBy(() -> calls.create(calls.base().addUserMessage("x").build()))
+				.isInstanceOf(ClaudeUnavailableException.class).hasMessageContaining("거절");
+	}
+
+	@Test
+	void 원본_호출도_max_tokens면_실패한다() {
+		ClaudeCalls calls = withRawResponse(BetaStopReason.MAX_TOKENS);
+
+		assertThatThrownBy(() -> calls.create(calls.base().addUserMessage("x").build()))
+				.isInstanceOf(ClaudeUnavailableException.class).hasMessageContaining("max_tokens");
+	}
+
+	@Test
+	void 원본_호출은_키가_없으면_실패한다() {
+		ClaudeCalls calls = calls("");
+
+		assertThatThrownBy(() -> calls.create(calls.base().addUserMessage("x").build()))
+				.isInstanceOf(ClaudeUnavailableException.class);
+	}
+
+	@Test
+	void 원본_호출의_임의_RuntimeException도_감싼다() {
+		AnthropicClient client = mock(AnthropicClient.class, org.mockito.Answers.RETURNS_DEEP_STUBS);
+		when(client.beta().messages().create(any(MessageCreateParams.class)))
+				.thenThrow(new IllegalStateException("boom"));
+		ClaudeCalls calls = new ClaudeCalls(new ClaudeProperties("k", "claude-opus-5-5", Duration.ofSeconds(1), 0), client);
+
+		assertThatThrownBy(() -> calls.create(calls.base().addUserMessage("x").build()))
+				.isInstanceOf(ClaudeUnavailableException.class).hasCauseInstanceOf(IllegalStateException.class);
 	}
 }
