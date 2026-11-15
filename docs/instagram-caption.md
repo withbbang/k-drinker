@@ -4,7 +4,7 @@
 
 - 상태: 확정 (2026-11-15 사용자 점검)
 - 설계: `docs/superpowers/specs/2026-11-14-review-to-instagram-design.md`
-- 소스: `apps/api/src/main/java/com/kdrinker/caption/` (P2에서 구현 예정)
+- 소스: `apps/api/src/main/java/com/kdrinker/caption/`
 - 텔레그램 문구: `docs/telegram-messages.md`
 
 ## 캡션 틀
