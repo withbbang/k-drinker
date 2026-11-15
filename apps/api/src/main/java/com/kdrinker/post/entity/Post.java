@@ -116,6 +116,10 @@ public class Post {
 		this.drink = drink;
 	}
 
+	public void recordRating(BigDecimal rating) {
+		this.rating = rating;
+	}
+
 	public void writeCaption(String caption, String hashtags, String tasteNotes, String pairing) {
 		this.caption = caption;
 		this.hashtags = hashtags;

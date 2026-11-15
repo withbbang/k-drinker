@@ -101,6 +101,11 @@ public class PhotoStorage {
 		}
 	}
 
+	/** 상대 경로를 MEDIA_DIR 안의 절대 경로로 바꾼다. 파일을 직접 스트림으로 읽어야 하는 쪽(분석 이미지 준비)이 쓴다. */
+	public Path locate(String relativePath) {
+		return resolve(relativePath);
+	}
+
 	public byte[] read(String relativePath) {
 		try {
 			return Files.readAllBytes(resolve(relativePath));

@@ -3,6 +3,7 @@ package com.kdrinker.post.repository;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostStatus;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -29,5 +30,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			""")
 	int transition(@Param("id") Long id, @Param("from") PostStatus from, @Param("to") PostStatus to,
 			@Param("expectedVersion") int expectedVersion, @Param("now") Instant now);
+
+	@Query("select p.id from Post p where p.status = :status order by p.id")
+	List<Long> findIdsByStatus(@Param("status") PostStatus status);
 
 }
