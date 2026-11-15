@@ -8,4 +8,6 @@ public interface DrinkRepository extends JpaRepository<Drink, Long> {
 
 	List<Drink> findByNormalizedName(String normalizedName);
 
+	List<Drink> findByAliasesIsNotNull();
+
 }
