@@ -1,5 +1,6 @@
 package com.kdrinker.brewery.repository;
 
+import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.entity.BreweryAlias;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,5 +10,7 @@ public interface BreweryAliasRepository extends JpaRepository<BreweryAlias, Long
 
 	@Query("select a from BreweryAlias a join fetch a.brewery where a.normalizedAlias = :normalizedAlias")
 	List<BreweryAlias> findByNormalizedAlias(String normalizedAlias);
+
+	boolean existsByBreweryAndNormalizedAlias(Brewery brewery, String normalizedAlias);
 
 }

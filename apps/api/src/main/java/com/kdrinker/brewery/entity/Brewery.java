@@ -55,6 +55,10 @@ public class Brewery {
 		return brewery;
 	}
 
+	public void markPublicData() {
+		this.source = BrewerySource.PUBLIC_DATA;
+	}
+
 	public void markVerified() {
 		this.verified = true;
 	}
