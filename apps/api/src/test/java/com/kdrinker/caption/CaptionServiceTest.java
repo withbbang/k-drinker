@@ -106,17 +106,14 @@ class CaptionServiceTest {
 
 	@Test
 	void 태그를_줄이는_것만으로_충분하면_tasting은_그대로다() {
-		// given: 태그 4개(페어링 2, 지역, 양조장)를 빼야 겨우 들어가는 길이를 찾는다
-		String base = sentences(0);
-		CaptionDraft probe = draft(base);
+		// given: 전체 태그로는 처음 상한을 넘는 문장 수를 찾는다(태그 몇 개만 빼면 들어가는 크기)
 		HashtagSet full = Hashtags.finalize(TAGS, label, brewery);
-		int overhead = CaptionAssembler.length(CaptionAssembler.assemble(probe, in.rating(), brewery, full.joined()));
-		int fixedOnly = full.dropOne().orElseThrow().dropOne().orElseThrow().dropOne().orElseThrow().dropOne()
-				.orElseThrow().all().size();
-		assertThat(fixedOnly).isEqualTo(7);
-		int sentenceLen = "달아요. ".length();
-		int n = (CaptionService.MAX_LENGTH - overhead) / sentenceLen;
-		String tasting = sentences(n + 3);
+		int n = 1;
+		while (CaptionAssembler.length(CaptionAssembler.assemble(draft(sentences(n)), in.rating(), brewery,
+				full.joined())) <= CaptionService.MAX_LENGTH) {
+			n++;
+		}
+		String tasting = sentences(n);
 		when(writer.write(in)).thenReturn(draft(tasting));
 		when(writer.shorten(any(), any(), anyInt())).thenReturn(draft(tasting));
 
@@ -125,6 +122,8 @@ class CaptionServiceTest {
 
 		// then
 		assertThat(CaptionAssembler.length(out.caption())).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
+		assertThat(out.caption()).contains("\n\n" + tasting + "\n\n");
+		assertThat(out.hashtags().split(" ")).hasSizeLessThan(full.all().size());
 	}
 
 	@Test
