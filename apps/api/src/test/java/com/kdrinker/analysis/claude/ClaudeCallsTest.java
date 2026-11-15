@@ -8,6 +8,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.anthropic.models.beta.messages.MessageCreateParams;
 import com.anthropic.models.beta.messages.StructuredMessageCreateParams;
 import java.time.Duration;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.anthropic.client.AnthropicClient;
+import com.anthropic.models.beta.messages.BetaStopReason;
+import com.anthropic.models.beta.messages.StructuredContentBlock;
+import com.anthropic.models.beta.messages.StructuredMessage;
+import com.anthropic.models.beta.messages.StructuredTextBlock;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
@@ -97,5 +108,65 @@ class ClaudeCallsTest {
 
 		// then
 		assertThat(json).contains("image/jpeg").contains("AQID");
+	}
+
+	@SuppressWarnings("unchecked")
+	private ClaudeCalls withResponse(BetaStopReason stop, Answer answer) {
+		StructuredMessage<Answer> message = mock(StructuredMessage.class);
+		when(message.stopReason()).thenReturn(Optional.ofNullable(stop));
+		if (answer != null) {
+			StructuredTextBlock<Answer> text = mock(StructuredTextBlock.class);
+			when(text.text()).thenReturn(answer);
+			StructuredContentBlock<Answer> block = mock(StructuredContentBlock.class);
+			when(block.text()).thenReturn(Optional.of(text));
+			when(message.content()).thenReturn(List.of(block));
+		} else {
+			when(message.content()).thenReturn(List.of());
+		}
+		AnthropicClient client = mock(AnthropicClient.class, org.mockito.Answers.RETURNS_DEEP_STUBS);
+		when(client.beta().messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
+		return new ClaudeCalls(new ClaudeProperties("k", "claude-opus-5-5", Duration.ofSeconds(1), 0), client);
+	}
+
+	@Test
+	void 정상_응답이면_파싱된_값을_돌려준다() {
+		ClaudeCalls calls = withResponse(BetaStopReason.END_TURN, new Answer("ok"));
+
+		assertThat(calls.structured(calls.base().addUserMessage("x"), Answer.class)).isEqualTo(new Answer("ok"));
+	}
+
+	@Test
+	void 종료_사유가_refusal이면_실패한다() {
+		ClaudeCalls calls = withResponse(BetaStopReason.REFUSAL, new Answer("ok"));
+
+		assertThatThrownBy(() -> calls.structured(calls.base().addUserMessage("x"), Answer.class))
+				.isInstanceOf(ClaudeUnavailableException.class).hasMessageContaining("거절");
+	}
+
+	@Test
+	void 종료_사유가_max_tokens면_실패한다() {
+		ClaudeCalls calls = withResponse(BetaStopReason.MAX_TOKENS, new Answer("ok"));
+
+		assertThatThrownBy(() -> calls.structured(calls.base().addUserMessage("x"), Answer.class))
+				.isInstanceOf(ClaudeUnavailableException.class).hasMessageContaining("max_tokens");
+	}
+
+	@Test
+	void 텍스트_블록이_없으면_실패한다() {
+		ClaudeCalls calls = withResponse(BetaStopReason.END_TURN, null);
+
+		assertThatThrownBy(() -> calls.structured(calls.base().addUserMessage("x"), Answer.class))
+				.isInstanceOf(ClaudeUnavailableException.class);
+	}
+
+	@Test
+	void 클라이언트의_임의_RuntimeException도_감싼다() {
+		AnthropicClient client = mock(AnthropicClient.class, org.mockito.Answers.RETURNS_DEEP_STUBS);
+		when(client.beta().messages().create(any(StructuredMessageCreateParams.class)))
+				.thenThrow(new IllegalArgumentException("boom"));
+		ClaudeCalls calls = new ClaudeCalls(new ClaudeProperties("k", "claude-opus-5-5", Duration.ofSeconds(1), 0), client);
+
+		assertThatThrownBy(() -> calls.structured(calls.base().addUserMessage("x"), Answer.class))
+				.isInstanceOf(ClaudeUnavailableException.class).hasCauseInstanceOf(IllegalArgumentException.class);
 	}
 }

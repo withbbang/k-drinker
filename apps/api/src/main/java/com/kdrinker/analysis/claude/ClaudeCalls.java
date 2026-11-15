@@ -2,7 +2,6 @@ package com.kdrinker.analysis.claude;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.core.JsonValue;
-import com.anthropic.errors.AnthropicException;
 import com.anthropic.models.beta.AnthropicBeta;
 import com.anthropic.models.beta.messages.BetaBase64ImageSource;
 import com.anthropic.models.beta.messages.BetaContentBlockParam;
@@ -63,7 +62,7 @@ public class ClaudeCalls {
 					.orElseThrow(() -> new ClaudeUnavailableException("Claude 응답에 텍스트가 없다"));
 		} catch (ClaudeUnavailableException e) {
 			throw e;
-		} catch (AnthropicException | IllegalStateException e) {
+		} catch (RuntimeException e) {
 			throw new ClaudeUnavailableException("Claude 호출 실패: " + e.getMessage(), e);
 		}
 	}
