@@ -52,6 +52,13 @@ public class Drink {
 		return drink;
 	}
 
+	/** 양조장이 비어 있을 때만 잇는다. 이미 있는 양조장은 바꾸지 않는다. */
+	public void linkBreweryIfMissing(Brewery brewery) {
+		if (this.brewery == null && brewery != null) {
+			this.brewery = brewery;
+		}
+	}
+
 	public void updateSpec(String category, BigDecimal abv, Integer volumeMl, String aliases) {
 		this.category = category;
 		this.abv = abv;

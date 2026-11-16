@@ -3,6 +3,7 @@ package com.kdrinker.media.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -17,9 +18,13 @@ import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+@ExtendWith(OutputCaptureExtension.class)
 class PhotoServiceTest {
 
 	private static final String TOKEN = "B".repeat(43);
@@ -148,6 +153,28 @@ class PhotoServiceTest {
 
 		// when / then
 		assertThat(service.publicUrl(photo)).isEqualTo("https://example.com/api/v1/media/" + TOKEN + ".jpg");
+	}
+
+	@Test
+	void 커밋_뒤_파일_쓰기가_실패해도_예외를_던지지_않고_ERROR_로그를_남긴다(CapturedOutput output) throws Exception {
+		// given
+		photoWithOriginal();
+		doThrow(new java.io.UncheckedIOException(new java.io.IOException("디스크 가득 참"))).when(storage)
+				.saveRendered(eq(TOKEN), any());
+		TransactionSynchronizationManager.initSynchronization();
+
+		try {
+			// when
+			service.rerender(1L, null, FitMode.PAD);
+			for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+				sync.afterCommit();
+			}
+
+			// then
+			assertThat(output).contains("ERROR").contains("photoId=1").contains("postId=");
+		} finally {
+			TransactionSynchronizationManager.clearSynchronization();
+		}
 	}
 
 }

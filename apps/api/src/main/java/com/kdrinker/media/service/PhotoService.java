@@ -11,12 +11,14 @@ import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import java.io.UncheckedIOException;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class PhotoService {
@@ -52,12 +54,18 @@ public class PhotoService {
 		}
 		photo.changeFitMode(mode);
 		// DB 변경이 커밋된 뒤에만 공개 파일을 덮어쓴다. 롤백되면 파일은 그대로다.
+		// 커밋 뒤 쓰기 실패는 던지지 않는다. 이미 커밋된 결과(예: 검토 대기 전환)를 실패로 보이게 하면 안 되기 때문이다.
 		String token = photo.getPublicToken();
+		Long postId = photo.getPost() == null ? null : photo.getPost().getId();
 		if (TransactionSynchronizationManager.isSynchronizationActive()) {
 			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 				@Override
 				public void afterCommit() {
-					photoStorage.saveRendered(token, rendered);
+					try {
+						photoStorage.saveRendered(token, rendered);
+					} catch (RuntimeException e) {
+						log.error("커밋 뒤 렌더링 파일을 쓰지 못했습니다. postId={} photoId={}", postId, photoId, e);
+					}
 				}
 			});
 		} else {

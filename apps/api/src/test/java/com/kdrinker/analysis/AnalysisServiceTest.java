@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -63,6 +64,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -373,6 +376,86 @@ class AnalysisServiceTest {
 		Long linkedBreweryId = tx.execute(s -> postRepository.findById(f.postId()).orElseThrow().getDrink()
 				.getBrewery().getId());
 		assertThat(linkedBreweryId).isEqualTo(known.getId());
+	}
+
+	@Test
+	void 검토_대기_커밋_뒤_후처리가_실패해도_검토_대기_이벤트를_낸다() {
+		// given
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+		doAnswer(invocation -> {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+				@Override
+				public void afterCommit() {
+					throw new IllegalStateException("디스크 가득 참");
+				}
+			});
+			return null;
+		}).when(photoService).rerender(any(), any(), any());
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.PENDING_REVIEW);
+		assertThat(analyzedEvents()).containsExactly(new PostAnalyzedEvent(f.postId(), PostStatus.PENDING_REVIEW));
+	}
+
+	@Test
+	void 양조장이_없던_기존_술에는_이번에_찾은_양조장을_잇고_다른_정보는_둔다() {
+		// given
+		Drink existing = Drink.of("새술", "새술", null);
+		existing.updateSpec("약주", new BigDecimal("13.0"), 375, null);
+		Long drinkId = drinkRepository.save(existing).getId();
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		String breweryName = tx.execute(s -> {
+			Drink d = drinkRepository.findById(drinkId).orElseThrow();
+			return d.getBrewery() == null ? null : d.getBrewery().getName();
+		});
+		assertThat(breweryName).isEqualTo("새술양조장");
+		Drink kept = drinkRepository.findById(drinkId).orElseThrow();
+		assertThat(kept.getCategory()).isEqualTo("약주");
+		assertThat(kept.getAbv()).isEqualByComparingTo("13.0");
+		assertThat(kept.getVolumeMl()).isEqualTo(375);
+	}
+
+	@Test
+	void 기존_술의_양조장은_바꾸지_않는다() {
+		// given
+		Brewery old = breweryRepository.save(Brewery.of("옛양조장", "옛양조장", BrewerySource.PUBLIC_DATA));
+		Long drinkId = drinkRepository.save(Drink.of("새술", "새술", old)).getId();
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		Long breweryId = tx.execute(s -> drinkRepository.findById(drinkId).orElseThrow().getBrewery().getId());
+		assertThat(breweryId).isEqualTo(old.getId());
+	}
+
+	@Test
+	void 이름이_같은_술이_여럿이면_새로_만들지_않고_가장_작은_id를_쓴다() {
+		// given
+		Long first = drinkRepository.save(Drink.of("새술", "새술", null)).getId();
+		drinkRepository.save(Drink.of("새 술", "새술", null));
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		assertThat(drinkRepository.count()).isEqualTo(2);
+		Long linked = tx.execute(s -> postRepository.findById(f.postId()).orElseThrow().getDrink().getId());
+		assertThat(linked).isEqualTo(first);
 	}
 
 	@Test

@@ -1,9 +1,9 @@
 package com.kdrinker.analysis.brewery;
 
+import com.kdrinker.common.InstagramHandles;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Locale;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,9 +17,6 @@ public record ResearchedBrewery(String name, String address, String phone, Strin
 
 	private static final Logger log = LoggerFactory.getLogger(ResearchedBrewery.class);
 
-	private static final Pattern HANDLE = Pattern.compile("^[A-Za-z0-9._]{1,30}$");
-	private static final Pattern INSTAGRAM_URL = Pattern.compile(
-			"^(?i)(?:https?://)?(?:www\\.)?instagram\\.com/([^/?#]*).*$");
 
 	/**
 	 * 저장 전 검증. 인스타그램 계정은 앞의 {@code @}·프로필 URL을 떼고 {@code [A-Za-z0-9._]{1,30}}만, 홈페이지는 http(s) URL만
@@ -41,18 +38,7 @@ public record ResearchedBrewery(String name, String address, String phone, Strin
 	}
 
 	static String handle(String raw) {
-		if (raw == null) {
-			return null;
-		}
-		String h = raw.strip();
-		var url = INSTAGRAM_URL.matcher(h);
-		if (url.matches()) {
-			h = url.group(1);
-		}
-		if (h.startsWith("@")) {
-			h = h.substring(1).strip();
-		}
-		return HANDLE.matcher(h).matches() ? h : null;
+		return InstagramHandles.normalize(raw);
 	}
 
 	static String httpUrl(String raw) {

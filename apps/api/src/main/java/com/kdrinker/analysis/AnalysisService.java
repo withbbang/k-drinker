@@ -26,13 +26,17 @@ import com.kdrinker.post.repository.PostRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -160,7 +164,25 @@ public class AnalysisService {
 		Brewery brewery = breweryMatcher.match(label).orElse(null);
 		BigDecimal rating = snapshot.rating() != null ? snapshot.rating() : label.rating();
 		ComposedCaption composed = captionService.compose(new CaptionInput(label, rating, brewery, snapshot.memo()));
-		tx.executeWithoutResult(status -> save(postId, snapshot, label, brewery, rating, composed));
+		AtomicBoolean committed = new AtomicBoolean();
+		try {
+			tx.executeWithoutResult(status -> {
+				// 다른 afterCommit 콜백(렌더링 파일 쓰기)보다 먼저 등록해 커밋 여부를 먼저 남긴다.
+				TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+					@Override
+					public void afterCommit() {
+						committed.set(true);
+					}
+				});
+				save(postId, snapshot, label, brewery, rating, composed);
+			});
+		} catch (RuntimeException e) {
+			if (!committed.get()) {
+				throw e;
+			}
+			// PENDING_REVIEW는 이미 커밋됐다. 커밋 뒤 후처리 실패는 분석 실패가 아니므로 이벤트는 그대로 낸다.
+			log.error("검토 대기로 커밋한 뒤 후처리에서 예외가 났습니다. 분석 실패로 보지 않습니다. postId={}", postId, e);
+		}
 	}
 
 	private Snapshot snapshot(Long postId) {
@@ -188,7 +210,12 @@ public class AnalysisService {
 	private void save(Long postId, Snapshot snapshot, LabelResult label, Brewery brewery, BigDecimal rating,
 			ComposedCaption composed) {
 		Post post = postRepository.findById(postId).orElseThrow();
-		Drink drink = breweryLookup.findDrink(label.drinkName()).orElseGet(() -> createDrink(label, brewery));
+		Optional<Drink> existing = breweryLookup.findDrink(label.drinkName())
+				.or(() -> lowestIdOfSameName(label.drinkName()));
+		Drink drink = existing.orElseGet(() -> createDrink(label, brewery));
+		if (existing.isPresent() && brewery != null) {
+			drink.linkBreweryIfMissing(breweryRepository.getReferenceById(brewery.getId()));
+		}
 		post.assignDrink(drink);
 		post.recordRating(rating);
 		post.writeCaption(composed.caption(), composed.hashtags(), label.tasteNotes(), label.pairing());
@@ -201,6 +228,15 @@ public class AnalysisService {
 		if (postRepository.transition(postId, PostStatus.ANALYZING, PostStatus.PENDING_REVIEW, clock.instant()) == 0) {
 			throw new IllegalStateException("분석 중 게시물 상태가 바뀌었습니다. postId=" + postId);
 		}
+	}
+
+	/** 정규화 이름이 같은 술이 여럿이면(조회에서는 모호해 비어 있음) 가장 작은 id를 쓴다. 별칭 충돌은 그대로 둔다. */
+	private Optional<Drink> lowestIdOfSameName(String drinkName) {
+		String key = Names.normalize(drinkName);
+		if (key.isEmpty()) {
+			return Optional.empty();
+		}
+		return drinkRepository.findByNormalizedName(key).stream().min(Comparator.comparing(Drink::getId));
 	}
 
 	/** 새로 만드는 술에만 라벨 정보를 넣는다. 이미 있는 술은 별칭 등 손본 정보를 지키려고 그대로 둔다. */

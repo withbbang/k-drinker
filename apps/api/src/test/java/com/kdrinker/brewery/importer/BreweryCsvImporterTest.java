@@ -138,6 +138,23 @@ class BreweryCsvImporterTest {
 	}
 
 	@Test
+	void 인스타그램은_프로필_URL을_떼고_형식에_맞을_때만_저장한다() throws IOException {
+		// when
+		ImportReport report = importer.importFrom(new StringReader(HEADER
+				+ "가양조장,,,,https://www.instagram.com/ga_sool/?hl=ko,,\n"
+				+ "나양조장,경기도,,,not a handle!,,\n"), "t");
+
+		// then
+		assertThat(report.inserted()).isEqualTo(2);
+		assertThat(report.skipped()).isZero();
+		assertThat(breweryRepository.findByNormalizedName("가양조장").get(0).getInstagramHandle())
+				.isEqualTo("ga_sool");
+		Brewery invalid = breweryRepository.findByNormalizedName("나양조장").get(0);
+		assertThat(invalid.getInstagramHandle()).isNull();
+		assertThat(invalid.getAddress()).isEqualTo("경기도");
+	}
+
+	@Test
 	void 같은_정규화_이름이_여럿이면_id가_가장_작은_하나만_갱신한다() throws IOException {
 		// given
 		Brewery first = breweryRepository.save(Brewery.of("국순당", "국순당", BrewerySource.MANUAL));

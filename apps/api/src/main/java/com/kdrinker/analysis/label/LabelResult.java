@@ -16,6 +16,8 @@ public record LabelResult(String drinkName, String category, BigDecimal abv, Int
 	private static final BigDecimal HUNDRED = new BigDecimal("100");
 	private static final BigDecimal TWO = new BigDecimal("2");
 	static final int MAX_TEXT = 1000;
+	/** drink.name·category 컬럼(VARCHAR(255)). UTF-16 길이로 재서 코드 포인트 수보다 항상 보수적이다. */
+	static final int MAX_COLUMN = 255;
 	private static final double EPS = 1e-9;
 	/** 모델이 술 이름을 못 읽었을 때 지어 넣는 자리표시. 정규화(공백 제거·소문자) 뒤 비교한다. */
 	static final Set<String> PLACEHOLDERS = Set.of("모름", "알수없음", "없음", "미상", "불明", "unknown", "n/a", "na",
@@ -29,7 +31,7 @@ public record LabelResult(String drinkName, String category, BigDecimal abv, Int
 	 */
 	public LabelResult sanitized(int imageCount) {
 		List<PhotoBox> source = boxes == null ? List.of() : boxes;
-		return new LabelResult(drinkNameOrNull(drinkName), clean(category), validAbv(abv), validVolume(volumeMl),
+		return new LabelResult(drinkNameOrNull(drinkName), fitColumn(category), validAbv(abv), validVolume(volumeMl),
 				clean(breweryName),
 				validRating(rating), capped(tasteNotes), capped(pairing),
 				source.stream().filter(b -> b != null && validBox(b, imageCount)).toList());
@@ -49,7 +51,7 @@ public record LabelResult(String drinkName, String category, BigDecimal abv, Int
 	}
 
 	private static String drinkNameOrNull(String s) {
-		String t = clean(s);
+		String t = fitColumn(s);
 		if (t == null) {
 			return null;
 		}
@@ -63,6 +65,12 @@ public record LabelResult(String drinkName, String category, BigDecimal abv, Int
 	private static boolean bracketedPlaceholder(String t) {
 		var m = BRACKETED.matcher(t);
 		return m.matches() && PLACEHOLDERS.contains(Names.normalize(m.group(1)));
+	}
+
+	/** 컬럼 길이를 넘으면 자르지 않고 null로 둔다(그렇게 긴 이름·종류는 잘못 읽은 값이다). */
+	private static String fitColumn(String s) {
+		String t = clean(s);
+		return t == null || t.length() > MAX_COLUMN ? null : t;
 	}
 
 	private static String clean(String s) {

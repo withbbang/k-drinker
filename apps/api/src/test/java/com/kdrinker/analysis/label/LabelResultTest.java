@@ -137,4 +137,21 @@ class LabelResultTest {
 		}
 		assertThat(withDrinkName("(생)막걸리").sanitized(1).drinkName()).isEqualTo("(생)막걸리");
 	}
+
+	@Test
+	void 술_이름이_컬럼_길이를_넘으면_null이다() {
+		assertThat(withDrinkName("가".repeat(255)).sanitized(1).drinkName()).hasSize(255);
+		assertThat(withDrinkName("가".repeat(256)).sanitized(1).drinkName()).isNull();
+		assertThat(withDrinkName("\uD840\uDC00".repeat(128)).sanitized(1).drinkName()).isNull();
+	}
+
+	@Test
+	void 종류가_컬럼_길이를_넘으면_null이다() {
+		LabelResult ok = new LabelResult("술", "탁".repeat(255), null, null, null, null, null, null, List.of());
+		LabelResult tooLong = new LabelResult("술", "탁".repeat(256), null, null, null, null, null, null, List.of());
+
+		assertThat(ok.sanitized(1).category()).hasSize(255);
+		assertThat(tooLong.sanitized(1).category()).isNull();
+		assertThat(tooLong.sanitized(1).drinkName()).isEqualTo("술");
+	}
 }

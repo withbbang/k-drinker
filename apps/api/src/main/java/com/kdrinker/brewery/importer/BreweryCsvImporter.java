@@ -5,6 +5,7 @@ import com.kdrinker.brewery.entity.BreweryAlias;
 import com.kdrinker.brewery.entity.BrewerySource;
 import com.kdrinker.brewery.repository.BreweryAliasRepository;
 import com.kdrinker.brewery.repository.BreweryRepository;
+import com.kdrinker.common.InstagramHandles;
 import com.kdrinker.common.Names;
 import java.io.IOException;
 import java.io.Reader;
@@ -14,6 +15,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 공공데이터 양조장 CSV를 정규화 이름 기준으로 upsert한다. 전체가 한 트랜잭션이다. */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BreweryCsvImporter {
@@ -61,7 +64,8 @@ public class BreweryCsvImporter {
 						or(value(row, "address"), brewery.getAddress()),
 						or(value(row, "phone"), brewery.getPhone()),
 						or(value(row, "homepage"), brewery.getHomepage()),
-						or(handle(value(row, "instagram")), brewery.getInstagramHandle()),
+						or(handle(value(row, "instagram"), sourceLabel, row.getRecordNumber()),
+								brewery.getInstagramHandle()),
 						brewery.getOtherSns(),
 						or(value(row, "source_url"), brewery.getSourceUrl()));
 				brewery.markVerified();
@@ -114,12 +118,13 @@ public class BreweryCsvImporter {
 		return v == null || v.isBlank() ? null : v.trim();
 	}
 
-	private static String handle(String v) {
-		if (v == null) {
-			return null;
+	/** 조사 결과와 같은 규칙으로 정규화한다. 형식이 틀리면 그 칸만 비우고(기존 값 유지) 행은 적재한다. */
+	private static String handle(String v, String sourceLabel, long rowNumber) {
+		String h = InstagramHandles.normalize(v);
+		if (v != null && h == null) {
+			log.warn("{} {}행: 인스타그램 계정 형식이 맞지 않아 비워 둡니다.", sourceLabel, rowNumber);
 		}
-		String h = v.startsWith("@") ? v.substring(1).trim() : v;
-		return h.isEmpty() ? null : h;
+		return h;
 	}
 
 	private static String or(String v, String fallback) {
