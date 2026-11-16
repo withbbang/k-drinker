@@ -6,7 +6,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
-/** 분석은 한 번에 하나씩(메모리 -Xmx512m, Claude 호출 직렬화). 대기열이 차면 버리고 다음 기동 때 복구가 다시 넣는다. */
+/**
+ * 분석은 한 번에 하나씩(메모리 -Xmx512m, Claude 호출 직렬화). 대기열이 차면 버리고 다음 기동 때 복구가 다시 넣는다.
+ * 이 빈이 있으면 Boot가 기본 실행기를 만들지 않으므로 application.yml의 {@code spring.task.execution.mode=force}로
+ * applicationTaskExecutor를 따로 남긴다. 이름 없는 {@code @Async}는 그쪽을 쓴다.
+ */
 @Slf4j
 @Configuration
 @EnableAsync

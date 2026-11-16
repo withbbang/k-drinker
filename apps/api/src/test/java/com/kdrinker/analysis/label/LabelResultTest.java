@@ -110,4 +110,23 @@ class LabelResultTest {
 		assertThat(sanitized.tasteNotes()).isEqualTo("맛".repeat(1000));
 		assertThat(sanitized.pairing()).isEqualTo("전".repeat(1000));
 	}
+
+	private static LabelResult withDrinkName(String drinkName) {
+		return new LabelResult(drinkName, null, null, null, null, null, null, null, List.of());
+	}
+
+	@Test
+	void 술_이름이_모름_같은_자리표시면_null이다() {
+		for (String placeholder : List.of("모름", "알수없음", "알 수 없음", "없음", "미상", "불明", "unknown", "n/a", "na",
+				"none", "null", "-", "?", " Unknown ", "N/A", "NULL", "알 수\u00A0없음")) {
+			assertThat(withDrinkName(placeholder).sanitized(1).drinkName()).as(placeholder).isNull();
+		}
+	}
+
+	@Test
+	void 자리표시가_들어간_진짜_술_이름은_남긴다() {
+		assertThat(withDrinkName("없음막걸리").sanitized(1).drinkName()).isEqualTo("없음막걸리");
+		assertThat(withDrinkName(" 화요 25 ").sanitized(1).drinkName()).isEqualTo("화요 25");
+		assertThat(withDrinkName("Nana").sanitized(1).drinkName()).isEqualTo("Nana");
+	}
 }

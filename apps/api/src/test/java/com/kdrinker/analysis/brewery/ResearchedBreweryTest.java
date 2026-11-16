@@ -3,7 +3,11 @@ package com.kdrinker.analysis.brewery;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
+@ExtendWith(OutputCaptureExtension.class)
 class ResearchedBreweryTest {
 
 	private static ResearchedBrewery withHandle(String handle) {
@@ -67,5 +71,21 @@ class ResearchedBreweryTest {
 	void 이름이_컬럼_길이를_넘으면_이름을_비운다() {
 		assertThat(new ResearchedBrewery("가".repeat(256), null, null, null, null, "https://a.example.com")
 				.sanitized().name()).isNull();
+	}
+
+	@Test
+	void 길이를_넘어_버린_칸은_이름과_길이만_로그에_남긴다(CapturedOutput output) {
+		// given
+		String address = "주소값" + "가".repeat(253);
+		ResearchedBrewery candidate = new ResearchedBrewery("새술양조장", address, "031-000-0000", null, null,
+				"https://a.example.com");
+
+		// when
+		ResearchedBrewery sanitized = candidate.sanitized();
+
+		// then
+		assertThat(sanitized.address()).isNull();
+		assertThat(output).contains("field=address").contains("length=256").contains("max=255");
+		assertThat(output).doesNotContain("주소값").doesNotContain("field=phone");
 	}
 }

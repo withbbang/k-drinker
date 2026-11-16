@@ -13,6 +13,8 @@ public final class Hashtags {
 	public static final List<String> FIXED = List.of("#전통주", "#우리술", "#전통주후기", "#막걸리", "#전통주추천", "#막걸리추천");
 	public static final int MAX = 12;
 	static final int MAX_PAIRING_TASTE = 2;
+	/** `#`을 뺀 태그 한 개의 최대 글자 수(코드 포인트). 12개를 이어도 post.hashtags(VARCHAR(500))에 들어간다. */
+	public static final int MAX_TAG_LENGTH = 30;
 
 	private Hashtags() {
 	}
@@ -64,13 +66,16 @@ public final class Hashtags {
 		return n != null && seen.add(n) ? n : null;
 	}
 
-	/** 글자·숫자·밑줄만 남기고 `#`을 앞에 붙인다. 남는 게 없으면 null. */
+	/** 글자·숫자·밑줄만 남기고 `#`을 앞에 붙인다. 남는 게 없거나 {@link #MAX_TAG_LENGTH}자를 넘으면 null. */
 	static String normalize(String raw) {
 		if (raw == null) {
 			return null;
 		}
 		StringBuilder sb = new StringBuilder();
 		raw.codePoints().filter(cp -> Character.isLetterOrDigit(cp) || cp == '_').forEach(sb::appendCodePoint);
-		return sb.isEmpty() ? null : "#" + sb;
+		if (sb.isEmpty() || sb.codePointCount(0, sb.length()) > MAX_TAG_LENGTH) {
+			return null;
+		}
+		return "#" + sb;
 	}
 }

@@ -5,6 +5,10 @@ spring:
     default: local
   jpa:
     open-in-view: false
+  task:
+    execution:
+      # analysisExecutor 빈이 있어도 Boot 기본 실행기(applicationTaskExecutor)를 만든다. 이름 없는 @Async가 분석 스레드(1개)를 쓰지 않게 한다.
+      mode: force
   servlet:
     multipart:
       max-file-size: 20MB

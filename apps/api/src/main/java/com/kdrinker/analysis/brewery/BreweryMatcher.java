@@ -19,7 +19,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 라벨에서 읽은 이름으로 양조장을 정한다. ① 술 이름으로 찾은 술의 양조장 ② 양조장 이름·별칭 ③ 웹 조사.
+ * 라벨에서 읽은 이름으로 양조장을 정한다. ① 술 이름으로 찾은 술의 양조장 ② 양조장 이름·별칭(같은 이름이 여럿이면 가장
+ * 작은 id) ③ 웹 조사.
  * ③에서 찾은 것은 미검증(verified=false) WEB_SEARCH 양조장으로 저장한다. 같은 정규화 이름이 이미 있으면 그것(가장 작은 id)을 쓴다.
  * <p>
  * 트랜잭션은 짧게 나눈다: ①② 조회는 읽기 전용 트랜잭션, ③ 조사(외부 호출, 수십 초)는 트랜잭션 밖, 저장은 별도 트랜잭션.
@@ -121,7 +122,23 @@ public class BreweryMatcher {
 		if (byDrink.isPresent()) {
 			return byDrink;
 		}
-		return lookup.findByName(label.breweryName()).map(brewery -> Hibernate.unproxy(brewery, Brewery.class));
+		Optional<Brewery> byName = lookup.findByName(label.breweryName());
+		if (byName.isEmpty()) {
+			byName = lowestIdOfSameName(label.breweryName());
+		}
+		return byName.map(brewery -> Hibernate.unproxy(brewery, Brewery.class));
+	}
+
+	/**
+	 * 정규화 이름이 같은 양조장이 여럿이면(조회에서는 모호해 비어 있음) 가장 작은 id를 쓴다. 조사해도 결국 같은 규칙으로
+	 * 그중 하나를 고르므로 유료 웹 조사를 건너뛴다. 별칭만 겹치는 경우는 서로 다른 양조장일 수 있어 그대로 둔다.
+	 */
+	private Optional<Brewery> lowestIdOfSameName(String breweryName) {
+		String key = Names.normalize(breweryName);
+		if (key.isEmpty()) {
+			return Optional.empty();
+		}
+		return breweryRepository.findByNormalizedName(key).stream().min(Comparator.comparing(Brewery::getId));
 	}
 
 	private Optional<Brewery> saveOrReuse(ResearchedBrewery found) {

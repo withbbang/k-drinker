@@ -147,4 +147,43 @@ class HashtagsTest {
 		assertThat(dropped).isEmpty();
 		assertThat(set.all()).contains("#화요25").hasSize(7);
 	}
+
+	@Test
+	void 정규화한_태그가_30자를_넘으면_버린다() {
+		// given
+		String thirty = "가".repeat(29) + "\uD840\uDC00"; // 마지막 한 자는 보충 평면 한자(UTF-16 두 칸)
+		String thirtyOne = "가".repeat(31);
+
+		// when / then
+		assertThat(Hashtags.normalize(thirty)).isEqualTo("#" + thirty);
+		assertThat(Hashtags.normalize("#" + thirtyOne)).isNull();
+		assertThat(Hashtags.normalize("가 ".repeat(31))).isNull();
+	}
+
+	@Test
+	void 너무_긴_이름_태그는_버리고_라벨_이름으로도_만들지_않는다() {
+		// given
+		String longName = "가".repeat(31);
+
+		// when
+		HashtagSet set = Hashtags.finalize(List.of(t(longName, TagCategory.NAME)), label(longName), brewery);
+
+		// then
+		assertThat(set.name()).isNull();
+	}
+
+	@Test
+	void 최대_길이_태그_12개를_이어도_hashtags_컬럼_500자에_들어간다() {
+		// given
+		String tag = "#" + "가".repeat(Hashtags.MAX_TAG_LENGTH);
+		HashtagSet set = new HashtagSet(List.of(tag, tag, tag, tag, tag, tag), tag, tag, tag, tag, List.of(tag, tag));
+
+		// when
+		String joined = set.joined();
+
+		// then
+		assertThat(set.all()).hasSize(Hashtags.MAX);
+		assertThat(joined.codePointCount(0, joined.length())).isLessThanOrEqualTo(500);
+		assertThat(joined.length()).isLessThanOrEqualTo(500);
+	}
 }

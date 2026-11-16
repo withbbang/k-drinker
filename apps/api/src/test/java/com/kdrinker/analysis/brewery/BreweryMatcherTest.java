@@ -423,4 +423,36 @@ class BreweryMatcherTest {
 			breweryRepository.deleteById(id);
 		}
 	}
+
+	// --- 이름이 같은 양조장이 여럿 ---
+
+	@Test
+	void 정규화_이름이_같은_양조장이_여럿이면_조사하지_않고_가장_작은_id를_쓴다() {
+		// given
+		Brewery first = complete("같은양조장", "같은양조장");
+		complete("같은 양조장", "같은양조장");
+
+		// when
+		Optional<Brewery> found = matcher.match(label("모르는술", "같은 양조장"));
+
+		// then
+		assertThat(found).map(Brewery::getId).contains(first.getId());
+		verifyNoInteractions(researcher);
+	}
+
+	@Test
+	void 이름이_같은_양조장이_여럿이어도_가장_작은_id의_빈_칸은_보강한다() {
+		// given
+		Brewery first = withBlanks();
+		complete("새술 양조장", "새술양조장");
+		when(researcher.research(any(), any())).thenReturn(Optional.of(researched("새술양조장")));
+
+		// when
+		Optional<Brewery> found = matcher.match(label("모르는술", "새술양조장"));
+
+		// then
+		assertThat(found).map(Brewery::getId).contains(first.getId());
+		assertThat(breweryRepository.findById(first.getId()).orElseThrow().getPhone()).isEqualTo("031-000-0000");
+		verify(researcher, times(1)).research(any(), any());
+	}
 }
