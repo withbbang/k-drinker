@@ -48,7 +48,7 @@ class TelegramIntakeTest {
 		verify(client, never()).downloadFile(anyString());
 		verify(intake, never()).receive(any(), any(), any(), any());
 		verify(sender).send(eq(null), eq(NotificationKind.TOO_MANY_PHOTOS), eq(null),
-				any(TelegramText.class));
+				eq(MessageFormatter.tooManyPhotos(11)));
 	}
 
 	@Test

@@ -106,6 +106,54 @@ class TelegramPollerTest {
 	}
 
 	@Test
+	void 실행_중_stop은_대기_앨범을_접수로_넘긴다() {
+		when(client.isConfigured()).thenReturn(true);
+		when(client.getUpdates(anyLong(), anyInt())).thenAnswer(i -> {
+			Thread.sleep(10);
+			return List.of();
+		});
+		List<AlbumCollector.PendingAlbum> pending = List
+				.of(new AlbumCollector.PendingAlbum(OWNER, List.of("F1"), null));
+		when(collector.drainAll()).thenReturn(pending);
+
+		poller.start();
+		poller.stop();
+
+		verify(intake).process(pending);
+		assertThat(poller.isRunning()).isFalse();
+	}
+
+	@Test
+	void 시작하지_않았으면_stop은_아무것도_접수하지_않는다() {
+		poller.stop();
+
+		verify(intake, never()).process(any());
+	}
+
+	@Test
+	void 종료_중에는_받아둔_업데이트를_수집기에_넣지_않는다() throws Exception {
+		when(client.isConfigured()).thenReturn(true);
+		TelegramMessage m = new TelegramMessage(1, OWNER, "hi", null, null, null, null);
+		java.util.concurrent.CountDownLatch inPoll = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+		when(client.getUpdates(anyLong(), anyInt())).thenAnswer(i -> {
+			inPoll.countDown();
+			release.await();
+			return List.of(new TelegramUpdate(5, m, null));
+		});
+
+		poller.start();
+		inPoll.await();
+		Thread stopper = new Thread(poller::stop);
+		stopper.start();
+		Thread.sleep(100);
+		release.countDown();
+		stopper.join();
+
+		verify(collector, never()).accept(any());
+	}
+
+	@Test
 	void 백오프는_5초에서_두_배씩_5분까지_늘고_리셋된다() {
 		PollBackoff b = new PollBackoff();
 		assertThat(b.nextDelay()).isEqualTo(Duration.ofSeconds(5));

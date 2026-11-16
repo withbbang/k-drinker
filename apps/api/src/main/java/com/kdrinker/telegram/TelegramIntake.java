@@ -48,9 +48,9 @@ public class TelegramIntake {
 			try {
 				processOne(album);
 			} catch (BusinessException e) {
-				log.warn("텔레그램 앨범 접수 실패: {}", e.getMessage());
+				log.warn("텔레그램 앨범 접수 실패", e);
 			} catch (RuntimeException e) {
-				log.warn("텔레그램 앨범 처리 실패: {}", e.getMessage());
+				log.warn("텔레그램 앨범 처리 실패", e);
 			}
 		}
 	}

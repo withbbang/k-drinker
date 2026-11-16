@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class TelegramPoller implements SmartLifecycle {
 
+	private static final long JOIN_MILLIS = 5000;
+
 	private final TelegramClient client;
 	private final TelegramSender sender;
 	private final AlbumCollector collector;
@@ -27,6 +29,7 @@ public class TelegramPoller implements SmartLifecycle {
 
 	private long offset;
 	private volatile boolean running;
+	private volatile boolean stopping;
 	private Thread thread;
 
 	public TelegramPoller(TelegramClient client, TelegramSender sender, AlbumCollector collector,
@@ -45,6 +48,7 @@ public class TelegramPoller implements SmartLifecycle {
 			log.info("텔레그램 설정이 없어 폴링을 시작하지 않습니다.");
 			return;
 		}
+		stopping = false;
 		running = true;
 		thread = new Thread(this::loop, "telegram-poller");
 		thread.setDaemon(true);
@@ -54,12 +58,23 @@ public class TelegramPoller implements SmartLifecycle {
 	@Override
 	public void stop() {
 		boolean wasRunning = running;
+		stopping = true;
 		running = false;
 		if (thread != null) {
 			thread.interrupt();
 		}
 		if (wasRunning) {
+			joinPollerThread();
 			intake.process(collector.drainAll());
+		}
+	}
+
+	/** 폴러 스레드가 받아둔 업데이트 처리를 끝내고 멈출 때까지 잠깐 기다린다(롱 폴링 읽기 타임아웃보다 짧게). */
+	private void joinPollerThread() {
+		try {
+			thread.join(JOIN_MILLIS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 
@@ -78,7 +93,7 @@ public class TelegramPoller implements SmartLifecycle {
 					return;
 				}
 				Duration delay = backoff.nextDelay();
-				log.warn("텔레그램 폴링 실패, {}초 뒤 다시 시도: {}", delay.toSeconds(), e.getMessage());
+				log.warn("텔레그램 폴링 실패, {}초 뒤 다시 시도", delay.toSeconds(), e);
 				try {
 					Thread.sleep(delay.toMillis());
 				} catch (InterruptedException interrupted) {
@@ -90,11 +105,15 @@ public class TelegramPoller implements SmartLifecycle {
 
 	void pollOnce() {
 		for (TelegramUpdate update : client.getUpdates(offset, pollTimeoutSeconds)) {
+			if (stopping) {
+				// 확인하지 않은 업데이트는 다음 기동 때 다시 받는다.
+				return;
+			}
 			offset = Math.max(offset, update.updateId() + 1);
 			try {
 				handle(update);
 			} catch (RuntimeException e) {
-				log.warn("텔레그램 업데이트 처리 실패: update={}, {}", update.updateId(), e.getMessage());
+				log.warn("텔레그램 업데이트 처리 실패: update={}", update.updateId(), e);
 			}
 		}
 	}
