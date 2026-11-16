@@ -1,0 +1,1 @@
+ALTER TABLE post ADD COLUMN ig_container_id VARCHAR(255) NULL;

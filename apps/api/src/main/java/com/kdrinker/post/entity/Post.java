@@ -85,6 +85,10 @@ public class Post {
 
 	private String permalink;
 
+	/** 인스타그램에 만든 (부모) 컨테이너 id. publish 호출 전에 저장해, 재시도가 같은 게시물을 두 번 올리지 않게 한다. */
+	@Column(name = "ig_container_id")
+	private String igContainerId;
+
 	@JdbcTypeCode(SqlTypes.TIMESTAMP)
 	@Column(name = "created_at")
 	private Instant createdAt;
@@ -142,6 +146,10 @@ public class Post {
 	public void clearFailure() {
 		this.failedStage = null;
 		this.failureReason = null;
+	}
+
+	public void recordContainer(String igContainerId) {
+		this.igContainerId = igContainerId;
 	}
 
 	public void recordPublished(String igMediaId, String permalink, Instant publishedAt) {
