@@ -36,4 +36,11 @@ class NamesTest {
 		assertThat(Names.normalize("")).isEqualTo("");
 	}
 
+	@Test
+	void 줄바꿈하지_않는_공백과_전각_공백도_지운다() {
+		assertThat(Names.normalize("느린마을\u00A0양조장")).isEqualTo("느린마을양조장");
+		assertThat(Names.normalize("느린마을\u3000양조장")).isEqualTo("느린마을양조장");
+		assertThat(Names.normalize("\u00A0\u3000\u2007\u202F")).isEqualTo("");
+	}
+
 }

@@ -122,4 +122,20 @@ class PostRepositoryTest {
 		assertThat(photos).extracting(PostPhoto::getOriginalPath).containsExactly("o0", "o1", "o2");
 	}
 
+	@Test
+	void 긴_맛노트_페어링_해시태그도_저장된다() {
+		// given
+		Post post = Post.receive(PostSource.TELEGRAM, "향이 좋다", null, CLOCK);
+		post.writeCaption("캡션", "#".repeat(500), "맛".repeat(1000), "전".repeat(1000));
+
+		// when
+		Long id = postRepository.saveAndFlush(post).getId();
+		em.clear();
+
+		// then
+		Post reloaded = postRepository.findById(id).orElseThrow();
+		assertThat(reloaded.getTasteNotes()).hasSize(1000);
+		assertThat(reloaded.getPairing()).hasSize(1000);
+		assertThat(reloaded.getHashtags()).hasSize(500);
+	}
 }

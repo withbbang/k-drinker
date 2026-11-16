@@ -225,4 +225,28 @@ class ClaudeCallsTest {
 		assertThatThrownBy(() -> calls.create(calls.base().addUserMessage("x").build()))
 				.isInstanceOf(ClaudeUnavailableException.class).hasCauseInstanceOf(IllegalStateException.class);
 	}
+
+	@Test
+	void 닫으면_Anthropic_클라이언트도_닫는다() {
+		// given
+		AnthropicClient client = mock(AnthropicClient.class);
+		ClaudeCalls withClient = new ClaudeCalls(
+				new ClaudeProperties("k", "claude-opus-5-5", Duration.ofSeconds(1), 0), client);
+
+		// when
+		withClient.close();
+
+		// then
+		org.mockito.Mockito.verify(client).close();
+	}
+
+	@Test
+	void 키가_없어_클라이언트가_없어도_닫을_수_있다() {
+		// given
+		ClaudeCalls withoutClient = calls(null);
+
+		// when / then
+		withoutClient.close();
+		assertThat(withoutClient.hasClient()).isFalse();
+	}
 }

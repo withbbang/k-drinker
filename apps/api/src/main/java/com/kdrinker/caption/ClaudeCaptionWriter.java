@@ -1,5 +1,7 @@
 package com.kdrinker.caption;
 
+import static com.kdrinker.analysis.claude.PromptText.neutral;
+
 import com.anthropic.models.beta.messages.MessageCreateParams;
 import com.kdrinker.analysis.claude.ClaudeCalls;
 import com.kdrinker.analysis.label.LabelResult;
@@ -101,10 +103,5 @@ public class ClaudeCaptionWriter implements CaptionWriter {
 		if (value != null && !value.isBlank()) {
 			lines.add(key + ": " + neutral(value));
 		}
-	}
-
-	/** 값 안의 닫는 태그가 데이터 구획을 끊지 못하게 한다. */
-	private static String neutral(String s) {
-		return s == null ? "" : s.replace("</", "<\\/");
 	}
 }

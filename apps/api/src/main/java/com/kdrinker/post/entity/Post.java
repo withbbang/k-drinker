@@ -44,9 +44,10 @@ public class Post {
 	@Column(length = 2000)
 	private String memo;
 
-	@Column(name = "taste_notes")
+	@Column(name = "taste_notes", length = 1000)
 	private String tasteNotes;
 
+	@Column(length = 1000)
 	private String pairing;
 
 	@Column(length = 4000)
@@ -55,6 +56,7 @@ public class Post {
 	@Column(name = "caption_edited")
 	private boolean captionEdited;
 
+	@Column(length = 500)
 	private String hashtags;
 
 	/** transition 의 조건부 UPDATE 로만 바뀐다. 오래된 인스턴스가 덮어쓰지 못하도록 updatable=false. */

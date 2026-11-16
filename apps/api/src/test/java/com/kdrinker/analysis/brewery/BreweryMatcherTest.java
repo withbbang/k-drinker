@@ -22,6 +22,9 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
@@ -162,5 +165,56 @@ class BreweryMatcherTest {
 		// then
 		assertThat(found).isEmpty();
 		verifyNoInteractions(researcher);
+	}
+
+	@Test
+	void 긴_홈페이지와_출처_URL도_저장된다() {
+		// given
+		String longUrl = "https://sool.example.com/" + "%EC%88%A0".repeat(100);
+		when(researcher.research(any(), any())).thenReturn(Optional.of(new ResearchedBrewery("새술양조장", null, null,
+				longUrl, null, longUrl)));
+
+		// when
+		Brewery saved = matcher.match(label("새술", "새술양조장")).orElseThrow();
+		breweryRepository.flush();
+
+		// then
+		assertThat(saved.getHomepage()).isEqualTo(longUrl);
+		assertThat(saved.getSourceUrl()).isEqualTo(longUrl);
+	}
+
+	@Test
+	void 컬럼_길이를_넘는_조사_값은_버리고_저장한다() {
+		// given
+		String tooLongUrl = "https://sool.example.com/" + "a".repeat(1000);
+		when(researcher.research(any(), any())).thenReturn(Optional.of(new ResearchedBrewery("새술양조장",
+				"주".repeat(256), "0".repeat(256), tooLongUrl, null, tooLongUrl)));
+
+		// when
+		Brewery saved = matcher.match(label("새술", "새술양조장")).orElseThrow();
+		breweryRepository.flush();
+
+		// then
+		assertThat(saved.getAddress()).isNull();
+		assertThat(saved.getPhone()).isNull();
+		assertThat(saved.getHomepage()).isNull();
+		assertThat(saved.getSourceUrl()).isNull();
+	}
+
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	void 조사_중에는_트랜잭션을_잡고_있지_않다() {
+		// given
+		boolean[] inTx = new boolean[1];
+		when(researcher.research(any(), any())).thenAnswer(invocation -> {
+			inTx[0] = TransactionSynchronizationManager.isActualTransactionActive();
+			return Optional.empty();
+		});
+
+		// when
+		matcher.match(label("새술", "새술양조장"));
+
+		// then
+		assertThat(inTx[0]).isFalse();
 	}
 }

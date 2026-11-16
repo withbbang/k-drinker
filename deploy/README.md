@@ -105,7 +105,7 @@ vi deploy/.env
 | `TOTP_SECRET` | 1-4에서 채운다. 지금은 비워 둔다 |
 | `PUBLIC_BASE_URL` | web의 공개 HTTPS 주소. 예: `https://kdrinker.example.com` (끝 슬래시 없음, 2장의 도메인과 같아야 한다). 비어 있으면 compose와 워크플로가 배포를 막는다 |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | P2/P3에서 사용. 지금은 비워 둔다 |
-| `ANTHROPIC_API_KEY` | P2/P3에서 사용. 지금은 비워 둔다 |
+| `ANTHROPIC_API_KEY` | 분석(라벨 인식·양조장 조사·캡션 생성)에 필수. 비워 두면 기동은 되지만 모든 게시물이 "분석 서버 응답에 문제가 있었습니다." 사유로 실패한다 |
 | `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | P2/P3에서 사용. 지금은 비워 둔다 |
 | `IMAGE_TAG` | 비워 둔다. 워크플로가 배포할 때마다 커밋 SHA를 써 넣는다 |
 

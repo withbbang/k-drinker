@@ -1,6 +1,7 @@
 package com.kdrinker.analysis;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -417,6 +418,38 @@ class AnalysisServiceTest {
 		Post post = reload(f.postId());
 		assertThat(post.getStatus()).isEqualTo(PostStatus.FAILED);
 		assertThat(post.getFailureReason()).isEqualTo("이전 실패");
+		verifyNoInteractions(labelReader);
+	}
+
+	@Test
+	void 게시_단계에서_실패한_게시물은_다시_분석하지_않는다() {
+		// given
+		Fixture f = post(PostStatus.FAILED, null);
+		jdbc.update("UPDATE post SET failed_stage = 'PUBLISHING', failure_reason = '게시 실패' WHERE id = ?", f.postId());
+		int versionBefore = reload(f.postId()).getVersion();
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.FAILED);
+
+		// then
+		Post post = reload(f.postId());
+		assertThat(post.getStatus()).isEqualTo(PostStatus.FAILED);
+		assertThat(post.getFailedStage()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(post.getFailureReason()).isEqualTo("게시 실패");
+		assertThat(post.getVersion()).isEqualTo(versionBefore);
+		verifyNoInteractions(labelReader, breweryResearcher, captionWriter, photoService);
+		assertThat(analyzedEvents()).isEmpty();
+	}
+
+	@Test
+	void 트랜잭션_안에서_분석을_부르면_호출_버그로_보고_예외를_던진다() {
+		// given
+		Fixture f = post(PostStatus.RECEIVED, null);
+
+		// when / then
+		assertThatThrownBy(() -> tx.executeWithoutResult(s -> analysisService.analyze(f.postId(), PostStatus.RECEIVED)))
+				.isInstanceOf(IllegalStateException.class);
+		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.RECEIVED);
 		verifyNoInteractions(labelReader);
 	}
 }

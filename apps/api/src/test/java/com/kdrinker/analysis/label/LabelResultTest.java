@@ -73,4 +73,41 @@ class LabelResultTest {
 		assertThat(s.pairing()).isEqualTo("전");
 		assertThat(s.boxes()).isEmpty();
 	}
+
+	private static LabelResult withSpec(String abv, Integer volumeMl) {
+		return new LabelResult("술", null, abv == null ? null : new BigDecimal(abv), volumeMl, null, null, null, null,
+				List.of());
+	}
+
+	@Test
+	void 도수는_0보다_크고_100보다_작을_때만_남긴다() {
+		assertThat(withSpec("0", null).sanitized(1).abv()).isNull();
+		assertThat(withSpec("-1", null).sanitized(1).abv()).isNull();
+		assertThat(withSpec("100", null).sanitized(1).abv()).isNull();
+		assertThat(withSpec("0.1", null).sanitized(1).abv()).isEqualByComparingTo("0.1");
+		assertThat(withSpec("99.9", null).sanitized(1).abv()).isEqualByComparingTo("99.9");
+		assertThat(withSpec(null, null).sanitized(1).abv()).isNull();
+	}
+
+	@Test
+	void 용량은_0보다_클_때만_남긴다() {
+		assertThat(withSpec(null, 0).sanitized(1).volumeMl()).isNull();
+		assertThat(withSpec(null, -750).sanitized(1).volumeMl()).isNull();
+		assertThat(withSpec(null, 1).sanitized(1).volumeMl()).isEqualTo(1);
+		assertThat(withSpec(null, null).sanitized(1).volumeMl()).isNull();
+	}
+
+	@Test
+	void 맛노트와_페어링은_컬럼_길이_1000자까지만_남긴다() {
+		// given
+		LabelResult result = new LabelResult("술", null, null, null, null, null, "맛".repeat(1001), "전".repeat(1000),
+				List.of());
+
+		// when
+		LabelResult sanitized = result.sanitized(1);
+
+		// then
+		assertThat(sanitized.tasteNotes()).isEqualTo("맛".repeat(1000));
+		assertThat(sanitized.pairing()).isEqualTo("전".repeat(1000));
+	}
 }

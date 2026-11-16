@@ -1,7 +1,6 @@
 package com.kdrinker.analysis.claude;
 
 import com.anthropic.client.AnthropicClient;
-import com.anthropic.core.JsonValue;
 import com.anthropic.models.beta.AnthropicBeta;
 import com.anthropic.models.beta.messages.BetaBase64ImageSource;
 import com.anthropic.models.beta.messages.BetaContentBlockParam;
@@ -18,7 +17,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /** Claude 베타 Messages 호출의 공통부. 분석 단계(라벨·조사·캡션)가 base()에 내용을 더해 structured()로 부른다. */
-public class ClaudeCalls {
+public class ClaudeCalls implements AutoCloseable {
 
 	static final long MAX_TOKENS = 16000L;
 
@@ -86,6 +85,14 @@ public class ClaudeCalls {
 
 	static <T> StructuredMessageCreateParams<T> toStructured(MessageCreateParams.Builder builder, Class<T> type) {
 		return builder.outputConfig(type).build();
+	}
+
+	/** 종료 시 Anthropic 클라이언트(OkHttp 연결 풀·스레드)를 닫는다. 키가 없어 클라이언트가 없으면 아무것도 하지 않는다. */
+	@Override
+	public void close() {
+		if (client != null) {
+			client.close();
+		}
 	}
 
 	/** base64 JPEG 이미지 content block. */

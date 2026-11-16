@@ -31,6 +31,7 @@ public class Brewery {
 
 	private String phone;
 
+	@Column(length = 1000)
 	private String homepage;
 
 	@Column(name = "instagram_handle")
@@ -42,7 +43,7 @@ public class Brewery {
 	@Enumerated(EnumType.STRING)
 	private BrewerySource source;
 
-	@Column(name = "source_url")
+	@Column(name = "source_url", length = 1000)
 	private String sourceUrl;
 
 	private boolean verified;

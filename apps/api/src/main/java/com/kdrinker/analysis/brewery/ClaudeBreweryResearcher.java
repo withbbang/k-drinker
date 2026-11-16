@@ -9,6 +9,7 @@ import com.anthropic.models.beta.messages.BetaWebSearchTool20260209;
 import com.anthropic.models.beta.messages.MessageCreateParams;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.kdrinker.analysis.claude.ClaudeCalls;
+import com.kdrinker.analysis.claude.PromptText;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.LinkedHashSet;
@@ -41,7 +42,7 @@ public class ClaudeBreweryResearcher implements BreweryResearcher {
 	static final String EXTRACT = """
 			위 검색 결과만 근거로 양조장 정보를 정리하라.
 			- sourceUrl은 위 검색 결과에 실제로 나온 URL 하나를 그대로 적는다. 정보를 가장 많이 확인한 페이지를 고른다.
-			- 확인하지 못한 값은 비워 둔다. 양조장을 찾지 못했으면 name과 sourceUrl을 비워 둔다.
+			- 확인하지 못한 값은 null로 둔다. 양조장을 찾지 못했으면 name과 sourceUrl을 null로 둔다.
 			- instagramHandle은 출처 페이지에서 확인한 계정만, @ 없이 적는다.""";
 
 	private final ClaudeCalls calls;
@@ -125,24 +126,26 @@ public class ClaudeBreweryResearcher implements BreweryResearcher {
 	}
 
 	private static String orUnknown(String s) {
-		return isBlank(s) ? "모름" : s.strip();
+		return isBlank(s) ? "모름" : PromptText.neutral(s.strip());
 	}
 
 	private static boolean isBlank(String s) {
 		return s == null || s.isBlank();
 	}
 
-	private static String clean(String s) {
+	private static String clean(Optional<String> o) {
+		String s = o == null ? null : o.orElse(null);
 		return isBlank(s) ? null : s.strip();
 	}
 
+	/** 확인하지 못한 값은 null로 답할 수 있게 모두 Optional이다(SDK 스키마에서 Optional만 null을 허용한다). */
 	record Reply(
-			@JsonPropertyDescription("양조장 정식 이름. 찾지 못했으면 비움") String name,
-			@JsonPropertyDescription("주소. 출처에서 확인한 것만") String address,
-			@JsonPropertyDescription("전화번호. 출처에서 확인한 것만") String phone,
-			@JsonPropertyDescription("홈페이지 URL. 출처에서 확인한 것만") String homepage,
-			@JsonPropertyDescription("인스타그램 계정. 출처 페이지에서 확인한 것만, @ 없이") String instagramHandle,
-			@JsonPropertyDescription("정보를 확인한 검색 결과 URL 하나. 위 검색 결과에 나온 그대로") String sourceUrl) {
+			@JsonPropertyDescription("양조장 정식 이름. 찾지 못했으면 null") Optional<String> name,
+			@JsonPropertyDescription("주소. 출처에서 확인한 것만, 아니면 null") Optional<String> address,
+			@JsonPropertyDescription("전화번호. 출처에서 확인한 것만, 아니면 null") Optional<String> phone,
+			@JsonPropertyDescription("홈페이지 URL. 출처에서 확인한 것만, 아니면 null") Optional<String> homepage,
+			@JsonPropertyDescription("인스타그램 계정. 출처 페이지에서 확인한 것만, @ 없이, 아니면 null") Optional<String> instagramHandle,
+			@JsonPropertyDescription("정보를 확인한 검색 결과 URL 하나. 위 검색 결과에 나온 그대로, 찾지 못했으면 null") Optional<String> sourceUrl) {
 
 		ResearchedBrewery toResearched() {
 			return new ResearchedBrewery(clean(name), clean(address), clean(phone), clean(homepage),

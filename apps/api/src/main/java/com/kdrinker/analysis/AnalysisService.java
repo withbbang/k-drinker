@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -84,9 +85,15 @@ public class AnalysisService {
 
 	/**
 	 * from(RECEIVED 최초, FAILED 재시도) → ANALYZING → PENDING_REVIEW | FAILED. 상태가 from이 아니면 아무것도 하지 않는다.
-	 * 상태를 바꿨으면 끝난 뒤 {@link PostAnalyzedEvent}를 정확히 한 번 발행한다. 예외를 밖으로 던지지 않는다.
+	 * 상태를 바꿨으면 끝난 뒤 {@link PostAnalyzedEvent}를 정확히 한 번 발행한다. 분석 중 예외는 밖으로 던지지 않는다.
+	 * FAILED 재시도는 분석 단계에서 실패한 게시물(failedStage=ANALYZING)만 받는다. 게시 단계 실패는 다시 분석하지 않는다.
+	 *
+	 * @throws IllegalStateException 트랜잭션 안에서 부른 경우(호출 쪽 버그). 바깥 트랜잭션에 합류하면 실패 기록까지 롤백된다.
 	 */
 	public void analyze(Long postId, PostStatus from) {
+		if (TransactionSynchronizationManager.isActualTransactionActive()) {
+			throw new IllegalStateException("analyze는 트랜잭션 밖에서 불러야 합니다. postId=" + postId);
+		}
 		if (!start(postId, from)) {
 			return;
 		}
@@ -129,6 +136,9 @@ public class AnalysisService {
 		return Boolean.TRUE.equals(tx.execute(status -> {
 			Post post = postRepository.findById(postId).orElse(null);
 			if (post == null || post.getStatus() != from) {
+				return false;
+			}
+			if (from == PostStatus.FAILED && post.getFailedStage() != PostStatus.ANALYZING) {
 				return false;
 			}
 			post.clearFailure();
