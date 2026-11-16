@@ -407,5 +407,5 @@ dc up -d                   # 바뀐 환경변수로 컨테이너 재생성
 1. Meta 개발자 앱에서 인스타그램 장기 액세스 토큰을 새로 발급한다.
 2. NAS의 `deploy/.env`에서 `INSTAGRAM_ACCESS_TOKEN`을 새 값으로 바꾼다 (`INSTAGRAM_USER_ID`는 그대로).
 3. 환경변수는 컨테이너 기동 때 묶이므로 `dc up -d`로 api를 다시 만든다 (`dc restart api`로는 반영되지 않는다).
-4. 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출한다 (웹 설정 화면의 [토큰 다시 불러오기]). 환경변수 토큰으로 저장된 값을 덮어쓰고 갱신을 한 번 시도한다.
-5. `GET /api/v1/instagram/token`으로 만료 시각과 갱신 시각을 확인한다. 만료가 약 60일 뒤면 정상이고, 하루 뒤로 나오면 갱신이 실패한 것이니 토큰 값과 `dc logs --tail 100 api`를 확인한다.
+4. 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출한다. 웹 설정 화면의 [토큰 다시 불러오기] 버튼은 P4 이후에 생기므로, 그때까지는 로그인한 세션 쿠키를 실어 직접 호출한다 (예: `curl -X POST -b 'KD_SESSION=<세션 쿠키 값>' https://<도메인>/api/v1/instagram/token/reload`). 환경변수 토큰으로 저장된 값을 덮어쓰고 갱신을 한 번 시도한다.
+5. `GET /api/v1/instagram/token`으로 만료 시각과 갱신 시각을 확인한다. 방금 발급한 토큰은 Meta가 발급 24시간 안의 갱신을 거부하므로, 다시 불러온 직후에는 "하루 뒤 만료"(현재 시각 + 1일)로 나오는 것이 정상이다. 실패가 아니다. 하루 이틀 뒤 04:00(Asia/Seoul) 점검이 지나고 같은 API로 다시 확인해 만료가 약 60일 뒤로 바뀌었으면 끝이다. 그때도 약 하루 뒤로 나오고 메시지 11까지 왔다면 진짜 갱신 실패이니 토큰 값과 `dc logs --tail 100 api`를 확인한다.

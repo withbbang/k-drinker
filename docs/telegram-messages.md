@@ -321,7 +321,7 @@
 
 ### 11. 인스타그램 토큰 갱신 실패 · `TOKEN_REFRESH_FAILED`
 
-- **언제:** 장기 토큰 갱신이 실패했을 때. 만료 7일 전부터는 매일 한 번만 다시 알린다
+- **언제:** 장기 토큰 갱신이 실패했을 때. 만료 30일 전(`app.instagram.refresh-before`)부터 매일 04:00(Asia/Seoul) 점검에서 갱신에 실패할 때마다 보내며, 같은 날은 한 번만 보낸다
 - **중복 키:** 날짜 (`2026-11-14`)
 - **소스:** `MessageFormatter.tokenRefreshFailed(Instant expiresAt)`
 
