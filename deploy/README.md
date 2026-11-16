@@ -104,9 +104,9 @@ vi deploy/.env
 | `DB_URL` | 비워 둔다 (`jdbc:mysql://mysql:3306/kdrinker`) |
 | `TOTP_SECRET` | 1-4에서 채운다. 지금은 비워 둔다 |
 | `PUBLIC_BASE_URL` | web의 공개 HTTPS 주소. 예: `https://kdrinker.example.com` (끝 슬래시 없음, 2장의 도메인과 같아야 한다). 비어 있으면 compose와 워크플로가 배포를 막는다 |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | P2/P3에서 사용. 지금은 비워 둔다 |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | 텔레그램 접수·알림·버튼에 쓴다. 둘 중 하나라도 비면 폴링도 전송도 하지 않는다(기동은 정상) |
 | `ANTHROPIC_API_KEY` | 분석(라벨 인식·양조장 조사·캡션 생성)에 필수. 비워 두면 기동은 되지만 모든 게시물이 "분석 서버 응답에 문제가 있었습니다." 사유로 실패한다 |
-| `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | P2/P3에서 사용. 지금은 비워 둔다 |
+| `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | 인스타그램 게시에 쓰는 장기 토큰과 계정 ID. 재발급 절차는 10장 |
 | `IMAGE_TAG` | 비워 둔다. 워크플로가 배포할 때마다 커밋 SHA를 써 넣는다 |
 
 - 비밀번호는 영문·숫자로만 만든다 (따옴표, `$`, 공백은 Compose 치환과 충돌한다). 예: `openssl rand -hex 24`.
@@ -390,3 +390,22 @@ dc exec mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot'
 sudo vi deploy/.env        # DB_PASSWORD / MYSQL_ROOT_PASSWORD 수정
 dc up -d                   # 바뀐 환경변수로 컨테이너 재생성
 ```
+
+---
+
+## 10. 인스타그램 장기 토큰 재발급
+
+장기 토큰은 발급 후 60일 동안 유효하다. API가 자동으로 갱신하지만, 갱신이 계속 실패해 만료가 다가오면 텔레그램으로 "인스타그램 토큰 갱신에 실패했습니다." 알림(메시지 11)이 온다. 그때 아래 순서로 새 토큰을 넣는다. 새 환경변수는 없다.
+
+자동 갱신
+- 매일 04:00(Asia/Seoul)에 점검한다 (`app.instagram.refresh-cron`, `app.instagram.zone`).
+- 만료가 30일 이내(`app.instagram.refresh-before`)이고 마지막 발급·갱신 후 24시간이 지났을 때만 갱신한다.
+- 갱신에 실패하면 그날 한 번 메시지 11을 보낸다(날짜별 중복 방지). 다음 날 04:00에 다시 시도한다.
+- 토큰을 처음 저장(기동 시 또는 reload)할 때 첫 갱신이 실패하면 실제 만료를 알 수 없어 만료일을 현재 시각 + 1일로 보수적으로 저장한다. 그러면 다음 날 점검에서 다시 갱신을 시도하고, 그때도 실패하면 메시지 11이 간다.
+
+재발급 절차
+1. Meta 개발자 앱에서 인스타그램 장기 액세스 토큰을 새로 발급한다.
+2. NAS의 `deploy/.env`에서 `INSTAGRAM_ACCESS_TOKEN`을 새 값으로 바꾼다 (`INSTAGRAM_USER_ID`는 그대로).
+3. 환경변수는 컨테이너 기동 때 묶이므로 `dc up -d`로 api를 다시 만든다 (`dc restart api`로는 반영되지 않는다).
+4. 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출한다 (웹 설정 화면의 [토큰 다시 불러오기]). 환경변수 토큰으로 저장된 값을 덮어쓰고 갱신을 한 번 시도한다.
+5. `GET /api/v1/instagram/token`으로 만료 시각과 갱신 시각을 확인한다. 만료가 약 60일 뒤면 정상이고, 하루 뒤로 나오면 갱신이 실패한 것이니 토큰 값과 `dc logs --tail 100 api`를 확인한다.

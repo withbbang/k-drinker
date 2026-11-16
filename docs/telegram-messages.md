@@ -4,10 +4,12 @@
 
 - 상태: 확정 (2026-11-15 사용자 점검)
 - 설계: `docs/superpowers/specs/2026-11-14-review-to-instagram-design.md`
-- 문구 소스: `apps/api/src/main/java/com/kdrinker/telegram/MessageFormatter.java` (P3에서 구현 예정)
+- 문구 소스: `apps/api/src/main/java/com/kdrinker/telegram/MessageFormatter.java`
 - 캡션 규칙: `docs/instagram-caption.md`
 
 ## 공통 규칙
+
+중복 키의 `attempt`는 구현에서 게시물 `version`으로 대신한다. `version`은 상태가 바뀔 때마다 오르므로 재시도마다 키가 새로 생기고, 같은 전이의 중복 전송은 같은 키로 걸러진다(`PostNotifier`가 `{종류}:{postId}:{version}`으로 만들고 `TelegramSender`가 키로 중복을 막는다).
 
 | 항목             | 규칙                                                                                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -31,7 +33,7 @@
 
 - **언제:** 사진(앨범)과 메모를 받아 게시물을 만들고(RECEIVED) 분석을 시작한 직후. 웹 공유로 들어온 게시물에도 보낸다
 - **중복 키:** `postId`
-- **소스:** `MessageFormatter.received(Post)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.received(int photoCount)`
 
 템플릿
 
@@ -50,8 +52,8 @@
 ### 2. 분석 실패 · `ANALYSIS_FAILED`
 
 - **언제:** 분석 단계(ANALYZING)에서 라벨 인식 실패나 Claude 오류로 게시물이 FAILED가 됐을 때
-- **중복 키:** `postId:analysisAttempt` (재시도 후 다시 실패하면 새로 보낸다)
-- **소스:** `MessageFormatter.analysisFailed(Post)` (P3에서 구현 예정)
+- **중복 키:** `postId:version` (재시도 후 다시 실패하면 version이 올라 새로 보낸다)
+- **소스:** `MessageFormatter.analysisFailed(Post)`
 - **버튼:** `[재시도]` `[수정]`. [재시도]는 분석 단계부터 다시 실행한다. [수정]은 수정 링크 안내(메시지 5)로 이어진다
 
 템플릿
@@ -80,7 +82,7 @@
 
 - **언제:** 분석을 마치고 PENDING_REVIEW가 됐을 때, 그리고 [수정] 저장으로 PENDING_REVIEW에 다시 들어왔을 때(새 개요)
 - **중복 키:** `postId:version` (수정할 때마다 version이 오르므로 새 개요는 새 키)
-- **소스:** `MessageFormatter.overview(Post)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.overview(Post, Brewery, int photoCount)`
 - **버튼:** `[확인]` `[상세]` `[수정]` `[취소]` (한 줄)
 
 양조장을 확인한 경우 (값이 있는 줄만 넣는다)
@@ -145,7 +147,7 @@
 - **항목별 출처 링크 규칙:** 값이 `WEB_SEARCH`로 채워진 항목(주소, 전화, 홈페이지, 인스타그램, 기타 SNS)은 그 줄 끝에 해당 항목의 `sourceUrl`로 가는 `(출처)` 링크를 붙인다. 항목마다 따로 붙인다. `PUBLIC_DATA`와 `MANUAL` 값에는 붙이지 않는다. 출처 URL이 없는 웹 검색 값은 분석 단계에서 버리므로 링크 없는 웹 검색 값은 나오지 않는다
 - **SNS는 링크로 쓴다:** 인스타그램 핸들은 `<a href="https://www.instagram.com/{핸들}/">@{핸들}</a>`, 홈페이지는 `<a href="{URL}">홈페이지</a>`. 기타 SNS(`otherSns`)는 항목마다 한 줄로, `🔗 <a href="{URL}">{이름}</a>` 형태로 쓴다 (이름은 블로그 유튜브 등 종류 이름, 모르면 `기타 SNS`)
 - 값이 비어 있는 항목은 그 줄을 통째로 뺀다
-- 지도 링크: 주소로 만든 네이버 지도 검색 URL (`https://map.naver.com/p/search/{주소를 URL 인코딩}`). P3에서 실제로 열리는지 확인한다
+- 지도 링크: 주소로 만든 네이버 지도 검색 URL (`https://map.naver.com/p/search/{주소를 URL 인코딩}`). 휴대폰에서 실제로 열리는지는 검증 대기 (Task 8 Step 2·3 미실행)
 - 캡션 글자 수는 게시 직전 최종 캡션(양조장 블록과 해시태그 포함)을 센다. 2,200자 처리는 `docs/instagram-caption.md`를 따른다
 - 캡션이 2,200자를 넘으면 개요 대신 메시지 9의 실패 알림이 간다(게시 전에 감지)
 - 술 이름은 사용자가 입력하거나 인식한 이름 그대로 쓴다
@@ -154,7 +156,7 @@
 
 - **언제:** 개요의 [상세]를 눌렀을 때. 게시물 상태는 바꾸지 않는다. 버튼을 다시 눌러도 보낸다
 - **중복 키:** 없음 (누를 때마다 보낸다)
-- **소스:** `MessageFormatter.detail(Post)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.detailCaption(Post)` (캡션 원문 메시지. 앨범은 `TelegramClient.sendPhotos`)
 - **구성:** (1) 사진 앨범(`sendMediaGroup`, 4:5로 잘린 변환본, 게시 순서. `sendMediaGroup`은 한 번에 최대 10장이고, 게시물도 최대 10장이라 한 번에 보낸다). (2) 캡션 원문 메시지
 
 캡션 원문 메시지 템플릿
@@ -184,7 +186,7 @@
 
 - **언제:** 개요나 실패 알림의 [수정]을 눌렀을 때
 - **중복 키:** 없음 (누를 때마다 보낸다)
-- **소스:** `MessageFormatter.editLink(Post, String url)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.editLink(String url)`
 
 템플릿
 
@@ -210,7 +212,7 @@
 
 - **언제:** 개요의 [취소]를 처리해 CANCELED가 됐을 때. 개요 메시지의 버튼은 제거한다
 - **중복 키:** `postId`
-- **소스:** `MessageFormatter.canceled(Post)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.canceled(Post)`
 
 템플릿
 
@@ -229,8 +231,8 @@
 ### 7. 게시 중 · `PUBLISHING`
 
 - **언제:** [확인] 또는 게시 실패 후 [재시도]를 처리해 PUBLISHING이 됐을 때. 개요 메시지의 버튼은 제거한다
-- **중복 키:** `postId:publishAttempt` (재시도마다 새로 보낸다)
-- **소스:** `MessageFormatter.publishing(Post)` (P3에서 구현 예정)
+- **중복 키:** `postId:version` (재시도마다 version이 올라 새로 보낸다)
+- **소스:** `MessageFormatter.publishing(Post)`
 
 템플릿
 
@@ -248,7 +250,7 @@
 
 - **언제:** 인스타그램 게시를 마쳐 PUBLISHED가 됐을 때
 - **중복 키:** `postId`
-- **소스:** `MessageFormatter.published(Post)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.published(Post)`
 
 템플릿
 
@@ -269,8 +271,8 @@
 ### 9. 게시 실패 · `PUBLISH_FAILED`
 
 - **언제:** 게시 단계(PUBLISHING)에서 실패해 FAILED가 됐을 때. 또는 게시 직전 검증에서 캡션이 2,200자를 넘은 것이 확인됐을 때(이 경우 PUBLISHING으로 가지 않고 FAILED로 둔다)
-- **중복 키:** `postId:publishAttempt`
-- **소스:** `MessageFormatter.publishFailed(Post)` (P3에서 구현 예정)
+- **중복 키:** `postId:version`
+- **소스:** `MessageFormatter.publishFailed(Post)`
 - **버튼:** `[재시도]`. 단 캡션 2,200자 초과로 실패한 경우에는 [재시도]로 해결되지 않으므로 `[수정]`만 붙인다. [재시도]는 게시 단계부터 다시 실행한다. 이미 인스타그램에 올라간 게시물은 다시 올리지 않는다(중복 게시 방지는 API가 처리)
 
 템플릿
@@ -308,7 +310,7 @@
 
 - **언제:** 사진 없이 텍스트만 온 메시지에 답할 때. 단 사진(앨범)의 마지막 사진을 받은 뒤 3초 안에 온 텍스트는 그 게시물의 메모로 붙이고 이 안내를 보내지 않는다(설계의 앨범 묶기 대기 시간 3초와 같은 값)
 - **중복 키:** 없음 (받을 때마다 보낸다)
-- **소스:** `MessageFormatter.textOnly()` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.textOnly()`
 
 ```text
 사진이 없어서 게시물을 만들 수 없습니다.
@@ -321,7 +323,7 @@
 
 - **언제:** 장기 토큰 갱신이 실패했을 때. 만료 7일 전부터는 매일 한 번만 다시 알린다
 - **중복 키:** 날짜 (`2026-11-14`)
-- **소스:** `MessageFormatter.tokenRefreshFailed(Instant expiresAt)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.tokenRefreshFailed(Instant expiresAt)`
 
 템플릿
 
@@ -345,7 +347,7 @@
 
 - **언제:** 한 번에 11장 이상(같은 `media_group_id` 앨범이 합쳐서 11장 이상)이 오거나 웹 공유로 11장 이상이 올라왔을 때. 입력은 1~10장까지 받는다(인스타그램 캐러셀 최대 10장). 게시물은 만들지 않고 사진도 저장하지 않는다
 - **중복 키:** 없음 (받을 때마다 보낸다)
-- **소스:** `MessageFormatter.tooManyPhotos(int count)` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.tooManyPhotos(int count)`
 
 템플릿
 
@@ -368,7 +370,7 @@
 ### 오래된 버튼 문구
 
 - **언제:** 버튼의 `version`이 현재와 다르거나, 현재 상태에서 받을 수 없는 동작일 때(예: 이미 게시 중인 글의 [확인])
-- **소스:** `MessageFormatter.staleButton()` (P3에서 구현 예정)
+- **소스:** `MessageFormatter.staleButton()`
 
 ```text
 이미 처리했거나 오래된 버튼입니다. 최신 개요 메시지를 확인해 주세요.
