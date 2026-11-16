@@ -280,6 +280,21 @@ class BreweryMatcherTest {
 	}
 
 	@Test
+	void blankFillRecordsWebFields() {
+		// given
+		Brewery known = withBlanks();
+		when(researcher.research("새술양조장", "새술")).thenReturn(Optional.of(researched("새술 양조장")));
+
+		// when
+		matcher.match(label("새술", "새술양조장"));
+
+		// then
+		Brewery saved = breweryRepository.findById(known.getId()).orElseThrow();
+		assertThat(saved.webSourceOf("phone")).contains("https://sool.example.com/about");
+		assertThat(saved.webSourceOf("address")).isEmpty();
+	}
+
+	@Test
 	void 빈_칸_보강은_값이_있는_칸과_출처_검증_여부를_덮어쓰지_않는다() {
 		// given
 		Brewery known = withBlanks();

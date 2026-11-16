@@ -112,6 +112,7 @@ public class BreweryMatcher {
 	private static void fill(Brewery brewery, ResearchedBrewery found, String path) {
 		List<String> filled = brewery.fillBlankContact(found.address(), found.phone(), found.homepage(),
 				found.instagramHandle());
+		brewery.recordWebFill(filled, found.sourceUrl());
 		log.info("양조장 빈 칸 보강 breweryId={} path={} outcome=filled filled={}", brewery.getId(), path, filled);
 	}
 
