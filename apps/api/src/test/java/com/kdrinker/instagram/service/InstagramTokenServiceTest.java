@@ -32,7 +32,7 @@ import org.mockito.ArgumentCaptor;
 
 class InstagramTokenServiceTest {
 
-	private static final Instant NOW = Instant.parse("2026-11-16T00:00:00Z");
+	private static final Instant NOW = Instant.parse("2026-11-15T16:00:00Z");
 
 	private final InstagramTokenRepository repository = mock(InstagramTokenRepository.class);
 	private final InstagramClient client = mock(InstagramClient.class);
@@ -68,7 +68,7 @@ class InstagramTokenServiceTest {
 	}
 
 	@Test
-	void 갱신이_실패하면_환경변수_토큰을_60일로_저장한다() {
+	void 갱신이_실패하면_환경변수_토큰을_1일_뒤_만료로_저장한다() {
 		// given
 		when(repository.existsById(InstagramToken.SINGLE_ROW_ID)).thenReturn(false);
 		when(client.refresh("ENV")).thenThrow(new InstagramApiException(100, null, "too new"));
@@ -80,7 +80,28 @@ class InstagramTokenServiceTest {
 		ArgumentCaptor<InstagramToken> saved = ArgumentCaptor.forClass(InstagramToken.class);
 		verify(repository).save(saved.capture());
 		assertThat(saved.getValue().getAccessToken()).isEqualTo("ENV");
-		assertThat(saved.getValue().getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(60)));
+		assertThat(saved.getValue().getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(1)));
+	}
+
+	@Test
+	void 전송_실패와_190도_만료일을_지어내지_않고_1일로_저장한다() {
+		for (int code : new int[] { -1, 190 }) {
+			// given
+			InstagramTokenRepository repo = mock(InstagramTokenRepository.class);
+			InstagramClient failing = mock(InstagramClient.class);
+			when(repo.existsById(InstagramToken.SINGLE_ROW_ID)).thenReturn(false);
+			when(failing.refresh("ENV")).thenThrow(new InstagramApiException(code, null, "fail"));
+			InstagramProperties props = new InstagramProperties("b", "v27.0", "ENV", "1", Duration.ofSeconds(3),
+					Duration.ofMinutes(5), Duration.ofDays(30), "0 0 4 * * *", ZoneId.of("Asia/Seoul"));
+
+			// when
+			new InstagramTokenService(repo, failing, sender, clock, props).initIfMissing();
+
+			// then
+			ArgumentCaptor<InstagramToken> saved = ArgumentCaptor.forClass(InstagramToken.class);
+			verify(repo).save(saved.capture());
+			assertThat(saved.getValue().getExpiresAt()).isEqualTo(NOW.plus(Duration.ofDays(1)));
+		}
 	}
 
 	@Test

@@ -101,8 +101,8 @@ public class InstagramClient {
 			.pathSegment("refresh_access_token")
 			.queryParam("grant_type", "ig_refresh_token");
 		RefreshResponse response = get(token, uri, RefreshResponse.class);
-		if (response == null || response.accessToken() == null) {
-			throw new InstagramApiException(-1, null, "인스타그램 응답에 access_token이 없습니다.");
+		if (response == null || response.accessToken() == null || response.expiresIn() == null) {
+			throw new InstagramApiException(-1, null, "인스타그램 응답에 access_token 또는 expires_in이 없습니다.");
 		}
 		return new RefreshedToken(response.accessToken(), response.expiresIn());
 	}
@@ -177,7 +177,7 @@ public class InstagramClient {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record RefreshResponse(@JsonProperty("access_token") String accessToken,
-			@JsonProperty("expires_in") long expiresIn) {
+			@JsonProperty("expires_in") Long expiresIn) {
 	}
 
 }

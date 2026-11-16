@@ -29,8 +29,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class InstagramTokenService {
 
-	/** 장기 토큰의 유효 기간. */
-	private static final Duration LIFETIME = Duration.ofDays(60);
+	/** 첫 갱신이 실패해 실제 만료를 모를 때 쓰는 보수적 값. 다음 날 refreshIfDue가 다시 시도한다. */
+	private static final Duration UNKNOWN_EXPIRY = Duration.ofDays(1);
 	/** 발급·갱신 후 이만큼 지나야 다시 갱신할 수 있다. */
 	private static final Duration MIN_AGE = Duration.ofHours(24);
 
@@ -113,17 +113,17 @@ public class InstagramTokenService {
 		}
 	}
 
-	/** 갱신을 시도해 실제 만료를 받고, 실패(발급 24시간 이내 등)하면 60일로 보고 저장한다. */
+	/** 갱신을 시도해 실제 만료를 받고, 어떤 이유로든 실패하면 만료일을 모르므로 1일 뒤로 저장한다. */
 	private InstagramToken store(String envToken) {
 		Instant now = clock.instant();
 		String token = envToken;
-		Instant expiresAt = now.plus(LIFETIME);
+		Instant expiresAt = now.plus(UNKNOWN_EXPIRY);
 		try {
 			RefreshedToken refreshed = client.refresh(envToken);
 			token = refreshed.accessToken();
 			expiresAt = now.plusSeconds(refreshed.expiresInSeconds());
 		} catch (InstagramApiException e) {
-			log.info("토큰 갱신을 건너뛰고 60일로 저장합니다. code={}, subcode={}", e.getCode(), e.getSubcode());
+			log.info("토큰 갱신에 실패해 만료일을 1일 뒤로 저장합니다. code={}, subcode={}", e.getCode(), e.getSubcode());
 		}
 		InstagramToken row = repository.findById(InstagramToken.SINGLE_ROW_ID).orElse(null);
 		if (row == null) {
