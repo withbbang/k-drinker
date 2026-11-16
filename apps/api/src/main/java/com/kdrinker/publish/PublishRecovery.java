@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,6 +35,8 @@ public class PublishRecovery {
 		this.events = events;
 	}
 
+	/** 알림 보정(NotificationReconciler, LOWEST_PRECEDENCE)보다 먼저 실행기에 넣는다. */
+	@Order(Ordered.LOWEST_PRECEDENCE - 100)
 	@EventListener(ApplicationReadyEvent.class)
 	public void recover() {
 		publishExecutor.execute(this::recoverNow);

@@ -148,6 +148,10 @@ public class Post {
 		this.failureReason = null;
 	}
 
+	public void clearContainer() {
+		this.igContainerId = null;
+	}
+
 	public void recordContainer(String igContainerId) {
 		this.igContainerId = igContainerId;
 	}

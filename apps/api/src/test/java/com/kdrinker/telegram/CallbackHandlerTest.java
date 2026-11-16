@@ -68,7 +68,7 @@ class CallbackHandlerTest {
 		photoStorage = mock(PhotoStorage.class);
 		when(client.isOwnerChat(OWNER)).thenReturn(true);
 		handler = new CallbackHandler(client, sender, postRepository, photoRepository, publishService,
-				analysisService, notifier, photoStorage, Runnable::run, CLOCK, "https://k.example/");
+				analysisService, notifier, photoStorage, Runnable::run, CLOCK, "https://k.example/", mock(org.springframework.transaction.PlatformTransactionManager.class));
 	}
 
 	private Post post(PostStatus status, int version, PostStatus failedStage) {

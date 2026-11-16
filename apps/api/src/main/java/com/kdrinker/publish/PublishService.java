@@ -59,6 +59,8 @@ public class PublishService implements CaptionLengthGuard {
 			if (brewery != null) {
 				brewery.markVerified();
 			}
+			// [확인]은 항상 새 내용이다. 이전 컨테이너를 쓰지 않도록 비운다(transition이 먼저 flush한다). [재시도]만 재사용한다.
+			post.clearContainer();
 			if (postRepository.transition(postId, PostStatus.PENDING_REVIEW, PostStatus.PUBLISHING, version,
 					clock.instant()) == 0) {
 				status.setRollbackOnly();
