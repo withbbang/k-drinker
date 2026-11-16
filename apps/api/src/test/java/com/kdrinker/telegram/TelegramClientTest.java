@@ -74,13 +74,16 @@ class TelegramClientTest {
 	@Test
 	void 토큰이_비면_설정되지_않은_것이고_요청을_보내지_않는다() {
 		// given
-		TelegramClient blank = new TelegramClient(RestClient.builder(),
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer blankServer = MockRestServiceServer.bindTo(builder).build();
+		TelegramClient blank = new TelegramClient(builder,
 				new TelegramProperties("https://api.telegram.org", "", "42", 25, null, null, 3));
 
 		// when, then
 		assertThat(blank.isConfigured()).isFalse();
-		assertThatThrownBy(() -> blank.sendMessage(TelegramText.of("안녕"))).isInstanceOf(TelegramApiException.class);
-		server.verify();
+		assertThatThrownBy(() -> blank.sendMessage(TelegramText.of("안녕"))).isInstanceOf(TelegramApiException.class)
+			.hasMessageContaining("설정이 비어 있습니다");
+		blankServer.verify();
 	}
 
 	@Test
