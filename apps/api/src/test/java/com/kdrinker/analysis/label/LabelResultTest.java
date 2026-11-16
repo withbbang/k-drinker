@@ -129,4 +129,12 @@ class LabelResultTest {
 		assertThat(withDrinkName(" 화요 25 ").sanitized(1).drinkName()).isEqualTo("화요 25");
 		assertThat(withDrinkName("Nana").sanitized(1).drinkName()).isEqualTo("Nana");
 	}
+
+	@Test
+	void 정규화하면_비는_술_이름과_괄호로_감싼_자리표시는_null이다() {
+		for (String name : List.of("(모름)", "()", "[unknown]", "{ 없음 }", "（미상）", "(주)", "( )")) {
+			assertThat(withDrinkName(name).sanitized(1).drinkName()).as(name).isNull();
+		}
+		assertThat(withDrinkName("(생)막걸리").sanitized(1).drinkName()).isEqualTo("(생)막걸리");
+	}
 }

@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /** 라벨·메모에서 읽은 값. 모르는 값은 null. */
 public record LabelResult(String drinkName, String category, BigDecimal abv, Integer volumeMl, String breweryName,
@@ -19,10 +20,12 @@ public record LabelResult(String drinkName, String category, BigDecimal abv, Int
 	/** 모델이 술 이름을 못 읽었을 때 지어 넣는 자리표시. 정규화(공백 제거·소문자) 뒤 비교한다. */
 	static final Set<String> PLACEHOLDERS = Set.of("모름", "알수없음", "없음", "미상", "불明", "unknown", "n/a", "na",
 			"none", "null", "-", "?");
+	private static final Pattern BRACKETED = Pattern.compile("^[(\\[{（](.*)[)\\]}）]$");
 
 	/**
 	 * 모델 출력 검증: 문자열 trim(빈 값 null), 도수는 0 초과 100 미만, 용량은 0 초과, 별점은 0~5의 0.5 단위만
-	 * (접수 검증과 같은 범위), 범위 밖 상자·index 제거. 술 이름이 "모름" 같은 자리표시면 null(술 이름을 못 읽음).
+	 * (접수 검증과 같은 범위), 범위 밖 상자·index 제거. 술 이름이 "모름" 같은 자리표시이거나
+	 * 정규화하면 비면 null(술 이름을 못 읽음).
 	 */
 	public LabelResult sanitized(int imageCount) {
 		List<PhotoBox> source = boxes == null ? List.of() : boxes;
@@ -50,9 +53,16 @@ public record LabelResult(String drinkName, String category, BigDecimal abv, Int
 		if (t == null) {
 			return null;
 		}
-		boolean placeholder = PLACEHOLDERS.contains(Names.normalize(t))
-				|| PLACEHOLDERS.contains(t.toLowerCase(Locale.ROOT));
+		String normalized = Names.normalize(t);
+		boolean placeholder = normalized.isEmpty() || PLACEHOLDERS.contains(normalized)
+				|| PLACEHOLDERS.contains(t.toLowerCase(Locale.ROOT)) || bracketedPlaceholder(t);
 		return placeholder ? null : t;
+	}
+
+	/** "(모름)" "[unknown]"처럼 괄호 하나로 감싼 자리표시. 정규화가 괄호 안을 지우므로 안쪽 글자를 따로 본다. */
+	private static boolean bracketedPlaceholder(String t) {
+		var m = BRACKETED.matcher(t);
+		return m.matches() && PLACEHOLDERS.contains(Names.normalize(m.group(1)));
 	}
 
 	private static String clean(String s) {
