@@ -103,6 +103,18 @@ public final class MessageFormatter {
 				+ "한 게시물에는 사진을 최대 10장까지 올릴 수 있습니다. 10장 이하로 나누어 다시 보내 주세요.");
 	}
 
+	public static TelegramText photoTooLarge() {
+		return TelegramText.of("사진이 너무 커서 받지 못했습니다. 20MB 이하로 다시 보내 주세요.");
+	}
+
+	public static TelegramText unsupportedAttachment() {
+		return TelegramText.of("사진만 받을 수 있습니다. 사진으로 다시 보내 주세요.");
+	}
+
+	public static TelegramText intakeFailed() {
+		return TelegramText.of("사진을 받지 못했습니다. 잠시 뒤 다시 보내 주세요.");
+	}
+
 	public static TelegramText tokenRefreshFailed(Instant expiresAt) {
 		ZonedDateTime date = expiresAt.atZone(SEOUL);
 		String day = String.format(Locale.ROOT, "%04d-%02d-%02d(%s)", date.getYear(), date.getMonthValue(),

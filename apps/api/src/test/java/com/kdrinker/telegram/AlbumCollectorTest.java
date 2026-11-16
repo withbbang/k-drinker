@@ -91,6 +91,18 @@ class AlbumCollectorTest {
 	}
 
 	@Test
+	void 사진이_아닌_첨부는_지원하지_않음으로_돌려준다() {
+		TelegramMessage pdf = new TelegramMessage(1, CHAT, null, "캡션", "g9", null,
+				new com.kdrinker.telegram.dto.Document("D1", "application/pdf", 10L));
+
+		Accepted result = collector.accept(pdf);
+
+		assertThat(result).isEqualTo(new AlbumCollector.Unsupported("g9"));
+		clock.advance(Duration.ofSeconds(5));
+		assertThat(collector.drainDue()).isEmpty();
+	}
+
+	@Test
 	void 창_밖의_텍스트는_텍스트만이다() {
 		collector.accept(photo(1, null, "A1", null));
 		clock.advance(Duration.ofSeconds(5));

@@ -1,6 +1,7 @@
 package com.kdrinker.telegram;
 
 import com.kdrinker.telegram.AlbumCollector.TextOnly;
+import com.kdrinker.telegram.AlbumCollector.Unsupported;
 import com.kdrinker.telegram.dto.TelegramUpdate;
 import com.kdrinker.telegram.entity.NotificationKind;
 import java.time.Duration;
@@ -28,6 +29,8 @@ public class TelegramPoller implements SmartLifecycle {
 	private final PollBackoff backoff = new PollBackoff();
 
 	private long offset;
+	/** 같은 앨범의 지원하지 않는 첨부 안내를 한 번만 보내려고 마지막으로 알린 media_group_id를 기억한다(폴러 스레드만 쓴다). */
+	private String lastUnsupportedGroup;
 	private volatile boolean running;
 	private volatile boolean stopping;
 	private Thread thread;
@@ -118,14 +121,26 @@ public class TelegramPoller implements SmartLifecycle {
 		}
 	}
 
+	private void notifyUnsupported(Unsupported unsupported) {
+		String group = unsupported.mediaGroupId();
+		if (group != null && group.equals(lastUnsupportedGroup)) {
+			return;
+		}
+		lastUnsupportedGroup = group;
+		sender.send(null, NotificationKind.INTAKE_FAILED, null, MessageFormatter.unsupportedAttachment());
+	}
+
 	private void handle(TelegramUpdate update) {
 		if (update.message() != null) {
 			if (!client.isOwnerChat(update.message().chatId())) {
 				log.info("소유자가 아닌 chat의 메시지를 무시합니다.");
 				return;
 			}
-			if (collector.accept(update.message()) instanceof TextOnly) {
+			AlbumCollector.Accepted accepted = collector.accept(update.message());
+			if (accepted instanceof TextOnly) {
 				sender.send(null, NotificationKind.TEXT_ONLY, null, MessageFormatter.textOnly());
+			} else if (accepted instanceof Unsupported unsupported) {
+				notifyUnsupported(unsupported);
 			}
 		} else if (update.callbackQuery() != null) {
 			if (!client.isOwnerChat(update.callbackQuery().fromChatId())) {

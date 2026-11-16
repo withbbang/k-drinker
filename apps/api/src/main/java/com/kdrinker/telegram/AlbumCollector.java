@@ -33,17 +33,22 @@ public class AlbumCollector {
 
 	}
 
-	public sealed interface Accepted permits Buffered, TextOnly {
+	public sealed interface Accepted permits Buffered, TextOnly, Unsupported {
 
 	}
 
-	/** 앨범에 붙었거나(또는 받지 않는 첨부라) 따로 알릴 일이 없는 메시지. */
+	/** 앨범에 붙어서 따로 알릴 일이 없는 메시지. */
 	public record Buffered() implements Accepted {
 
 	}
 
 	/** 사진 없이 텍스트만 온 메시지. */
 	public record TextOnly() implements Accepted {
+
+	}
+
+	/** 사진도 텍스트도 아닌 첨부(사진이 아닌 파일, 동영상 등)만 온 메시지. 같은 앨범이면 mediaGroupId가 같다. */
+	public record Unsupported(String mediaGroupId) implements Accepted {
 
 	}
 
@@ -117,7 +122,7 @@ public class AlbumCollector {
 			return new Buffered();
 		}
 		if (m.text() == null) {
-			return new Buffered();
+			return new Unsupported(m.mediaGroupId());
 		}
 		Open current = open.get(m.chatId());
 		if (current != null && now.isBefore(current.lastPhotoAt.plus(window))) {

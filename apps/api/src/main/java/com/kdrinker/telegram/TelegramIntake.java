@@ -1,9 +1,9 @@
 package com.kdrinker.telegram;
 
-import com.kdrinker.common.BusinessException;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.service.PostIntakeService;
 import com.kdrinker.telegram.AlbumCollector.PendingAlbum;
+import com.kdrinker.telegram.dto.TelegramText;
 import com.kdrinker.telegram.entity.NotificationKind;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,31 +47,49 @@ public class TelegramIntake {
 		for (PendingAlbum album : albums) {
 			try {
 				processOne(album);
-			} catch (BusinessException e) {
-				log.warn("텔레그램 앨범 접수 실패", e);
 			} catch (RuntimeException e) {
 				log.warn("텔레그램 앨범 처리 실패", e);
 			}
 		}
 	}
 
+	/**
+	 * 받을 수 있는 사진만 모아 접수한다. 일부 사진이 크기 초과·다운로드 실패면 나머지로 게시물을 만들고, 앨범마다 실패 안내는
+	 * 한 번만 보낸다. 받을 수 있는 사진이 없거나 접수가 실패하면 게시물은 만들지 않는다.
+	 */
 	private void processOne(PendingAlbum album) {
 		int count = album.fileIds().size();
 		if (count > MAX_PHOTOS) {
 			sender.send(null, NotificationKind.TOO_MANY_PHOTOS, null, MessageFormatter.tooManyPhotos(count));
 			return;
 		}
-		for (Long size : album.fileSizes()) {
+		TelegramText failure = null;
+		List<byte[]> photos = new ArrayList<>(count);
+		for (int i = 0; i < count; i++) {
+			Long size = album.fileSizes().get(i);
 			if (size != null && size > MAX_FILE_BYTES) {
-				log.warn("텔레그램 사진이 20MB를 넘어 앨범 접수를 건너뜁니다. size={}", size);
-				return;
+				log.warn("텔레그램 사진이 20MB를 넘어 건너뜁니다. size={}", size);
+				failure = failure == null ? MessageFormatter.photoTooLarge() : failure;
+				continue;
+			}
+			try {
+				photos.add(client.downloadFile(album.fileIds().get(i)));
+			} catch (RuntimeException e) {
+				log.warn("텔레그램 사진 다운로드 실패", e);
+				failure = failure == null ? MessageFormatter.intakeFailed() : failure;
 			}
 		}
-		List<byte[]> photos = new ArrayList<>(count);
-		for (String fileId : album.fileIds()) {
-			photos.add(client.downloadFile(fileId));
+		if (!photos.isEmpty()) {
+			try {
+				intake.receive(PostSource.TELEGRAM, album.memo(), null, photos);
+			} catch (RuntimeException e) {
+				log.warn("텔레그램 앨범 접수 실패", e);
+				failure = MessageFormatter.intakeFailed();
+			}
 		}
-		intake.receive(PostSource.TELEGRAM, album.memo(), null, photos);
+		if (failure != null) {
+			sender.send(null, NotificationKind.INTAKE_FAILED, null, failure);
+		}
 	}
 
 }

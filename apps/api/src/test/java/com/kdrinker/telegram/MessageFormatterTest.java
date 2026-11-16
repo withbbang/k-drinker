@@ -268,6 +268,16 @@ class MessageFormatterTest {
 	}
 
 	@Test
+	void intakeFailureNotices() {
+		assertThat(MessageFormatter.photoTooLarge().html())
+				.isEqualTo("사진이 너무 커서 받지 못했습니다. 20MB 이하로 다시 보내 주세요.");
+		assertThat(MessageFormatter.unsupportedAttachment().html())
+				.isEqualTo("사진만 받을 수 있습니다. 사진으로 다시 보내 주세요.");
+		assertThat(MessageFormatter.intakeFailed().html()).isEqualTo("사진을 받지 못했습니다. 잠시 뒤 다시 보내 주세요.");
+		assertThat(MessageFormatter.intakeFailed().keyboard()).isEmpty();
+	}
+
+	@Test
 	void tokenRefreshFailedShowsKoreanWeekday() {
 		// 2026-12-02 00:00 +09:00 = 2026-12-01T15:00Z
 		assertThat(MessageFormatter.tokenRefreshFailed(Instant.parse("2026-12-01T15:00:00Z")).html()).isEqualTo(

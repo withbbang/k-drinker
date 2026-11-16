@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -71,6 +72,32 @@ class TelegramPollerTest {
 
 		verify(sender).send(eq(null), eq(com.kdrinker.telegram.entity.NotificationKind.TEXT_ONLY), eq(null),
 				any());
+	}
+
+	@Test
+	void 지원하지_않는_첨부는_안내를_보낸다() {
+		TelegramMessage m = new TelegramMessage(1, OWNER, null, null, null, null, null);
+		when(client.getUpdates(anyLong(), anyInt())).thenReturn(List.of(new TelegramUpdate(5, m, null)));
+		when(collector.accept(m)).thenReturn(new AlbumCollector.Unsupported(null));
+
+		poller.pollOnce();
+
+		verify(sender).send(eq(null), eq(com.kdrinker.telegram.entity.NotificationKind.INTAKE_FAILED), eq(null),
+				eq(MessageFormatter.unsupportedAttachment()));
+	}
+
+	@Test
+	void 같은_앨범의_지원하지_않는_첨부_안내는_한_번만_보낸다() {
+		TelegramMessage m1 = new TelegramMessage(1, OWNER, null, null, "g1", null, null);
+		TelegramMessage m2 = new TelegramMessage(2, OWNER, null, null, "g1", null, null);
+		when(client.getUpdates(anyLong(), anyInt()))
+				.thenReturn(List.of(new TelegramUpdate(5, m1, null), new TelegramUpdate(6, m2, null)));
+		when(collector.accept(any())).thenReturn(new AlbumCollector.Unsupported("g1"));
+
+		poller.pollOnce();
+
+		verify(sender, times(1)).send(eq(null), eq(com.kdrinker.telegram.entity.NotificationKind.INTAKE_FAILED),
+				eq(null), any());
 	}
 
 	@Test
