@@ -397,4 +397,80 @@ class PublishWorkerTest {
 		// then
 		assertThat(finished()).containsExactly(new PostPublishFinishedEvent(id, PostStatus.FAILED));
 	}
+
+	@Test
+	void 컨테이너_대기_중_중단되면_실패로_기록하지_않고_PUBLISHING으로_둔다() throws Exception {
+		// given
+		Long id = post(1, null);
+		when(client.createImageContainer(eq(TOKEN), anyString(), eq(false), anyString())).thenReturn("c1");
+		when(client.containerStatus(TOKEN, "c1")).thenReturn(ContainerStatus.IN_PROGRESS);
+		org.mockito.Mockito.doThrow(new InterruptedException("shutdown")).when(sleeper).sleep(any());
+
+		// when
+		try {
+			worker.publish(id);
+			// then
+			assertThat(Thread.currentThread().isInterrupted()).isTrue();
+		} finally {
+			Thread.interrupted();
+		}
+		Post after = reload(id);
+		assertThat(after.getStatus()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(after.getIgContainerId()).isEqualTo("c1");
+		assertThat(finished()).isEmpty();
+	}
+
+	@Test
+	void HTTP_호출이_중단_예외로_감싸져_실패해도_PUBLISHING으로_둔다() {
+		// given
+		Long id = post(1, null);
+		when(client.createImageContainer(eq(TOKEN), anyString(), eq(false), anyString()))
+				.thenThrow(new IllegalStateException("io", new InterruptedException("x")));
+
+		// when
+		try {
+			worker.publish(id);
+		} finally {
+			Thread.interrupted();
+		}
+
+		// then
+		assertThat(reload(id).getStatus()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(finished()).isEmpty();
+	}
+
+	@Test
+	void 스냅샷_단계에서_예외가_나면_알_수_없음으로_실패_처리하고_이벤트를_낸다() {
+		// given
+		Long id = post(1, null);
+		org.mockito.Mockito.doThrow(new IllegalStateException("boom")).when(photoService).publicUrl(any());
+
+		// when
+		worker.publish(id);
+
+		// then
+		Post after = reload(id);
+		assertThat(after.getStatus()).isEqualTo(PostStatus.FAILED);
+		assertThat(after.getFailedStage()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(after.getFailureReason()).isEqualTo(PublishFailure.UNKNOWN.message());
+		assertThat(finished()).containsExactly(new PostPublishFinishedEvent(id, PostStatus.FAILED));
+	}
+
+	@Test
+	void 스냅샷_단계에서_중단되면_PUBLISHING으로_둔다() {
+		// given
+		Long id = post(1, null);
+		org.mockito.Mockito.doThrow(new IllegalStateException("x", new InterruptedException())).when(photoService).publicUrl(any());
+
+		// when
+		try {
+			worker.publish(id);
+		} finally {
+			Thread.interrupted();
+		}
+
+		// then
+		assertThat(reload(id).getStatus()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(finished()).isEmpty();
+	}
 }

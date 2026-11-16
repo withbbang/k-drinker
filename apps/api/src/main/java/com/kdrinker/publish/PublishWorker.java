@@ -64,34 +64,68 @@ public class PublishWorker {
 		this.tx = new TransactionTemplate(transactionManager);
 	}
 
-	/** 예외를 밖으로 던지지 않는다. 상태를 바꿨으면 이벤트를 정확히 한 번 낸다. */
+	/**
+	 * 예외를 밖으로 던지지 않는다. 상태를 바꿨으면 이벤트를 정확히 한 번 낸다. 종료 등으로 중단(interrupt)됐으면 실패로
+	 * 기록하지 않고 PUBLISHING으로 둔다(알림 실행기도 이미 멈췄을 수 있다). 다음 기동 때 PublishRecovery가 실패로 바꾸고 알린다.
+	 */
 	public void publish(Long postId) {
 		PostStatus result;
+		Snapshot snapshot;
 		try {
-			Snapshot snapshot = tx.execute(status -> snapshot(postId));
-			if (snapshot == null) {
+			snapshot = tx.execute(status -> snapshot(postId));
+		} catch (RuntimeException e) {
+			if (interrupted(e)) {
+				leaveForRecovery(postId, e);
 				return;
 			}
-			try {
-				run(postId, snapshot);
-				result = PostStatus.PUBLISHED;
-			} catch (Exception e) {
-				if (e instanceof InterruptedException) {
-					Thread.currentThread().interrupt();
-				}
-				result = fail(postId, e);
-			}
-		} catch (RuntimeException e) {
 			log.error("게시 준비 중 예외가 났습니다. postId={}", postId, e);
+			result = fail(postId, e);
+			publishFinished(postId, result);
 			return;
 		}
-		if (result != null) {
-			try {
-				events.publishEvent(new PostPublishFinishedEvent(postId, result));
-			} catch (RuntimeException e) {
-				log.error("게시 완료 이벤트 처리 중 예외가 났습니다. postId={}", postId, e);
+		if (snapshot == null) {
+			return;
+		}
+		try {
+			run(postId, snapshot);
+			result = PostStatus.PUBLISHED;
+		} catch (Exception e) {
+			if (interrupted(e)) {
+				leaveForRecovery(postId, e);
+				return;
+			}
+			result = fail(postId, e);
+		}
+		publishFinished(postId, result);
+	}
+
+	private void publishFinished(Long postId, PostStatus result) {
+		if (result == null) {
+			return;
+		}
+		try {
+			events.publishEvent(new PostPublishFinishedEvent(postId, result));
+		} catch (RuntimeException e) {
+			log.error("게시 완료 이벤트 처리 중 예외가 났습니다. postId={}", postId, e);
+		}
+	}
+
+	/** 원인 사슬에 InterruptedException이 있거나 현재 스레드가 중단 상태인가. */
+	private static boolean interrupted(Throwable e) {
+		if (Thread.currentThread().isInterrupted()) {
+			return true;
+		}
+		for (Throwable t = e; t != null; t = t.getCause()) {
+			if (t instanceof InterruptedException) {
+				return true;
 			}
 		}
+		return false;
+	}
+
+	private static void leaveForRecovery(Long postId, Throwable e) {
+		Thread.currentThread().interrupt();
+		log.warn("게시 중 중단되었습니다. PUBLISHING으로 두고 다음 기동 때 복구합니다. postId={} cause={}", postId, e.toString());
 	}
 
 	/** PUBLISHING 게시물을 실패로 바꾼다. 다른 상태면 아무것도 바꾸지 않고 false. 기동 복구도 쓴다. */

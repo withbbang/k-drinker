@@ -34,4 +34,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("select p.id from Post p where p.status = :status order by p.id")
 	List<Long> findIdsByStatus(@Param("status") PostStatus status);
 
+	/** 상태가 같고 since 이후에 갱신된 게시물 id. 기동 알림 보정이 쓴다. */
+	@Query("select p.id from Post p where p.status = :status and p.updatedAt >= :since order by p.id")
+	List<Long> findIdsByStatusUpdatedSince(@Param("status") PostStatus status, @Param("since") Instant since);
+
 }
