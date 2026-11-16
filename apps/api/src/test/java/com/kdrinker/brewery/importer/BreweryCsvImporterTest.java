@@ -14,6 +14,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -118,6 +119,22 @@ class BreweryCsvImporterTest {
 		assertThat(b.getSource()).isEqualTo(BrewerySource.PUBLIC_DATA);
 		assertThat(b.isVerified()).isTrue();
 		assertThat(b.getInstagramHandle()).isEqualTo("baek");
+	}
+
+	@Test
+	void 다시_적재해도_웹_조사_시각은_그대로_둔다() throws IOException {
+		// given
+		Instant researchedAt = Instant.parse("2026-11-15T03:00:00Z");
+		Brewery existing = Brewery.of("배상면주가", "배상면주가", BrewerySource.PUBLIC_DATA);
+		existing.markResearched(researchedAt);
+		breweryRepository.save(existing);
+
+		// when
+		importer.importFrom(new StringReader(HEADER + "배상면주가,경기도,031,,,,https://example.org/a\n"), "t");
+
+		// then
+		assertThat(breweryRepository.findByNormalizedName("배상면주가").get(0).getResearchedAt())
+				.isEqualTo(researchedAt);
 	}
 
 	@Test

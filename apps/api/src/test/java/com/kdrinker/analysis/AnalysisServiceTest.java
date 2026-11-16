@@ -357,6 +357,25 @@ class AnalysisServiceTest {
 	}
 
 	@Test
+	void DB_양조장_빈_칸_보강이_Claude_오류여도_검토_대기가_된다() {
+		// given
+		Brewery known = breweryRepository.save(Brewery.of("새술양조장", "새술양조장", BrewerySource.PUBLIC_DATA));
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+		when(breweryResearcher.research(anyString(), anyString())).thenThrow(new ClaudeUnavailableException("시간 초과"));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.PENDING_REVIEW);
+		assertThat(breweryRepository.findById(known.getId()).orElseThrow().getResearchedAt()).isNull();
+		Long linkedBreweryId = tx.execute(s -> postRepository.findById(f.postId()).orElseThrow().getDrink()
+				.getBrewery().getId());
+		assertThat(linkedBreweryId).isEqualTo(known.getId());
+	}
+
+	@Test
 	void 예상하지_못한_예외면_알_수_없는_오류로_실패한다() {
 		// given
 		Fixture f = post(PostStatus.RECEIVED, null);
