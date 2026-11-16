@@ -247,10 +247,10 @@ class PublishWorkerTest {
 	}
 
 	@Test
-	void 조회가_실패하면_새_컨테이너로_이어간다() {
+	void 저장된_컨테이너가_없다는_100_오류면_새_컨테이너로_이어간다() {
 		// given
 		Long id = post(1, "old2");
-		when(client.containerStatus(TOKEN, "old2")).thenThrow(new InstagramApiException(-1, null, "조회 실패"));
+		when(client.containerStatus(TOKEN, "old2")).thenThrow(new InstagramApiException(100, null, "Object does not exist"));
 		when(client.createImageContainer(eq(TOKEN), anyString(), eq(false), anyString())).thenReturn("new2");
 		when(client.containerStatus(TOKEN, "new2")).thenReturn(ContainerStatus.FINISHED);
 		when(client.publish(TOKEN, "new2")).thenReturn("m2");
@@ -262,6 +262,27 @@ class PublishWorkerTest {
 		// then
 		assertThat(reload(id).getIgContainerId()).isEqualTo("new2");
 		assertThat(reload(id).getStatus()).isEqualTo(PostStatus.PUBLISHED);
+	}
+
+	@Test
+	void 저장된_컨테이너_조회가_일시_실패하면_새로_만들지_않고_실패로_남긴다() {
+		// given
+		Long id = post(1, "old3");
+		when(client.containerStatus(TOKEN, "old3")).thenThrow(new InstagramApiException(-1, null, "타임아웃"));
+
+		// when
+		worker.publish(id);
+
+		// then
+		verify(client, never()).createImageContainer(any(), any(), anyBoolean(), any());
+		verify(client, never()).createCarouselContainer(any(), anyList(), any());
+		verify(client, never()).publish(any(), any());
+		Post after = reload(id);
+		assertThat(after.getStatus()).isEqualTo(PostStatus.FAILED);
+		assertThat(after.getFailedStage()).isEqualTo(PostStatus.PUBLISHING);
+		assertThat(after.getFailureReason()).isEqualTo(PublishFailure.UNKNOWN.message());
+		assertThat(after.getIgContainerId()).isEqualTo("old3");
+		assertThat(finished()).containsExactly(new PostPublishFinishedEvent(id, PostStatus.FAILED));
 	}
 
 	@Test

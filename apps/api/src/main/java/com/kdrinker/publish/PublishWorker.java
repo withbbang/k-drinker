@@ -34,6 +34,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class PublishWorker {
 
 	private static final int MAX_PHOTOS = 10;
+	/** Graph API 잘못된 파라미터·존재하지 않는 객체. */
+	private static final int CONTAINER_NOT_FOUND_CODE = 100;
 
 	private final PostRepository postRepository;
 	private final PostPhotoRepository photoRepository;
@@ -145,14 +147,20 @@ public class PublishWorker {
 		finish(postId, mediaId, permalinkOrNull(token, mediaId));
 	}
 
-	/** 저장된 컨테이너의 상태. 조회에 실패하면 null(새로 만든다). ERROR·EXPIRED도 새로 만들어야 하므로 null. */
+	/**
+	 * 저장된 컨테이너의 상태. ERROR·EXPIRED, 그리고 컨테이너가 없다고 확정되는 Meta 오류(code 100)는 null(새로 만든다).
+	 * 그 밖의 조회 실패(전송 실패·타임아웃·5xx·속도 제한·인증)는 이미 게시됐을 수 있으므로 새로 만들지 않고 예외를 던진다.
+	 */
 	private ContainerStatus existingState(String token, String containerId) {
 		try {
 			ContainerStatus state = client.containerStatus(token, containerId);
 			return state == ContainerStatus.ERROR || state == ContainerStatus.EXPIRED ? null : state;
 		} catch (InstagramApiException e) {
-			log.warn("저장된 컨테이너를 조회하지 못해 새로 만듭니다. cause={}", e.getMessage());
-			return null;
+			if (e.getCode() == CONTAINER_NOT_FOUND_CODE) {
+				log.warn("저장된 컨테이너가 없어 새로 만듭니다. cause={}", e.getMessage());
+				return null;
+			}
+			throw e;
 		}
 	}
 
