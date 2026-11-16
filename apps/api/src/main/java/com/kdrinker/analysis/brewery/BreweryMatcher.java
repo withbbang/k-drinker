@@ -95,14 +95,24 @@ public class BreweryMatcher {
 			return null;
 		}
 		if (brewery.getResearchedAt() == null) {
-			if (found != null && sameBrewery(brewery, found)) {
-				List<String> filled = brewery.fillBlankContact(found.address(), found.phone(), found.homepage(),
-						found.instagramHandle());
-				log.info("양조장 빈 칸 보강 breweryId={} filled={}", breweryId, filled);
+			if (found == null) {
+				log.info("양조장 빈 칸 보강 breweryId={} outcome=no result", breweryId);
+			} else if (!sameBrewery(brewery, found)) {
+				log.info("양조장 빈 칸 보강 breweryId={} outcome=name mismatch researched={} db={}", breweryId,
+						found.name(), brewery.getName());
+			} else {
+				fill(brewery, found, "blank-fill");
 			}
 			brewery.markResearched(clock.instant());
 		}
 		return Hibernate.unproxy(brewery, Brewery.class);
+	}
+
+	/** 빈 칸만 채우고(값이 있는 칸·출처·검증 여부는 그대로) 채운 칸을 로그에 남긴다. 값은 남기지 않는다. */
+	private static void fill(Brewery brewery, ResearchedBrewery found, String path) {
+		List<String> filled = brewery.fillBlankContact(found.address(), found.phone(), found.homepage(),
+				found.instagramHandle());
+		log.info("양조장 빈 칸 보강 breweryId={} path={} outcome=filled filled={}", brewery.getId(), path, filled);
 	}
 
 	/** 조사한 이름이 그 양조장의 정규화 이름이거나, 이름·별칭으로 찾았을 때 그 양조장이면 같은 양조장이다. */
@@ -148,7 +158,13 @@ public class BreweryMatcher {
 		}
 		List<Brewery> existing = breweryRepository.findByNormalizedName(key);
 		if (!existing.isEmpty()) {
-			return existing.stream().min(Comparator.comparing(Brewery::getId));
+			// 조사 결과 이름으로 기존 양조장을 다시 쓴다. 이미 낸 조사 비용을 버리지 않게 빈 칸을 채우고 조사 시각을 남긴다.
+			Brewery reused = existing.stream().min(Comparator.comparing(Brewery::getId)).orElseThrow();
+			fill(reused, found, "reuse");
+			if (reused.getResearchedAt() == null) {
+				reused.markResearched(clock.instant());
+			}
+			return Optional.of(Hibernate.unproxy(reused, Brewery.class));
 		}
 		Brewery brewery = Brewery.of(found.name().strip(), key, BrewerySource.WEB_SEARCH);
 		brewery.updateContact(found.address(), found.phone(), found.homepage(), found.instagramHandle(), null,

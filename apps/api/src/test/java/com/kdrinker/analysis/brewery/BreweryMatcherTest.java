@@ -22,6 +22,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -36,6 +39,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
+@ExtendWith(OutputCaptureExtension.class)
 @Import({BreweryLookup.class, BreweryMatcher.class, BreweryMatcherTest.FixedClock.class})
 class BreweryMatcherTest {
 
@@ -454,5 +458,115 @@ class BreweryMatcherTest {
 		assertThat(found).map(Brewery::getId).contains(first.getId());
 		assertThat(breweryRepository.findById(first.getId()).orElseThrow().getPhone()).isEqualTo("031-000-0000");
 		verify(researcher, times(1)).research(any(), any());
+	}
+
+	// --- 조사 결과로 기존 양조장을 다시 쓸 때 ---
+
+	@Test
+	void 조사한_이름으로_기존_양조장을_다시_쓰면_빈_칸을_채우고_조사_시각을_남긴다() {
+		// given
+		Brewery known = withBlanks();
+		when(researcher.research("광주요", null)).thenReturn(Optional.of(researched("㈜새술양조장")));
+
+		// when
+		Brewery found = matcher.match(label(null, "광주요")).orElseThrow();
+
+		// then
+		Brewery saved = breweryRepository.findById(known.getId()).orElseThrow();
+		assertThat(found.getId()).isEqualTo(known.getId());
+		assertThat(saved.getAddress()).isEqualTo("경기도 이천시 9");
+		assertThat(saved.getPhone()).isEqualTo("031-000-0000");
+		assertThat(saved.getInstagramHandle()).isEqualTo("sool_official");
+		assertThat(saved.getSourceUrl()).isEqualTo("https://data.example.org/1");
+		assertThat(saved.getSource()).isEqualTo(BrewerySource.PUBLIC_DATA);
+		assertThat(saved.isVerified()).isTrue();
+		assertThat(saved.getResearchedAt()).isEqualTo(NOW);
+		assertThat(found.getPhone()).isEqualTo("031-000-0000");
+	}
+
+	@Test
+	void 다시_쓴_기존_양조장으로_다음_게시물이_와도_다시_조사하지_않는다() {
+		// given
+		withBlanks();
+		when(researcher.research(any(), any())).thenReturn(Optional.of(researched("새술양조장")));
+		matcher.match(label(null, "광주요"));
+
+		// when
+		matcher.match(label(null, "새술양조장"));
+
+		// then
+		verify(researcher, times(1)).research(any(), any());
+	}
+
+	@Test
+	void 이미_조사한_기존_양조장을_다시_쓰면_빈_칸은_채우되_조사_시각은_바꾸지_않는다() {
+		// given
+		Brewery known = Brewery.of("새술양조장", "새술양조장", BrewerySource.PUBLIC_DATA);
+		known.markResearched(NOW.minusSeconds(3600));
+		breweryRepository.save(known);
+		when(researcher.research(any(), any())).thenReturn(Optional.of(researched("새술양조장")));
+
+		// when
+		matcher.match(label(null, "광주요"));
+
+		// then
+		Brewery saved = breweryRepository.findById(known.getId()).orElseThrow();
+		assertThat(saved.getResearchedAt()).isEqualTo(NOW.minusSeconds(3600));
+		assertThat(saved.getPhone()).isEqualTo("031-000-0000");
+	}
+
+	// --- 보강 결과 로그 ---
+
+	@Test
+	void 보강_조사_결과가_없으면_결과_없음을_로그에_남긴다(CapturedOutput output) {
+		// given
+		withBlanks();
+		when(researcher.research(any(), any())).thenReturn(Optional.empty());
+
+		// when
+		matcher.match(label("새술", "새술양조장"));
+
+		// then
+		assertThat(output).contains("outcome=no result");
+	}
+
+	@Test
+	void 보강_조사_이름이_다르면_두_이름만_로그에_남긴다(CapturedOutput output) {
+		// given
+		withBlanks();
+		when(researcher.research(any(), any())).thenReturn(Optional.of(researched("엉뚱한양조장")));
+
+		// when
+		matcher.match(label("새술", "새술양조장"));
+
+		// then
+		assertThat(output).contains("outcome=name mismatch").contains("researched=엉뚱한양조장")
+				.contains("db=새술양조장").doesNotContain("031-000-0000").doesNotContain("sool_official");
+	}
+
+	@Test
+	void 보강해_채운_칸을_로그에_남긴다(CapturedOutput output) {
+		// given
+		withBlanks();
+		when(researcher.research(any(), any())).thenReturn(Optional.of(researched("새술양조장")));
+
+		// when
+		matcher.match(label("새술", "새술양조장"));
+
+		// then
+		assertThat(output).contains("filled=[phone, homepage, instagram]");
+	}
+
+	@Test
+	void 기존_양조장을_다시_쓸_때도_채운_칸을_로그에_남긴다(CapturedOutput output) {
+		// given
+		withBlanks();
+		when(researcher.research(any(), any())).thenReturn(Optional.of(researched("새술양조장")));
+
+		// when
+		matcher.match(label(null, "광주요"));
+
+		// then
+		assertThat(output).contains("filled=[phone, homepage, instagram]");
 	}
 }

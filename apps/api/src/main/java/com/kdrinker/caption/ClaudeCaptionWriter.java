@@ -6,6 +6,7 @@ import com.anthropic.models.beta.messages.MessageCreateParams;
 import com.kdrinker.analysis.claude.ClaudeCalls;
 import com.kdrinker.analysis.label.LabelResult;
 import com.kdrinker.brewery.entity.Brewery;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -78,12 +79,18 @@ public class ClaudeCaptionWriter implements CaptionWriter {
 		if (l != null) {
 			line(lines, "술 이름", l.drinkName());
 			line(lines, "종류", l.category());
-			line(lines, "도수", l.abv() == null ? null : l.abv().toPlainString() + "%");
+			line(lines, "도수", l.abv() == null ? null : abv(l.abv()) + "%");
 			line(lines, "용량", l.volumeMl() == null ? null : l.volumeMl() + "ml");
 			line(lines, "맛 노트", l.tasteNotes());
 			line(lines, "페어링", l.pairing());
 		}
 		return lines.isEmpty() ? "없음\n" : String.join("\n", lines) + "\n";
+	}
+
+	/** 41.0 → "41", 6.50 → "6.5". 지수 표기(4E+1)가 나오지 않게 toPlainString을 쓴다. */
+	static String abv(BigDecimal abv) {
+		BigDecimal stripped = abv.stripTrailingZeros();
+		return (stripped.scale() < 0 ? stripped.setScale(0) : stripped).toPlainString();
 	}
 
 	private static String breweryLines(Brewery b) {

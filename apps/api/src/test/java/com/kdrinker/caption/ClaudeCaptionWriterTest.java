@@ -78,4 +78,20 @@ class ClaudeCaptionWriterTest {
 		assertThat(ClaudeCaptionWriter.SYSTEM).contains("느낌표").contains("2,200자").contains("해요체")
 				.contains("지어 쓰지 않는다").contains("고정 태그");
 	}
+
+	private String requestText(String abv) {
+		LabelResult l = new LabelResult("화요41", "증류주", abv == null ? null : new BigDecimal(abv), null, null, null,
+				null, null, List.of());
+		return body(writer.request(new CaptionInput(l, null, null, "m"), null, 0).build()).toString();
+	}
+
+	@Test
+	void 도수는_끝의_0을_떼고_넘긴다() {
+		assertThat(requestText("41.0")).contains("도수: 41%").doesNotContain("41.0%");
+		assertThat(requestText("12.00")).contains("도수: 12%");
+		assertThat(requestText("6.5")).contains("도수: 6.5%");
+		assertThat(requestText("6.50")).contains("도수: 6.5%");
+		assertThat(requestText("40")).contains("도수: 40%").doesNotContain("4E+1");
+		assertThat(requestText(null)).doesNotContain("도수:");
+	}
 }
