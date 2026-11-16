@@ -65,7 +65,9 @@ docker compose -f deploy/compose.yml --env-file deploy/.env run --rm \
 
 ## 적재 결과
 
-로컬 H2 (2026-11-16): CSV 560곳 → `inserted=454, updated=106, skipped=0`. 106곳은 정규화 이름이 같아("(주)OO"·"OO" 등) 한 양조장으로 합쳐졌다. 최종 454곳(주소 451, 홈페이지 412), 정규화 이름 중복 없음. 운영 적재는 아직.
+로컬 H2 (2026-11-16): CSV 560곳 → `inserted=454, updated=106, skipped=0`. 106곳은 정규화 이름이 같아("(주)OO"·"OO" 등) 한 양조장으로 합쳐졌다. 최종 454곳(주소 451, 홈페이지 412), 정규화 이름 중복 없음.
+
+운영 MySQL (2026-11-16, 이미지 `ff69b79`): 같은 CSV로 `inserted=454, updated=106, skipped=0`. 최종 454곳(주소 451, 홈페이지 412, 인스타그램 0), 정규화 이름 중복 없음. CSV는 NAS `/volume1/docker/k-drinker/import/breweries.csv`.
 
 ## 샘플 분석 결과 (P2 실호출 검증)
 
