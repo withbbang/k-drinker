@@ -138,7 +138,7 @@ class TelegramPollerTest {
 		java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
 		when(client.getUpdates(anyLong(), anyInt())).thenAnswer(i -> {
 			inPoll.countDown();
-			release.await();
+			awaitUninterruptibly(release);
 			return List.of(new TelegramUpdate(5, m, null));
 		});
 
@@ -146,11 +146,29 @@ class TelegramPollerTest {
 		inPoll.await();
 		Thread stopper = new Thread(poller::stop);
 		stopper.start();
-		Thread.sleep(100);
+		// stop()이 stopping을 세우고 폴러 스레드 join에 들어갈 때까지 기다린다.
+		while (stopper.getState() != Thread.State.TIMED_WAITING) {
+			Thread.sleep(5);
+		}
 		release.countDown();
 		stopper.join();
 
 		verify(collector, never()).accept(any());
+	}
+
+	private static void awaitUninterruptibly(java.util.concurrent.CountDownLatch latch) {
+		boolean interrupted = false;
+		while (true) {
+			try {
+				latch.await();
+				break;
+			} catch (InterruptedException e) {
+				interrupted = true;
+			}
+		}
+		if (interrupted) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	@Test
