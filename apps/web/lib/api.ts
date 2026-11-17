@@ -1,15 +1,17 @@
-import type { ApiResponse } from "@/types/api/common";
+import type { ApiFieldError, ApiResponse } from "@/types/api/common";
 
 const UNREACHABLE_MESSAGE =
   "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
 
 export class ApiError extends Error {
   readonly code: string;
+  readonly fields: ApiFieldError[];
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, fields: ApiFieldError[] = []) {
     super(message);
     this.name = "ApiError";
     this.code = code;
+    this.fields = fields;
   }
 }
 
@@ -43,7 +45,11 @@ export async function apiFetch<T>(
     throw new ApiError("COMMON_INTERNAL_ERROR", UNREACHABLE_MESSAGE);
   }
   if (!body.success) {
-    throw new ApiError(body.error.code, body.error.message);
+    throw new ApiError(
+      body.error.code,
+      body.error.message,
+      body.error.fields ?? [],
+    );
   }
   return body.data;
 }
