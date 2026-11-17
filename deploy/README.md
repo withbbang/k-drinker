@@ -406,5 +406,5 @@ dc up -d                   # 바뀐 환경변수로 컨테이너 재생성
 1. 같은 화면 2단계에서 계정의 [토큰 생성]을 누르고 Instagram 계정으로 로그인·승인한다. 토큰은 한 번만 보여 주니 [복사]해서 바로 보관한다. 계정 ID(`INSTAGRAM_USER_ID`)도 이 표에 나온다.
 2. NAS의 `deploy/.env`에서 `INSTAGRAM_ACCESS_TOKEN`을 새 값으로 바꾼다.
 3. 환경변수는 컨테이너 기동 때 묶이므로 `dc up -d`로 api를 다시 만든다 (`dc restart api`로는 반영되지 않는다).
-4. DB에 이미 토큰이 있으면 기동만으로는 바뀌지 않는다. 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출해 환경변수 토큰으로 덮는다. 웹 설정 화면의 [토큰 다시 불러오기] 버튼은 P4 이후에 생기므로, 그때까지는 세션 쿠키를 실어 직접 호출한다 (예: `curl -X POST -b 'KD_SESSION=<세션 쿠키 값>' https://<도메인>/api/v1/instagram/token/reload`).
+4. API는 기동할 때 환경변수 토큰이 저장된 값과 다르면 덮어쓰므로 3단계로 반영된다. 기동 때 DB 오류 등으로 반영되지 않았으면(로그 "인스타그램 토큰 초기화에 실패했습니다") 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출해 기동 때 읽은 환경변수 값으로 다시 덮는다. 웹 설정 화면의 [토큰 다시 불러오기] 버튼은 P4 이후에 생기므로, 그때까지는 세션 쿠키를 실어 직접 호출한다 (예: `curl -X POST -b 'KD_SESSION=<세션 쿠키 값>' https://<도메인>/api/v1/instagram/token/reload`).
 5. `GET /api/v1/instagram/token`으로 확인한다. `expiresAt`이 `null`(만료 없음)이고 `refreshedAt`이 방금 저장한 시각이면 끝이다.

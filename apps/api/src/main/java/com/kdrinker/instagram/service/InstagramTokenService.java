@@ -45,14 +45,22 @@ public class InstagramTokenService {
 		return new TokenStatus(row.getExpiresAt(), row.getRefreshedAt());
 	}
 
-	/** 기동 시 행이 없고 환경변수가 있으면 그 토큰으로 행을 만든다. 실패해도 기동은 계속한다. */
+	/**
+	 * 기동 시 환경변수 토큰이 있고 저장된 값과 다르면(행 없음, 다른 토큰, 예전 방식의 만료 시각이 남은 행) 환경변수로 맞춘다.
+	 * 토큰을 바꾸는 경로가 환경변수뿐이라, reload를 빠뜨려도 재기동만으로 반영되게 한다. 실패해도 기동은 계속한다.
+	 */
 	@EventListener(ApplicationReadyEvent.class)
-	public void initIfMissing() {
+	public void syncFromEnv() {
 		try {
-			if (repository.existsById(InstagramToken.SINGLE_ROW_ID) || isBlank(properties.accessToken())) {
+			String envToken = properties.accessToken();
+			if (isBlank(envToken)) {
 				return;
 			}
-			store(properties.accessToken());
+			InstagramToken row = repository.findById(InstagramToken.SINGLE_ROW_ID).orElse(null);
+			if (row != null && envToken.equals(row.getAccessToken()) && row.getExpiresAt() == null) {
+				return;
+			}
+			store(row, envToken);
 		} catch (RuntimeException e) {
 			log.warn("인스타그램 토큰 초기화에 실패했습니다. {}", e.getClass().getSimpleName());
 		}
@@ -63,17 +71,18 @@ public class InstagramTokenService {
 		if (isBlank(properties.accessToken())) {
 			throw new BusinessException(ErrorCode.INSTAGRAM_TOKEN_MISSING);
 		}
-		InstagramToken row = store(properties.accessToken());
+		InstagramToken row = store(repository.findById(InstagramToken.SINGLE_ROW_ID).orElse(null),
+				properties.accessToken());
 		return new TokenStatus(row.getExpiresAt(), row.getRefreshedAt());
 	}
 
-	private InstagramToken store(String envToken) {
+	private InstagramToken store(InstagramToken rowOrNull, String envToken) {
 		Instant now = clock.instant();
-		InstagramToken row = repository.findById(InstagramToken.SINGLE_ROW_ID).orElse(null);
+		InstagramToken row = rowOrNull;
 		if (row == null) {
-			row = InstagramToken.issue(envToken, null, now);
+			row = InstagramToken.issue(envToken, now);
 		} else {
-			row.refresh(envToken, null, now);
+			row.replace(envToken, now);
 		}
 		repository.save(row);
 		log.info("인스타그램 토큰을 저장했습니다.");

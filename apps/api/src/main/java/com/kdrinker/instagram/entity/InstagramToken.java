@@ -34,18 +34,18 @@ public class InstagramToken {
 	@Column(name = "refreshed_at")
 	private Instant refreshedAt;
 
-	public static InstagramToken issue(String accessToken, Instant expiresAt, Instant now) {
+	/** 만료 없는 토큰으로 행을 만든다. */
+	public static InstagramToken issue(String accessToken, Instant now) {
 		InstagramToken token = new InstagramToken();
 		token.id = SINGLE_ROW_ID;
-		token.accessToken = accessToken;
-		token.expiresAt = expiresAt;
-		token.refreshedAt = now;
+		token.replace(accessToken, now);
 		return token;
 	}
 
-	public void refresh(String accessToken, Instant expiresAt, Instant now) {
+	/** 토큰을 바꾸고, 예전 갱신 방식 시절의 만료 시각도 비운다. */
+	public void replace(String accessToken, Instant now) {
 		this.accessToken = accessToken;
-		this.expiresAt = expiresAt;
+		this.expiresAt = null;
 		this.refreshedAt = now;
 	}
 
