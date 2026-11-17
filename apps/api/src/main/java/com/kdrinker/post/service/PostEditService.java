@@ -28,6 +28,7 @@ import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.event.PostEditedEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -162,6 +163,11 @@ public class PostEditService {
 		if (req.breweryEdit() != null && targetBrewery == null) {
 			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
 		}
+		if (req.breweryId() == null && req.breweryEdit() != null
+				&& !targetBrewery.getName().strip().equals(req.breweryEdit().name().strip())) {
+			// 술을 바꾸면 양조장도 그 술의 양조장이 된다. 이전 양조장 이름으로 고친 값을 다른 양조장에 덮어쓰지 않는다.
+			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+		}
 
 		// 캡션 블록에 쓸 저장하지 않는 사본. breweryEdit를 미리 적용해 검증도 여기서 끝낸다(4단계가 같은 값을 레코드에 넣는다).
 		Brewery captionBrewery = targetBrewery == null ? null : copyOf(targetBrewery);
@@ -176,7 +182,7 @@ public class PostEditService {
 				|| !Objects.equals(targetDrink == null ? null : targetDrink.getId(), currentDrinkId)
 				|| !Objects.equals(targetBreweryId, currentBreweryId) || req.breweryEdit() != null;
 		return new Snapshot(post.getStatus(), post.getVersion(), CaptionParts.split(post.getCaption()),
-				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId);
+				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId, post.getRating());
 	}
 
 	/** 사진이 한 장 이상이고, 모두 이 게시물의 사진이며 겹치지 않아야 한다. */
@@ -193,10 +199,14 @@ public class PostEditService {
 		}
 	}
 
-	/** 2·3단계: 직접 고친 캡션이거나 술·양조장이 그대로면 양조장 블록만 바꾼다. 아니면 트랜잭션 밖에서 다시 만든다. */
+	/**
+	 * 2·3단계: 직접 고친 캡션이거나 술·양조장이 그대로면 양조장 블록만 바꾼다. 아니면 트랜잭션 밖에서 다시 만든다.
+	 * 이번 요청에서 캡션 문장을 고치지 않았으면 머리 끝의 별점 블록도 새 별점으로 맞춘다.
+	 */
 	private NewCaption decideCaption(Long id, PostUpdateRequest req, Snapshot snapshot) {
 		CaptionParts edited = new CaptionParts(req.captionHead().strip(), req.captionTail().strip());
-		boolean textEdited = snapshot.captionEdited() || !edited.equals(snapshot.parts());
+		boolean editedNow = !edited.equals(snapshot.parts());
+		boolean textEdited = snapshot.captionEdited() || editedNow;
 		if (snapshot.identityChanged() && !textEdited) {
 			try {
 				ComposedCaption composed = captionService.compose(new CaptionInput(snapshot.label(), req.rating(),
@@ -206,7 +216,8 @@ public class PostEditService {
 				log.warn("캡션 재생성에 실패해 양조장 블록만 바꿉니다. postId={} cause={}", id, e.toString());
 			}
 		}
-		return new NewCaption(edited.join(snapshot.captionBrewery()), edited.tail(), textEdited);
+		CaptionParts parts = editedNow ? edited : edited.withRating(snapshot.rating(), req.rating());
+		return new NewCaption(parts.join(snapshot.captionBrewery()), parts.tail(), textEdited);
 	}
 
 	/** 4단계: 전이 전에 고칠 필드를 모두 고친다. 예외가 나면 템플릿이 롤백하고 파일은 그대로다. */
@@ -328,7 +339,8 @@ public class PostEditService {
 	}
 
 	private record Snapshot(PostStatus status, int version, CaptionParts parts, boolean captionEdited,
-			boolean identityChanged, LabelResult label, Brewery captionBrewery, Long targetBreweryId) {
+			boolean identityChanged, LabelResult label, Brewery captionBrewery, Long targetBreweryId,
+			BigDecimal rating) {
 	}
 
 	private record NewCaption(String caption, String hashtags, boolean edited) {

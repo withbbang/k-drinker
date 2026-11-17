@@ -2,6 +2,7 @@ package com.kdrinker.caption;
 
 import com.kdrinker.brewery.entity.Brewery;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,11 +19,16 @@ public final class CaptionAssembler {
 		addIfPresent(blocks, d.intro());
 		addIfPresent(blocks, d.tasting());
 		if (rating != null) {
-			blocks.add("★" + rating.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString());
+			blocks.add(ratingBlock(rating));
 		}
 		blocks.add(BreweryBlock.render(b));
 		addIfPresent(blocks, hashtags);
 		return String.join("\n\n", blocks);
+	}
+
+	/** 별점 블록. 소수 한 자리로 맞춘다(예: ★4.0). */
+	public static String ratingBlock(BigDecimal rating) {
+		return "★" + rating.setScale(1, RoundingMode.HALF_UP).toPlainString();
 	}
 
 	private static void addIfPresent(List<String> blocks, String s) {

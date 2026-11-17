@@ -563,4 +563,96 @@ class PostEditServiceTest {
 			TransactionSynchronizationManager.setActualTransactionActive(false);
 		}
 	}
+
+	private PostUpdateRequest drinkChange(Long drinkId, BreweryRequest edit) {
+		return new PostUpdateRequest(VERSION, drinkId, null, null, edit, new BigDecimal("4.0"), "메모", "훅\n\n★4.0",
+				"#막걸리", keepPhotos());
+	}
+
+	private Drink drinkOf(Brewery brewery) {
+		Drink other = Drink.of("화요25", "화요25", brewery);
+		ReflectionTestUtils.setField(other, "id", 21L);
+		when(drinkRepository.findById(21L)).thenReturn(Optional.of(other));
+		return other;
+	}
+
+	private PostUpdateRequest ratingChange(BigDecimal rating, String head) {
+		return new PostUpdateRequest(VERSION, null, null, null, null, rating, "메모", head, "#막걸리", keepPhotos());
+	}
+
+	@Test
+	void 술을_바꾸고_이전_양조장_이름으로_고치면_400이고_새_양조장은_그대로다() {
+		// given
+		drinkOf(hwayo);
+		BreweryRequest edit = new BreweryRequest("국순당", null, "02-1", null, null, null);
+
+		// when
+		ErrorCode code = errorOf(() -> service.update(POST_ID, drinkChange(21L, edit)));
+
+		// then
+		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
+		assertThat(hwayo.getName()).isEqualTo("화요");
+		assertThat(hwayo.getPhone()).isNull();
+		assertThat(hwayo.getSource()).isEqualTo(BrewerySource.PUBLIC_DATA);
+		verify(postRepository, never()).transition(any(), any(), any(), anyInt(), any());
+	}
+
+	@Test
+	void 술을_바꾸고_그_술의_양조장_이름으로_고치면_그_양조장에_반영된다() {
+		// given
+		drinkOf(hwayo);
+		when(captionService.compose(any())).thenReturn(new ComposedCaption("새 캡션", ""));
+		BreweryRequest edit = new BreweryRequest("화요", null, "02-1", null, null, null);
+
+		// when
+		service.update(POST_ID, drinkChange(21L, edit));
+
+		// then
+		assertThat(hwayo.getPhone()).isEqualTo("02-1");
+		assertThat(kooksoondang.getPhone()).isNull();
+	}
+
+	@Test
+	void 양조장이_없는_술로_바꾸고_양조장을_고치면_400이다() {
+		// given
+		drinkOf(null);
+		BreweryRequest edit = new BreweryRequest("국순당", null, "02-1", null, null, null);
+
+		// when
+		ErrorCode code = errorOf(() -> service.update(POST_ID, drinkChange(21L, edit)));
+
+		// then
+		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
+		assertThat(kooksoondang.getPhone()).isNull();
+	}
+
+	@Test
+	void 별점만_바꾸면_캡션_별점도_바뀐다() {
+		// when
+		service.update(POST_ID, ratingChange(new BigDecimal("4.5"), "훅\n\n★4.0"));
+
+		// then
+		verifyNoInteractions(captionService);
+		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅\n\n★4.5", "#막걸리").join(kooksoondang));
+		assertThat(post.isCaptionEdited()).isFalse();
+	}
+
+	@Test
+	void 별점을_비우면_캡션_별점_블록을_뺀다() {
+		// when
+		service.update(POST_ID, ratingChange(null, "훅\n\n★4.0"));
+
+		// then
+		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅", "#막걸리").join(kooksoondang));
+	}
+
+	@Test
+	void 캡션을_고치면서_별점을_바꾸면_고친_문장을_그대로_둔다() {
+		// when
+		service.update(POST_ID, ratingChange(new BigDecimal("4.5"), "내가 고친 훅\n\n★4.0"));
+
+		// then
+		assertThat(post.getCaption()).isEqualTo(new CaptionParts("내가 고친 훅\n\n★4.0", "#막걸리").join(kooksoondang));
+		assertThat(post.isCaptionEdited()).isTrue();
+	}
 }
