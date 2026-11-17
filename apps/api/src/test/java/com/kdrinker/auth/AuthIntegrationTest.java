@@ -155,6 +155,29 @@ class AuthIntegrationTest {
 	}
 
 	@Test
+	void 세션이_있으면_현재_세션은_204다() throws Exception {
+		// given
+		String setCookie = login(currentCode()).andReturn().getResponse().getHeader(HttpHeaders.SET_COOKIE);
+		Cookie cookie = new Cookie("KD_SESSION", setCookie.substring("KD_SESSION=".length(), setCookie.indexOf(';')));
+
+		// when
+		var result = mockMvc.perform(get("/api/v1/sessions/current").cookie(cookie));
+
+		// then
+		result.andExpect(status().isNoContent());
+	}
+
+	@Test
+	void 세션이_없으면_현재_세션은_401이다() throws Exception {
+		// when
+		var result = mockMvc.perform(get("/api/v1/sessions/current"));
+
+		// then
+		result.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code").value("AUTH_REQUIRED"));
+	}
+
+	@Test
 	void 기동하면_시크릿_지문을_저장한다() {
 		// when
 		String stored = jdbcTemplate.queryForObject("SELECT secret_fingerprint FROM auth_state", String.class);
