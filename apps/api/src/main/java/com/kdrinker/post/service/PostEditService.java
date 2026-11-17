@@ -182,7 +182,8 @@ public class PostEditService {
 				|| !Objects.equals(targetDrink == null ? null : targetDrink.getId(), currentDrinkId)
 				|| !Objects.equals(targetBreweryId, currentBreweryId) || req.breweryEdit() != null;
 		return new Snapshot(post.getStatus(), post.getVersion(), CaptionParts.split(post.getCaption()),
-				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId, post.getRating());
+				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId, post.getRating(),
+				post.getCaption() == null || post.getCaption().isBlank());
 	}
 
 	/** 사진이 한 장 이상이고, 모두 이 게시물의 사진이며 겹치지 않아야 한다. */
@@ -202,12 +203,14 @@ public class PostEditService {
 	/**
 	 * 2·3단계: 직접 고친 캡션이거나 술·양조장이 그대로면 양조장 블록만 바꾼다. 아니면 트랜잭션 밖에서 다시 만든다.
 	 * 이번 요청에서 캡션 문장을 고치지 않았으면 머리 끝의 별점 블록도 새 별점으로 맞춘다.
+	 * 캡션이 없는 게시물(분석 단계 실패)은 사용자가 문장을 쓰지 않았으면 새로 만들고, 만들지 못하면 저장하지 않는다.
 	 */
 	private NewCaption decideCaption(Long id, PostUpdateRequest req, Snapshot snapshot) {
 		CaptionParts edited = new CaptionParts(req.captionHead().strip(), req.captionTail().strip());
 		boolean editedNow = !edited.equals(snapshot.parts());
 		boolean textEdited = snapshot.captionEdited() || editedNow;
-		if (snapshot.identityChanged() && !textEdited) {
+		boolean generate = snapshot.captionMissing() ? !editedNow : snapshot.identityChanged() && !textEdited;
+		if (generate) {
 			try {
 				ComposedCaption composed = captionService.compose(new CaptionInput(snapshot.label(), req.rating(),
 						snapshot.captionBrewery(), req.memo()));
@@ -217,6 +220,10 @@ public class PostEditService {
 			}
 		}
 		CaptionParts parts = editedNow ? edited : edited.withRating(snapshot.rating(), req.rating());
+		if (snapshot.captionMissing() && edited.head().isEmpty()) {
+			// 본문 없는 캡션으로 검토 대기에 두면 [확인] 한 번에 빈 캡션이 게시된다.
+			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+		}
 		return new NewCaption(parts.join(snapshot.captionBrewery()), parts.tail(), textEdited);
 	}
 
@@ -340,7 +347,7 @@ public class PostEditService {
 
 	private record Snapshot(PostStatus status, int version, CaptionParts parts, boolean captionEdited,
 			boolean identityChanged, LabelResult label, Brewery captionBrewery, Long targetBreweryId,
-			BigDecimal rating) {
+			BigDecimal rating, boolean captionMissing) {
 	}
 
 	private record NewCaption(String caption, String hashtags, boolean edited) {

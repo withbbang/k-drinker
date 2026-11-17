@@ -655,4 +655,67 @@ class PostEditServiceTest {
 		assertThat(post.getCaption()).isEqualTo(new CaptionParts("내가 고친 훅\n\n★4.0", "#막걸리").join(kooksoondang));
 		assertThat(post.isCaptionEdited()).isTrue();
 	}
+
+	/** 분석 단계에서 실패해 캡션이 없는 게시물. */
+	private Post uncaptionedFailedPost() {
+		Post p = Post.receive(PostSource.SHARE, "메모", new BigDecimal("4.0"), CLOCK);
+		ReflectionTestUtils.setField(p, "id", POST_ID);
+		ReflectionTestUtils.setField(p, "status", PostStatus.FAILED);
+		ReflectionTestUtils.setField(p, "version", VERSION);
+		p.assignDrink(drink);
+		p.recordFailure(PostStatus.ANALYZING, "캡션 생성 실패");
+		when(postRepository.findById(POST_ID)).thenReturn(Optional.of(p));
+		return p;
+	}
+
+	private PostUpdateRequest captionless(String head) {
+		return new PostUpdateRequest(VERSION, null, null, null, null, new BigDecimal("4.0"), "메모", head, "",
+				keepPhotos());
+	}
+
+	@Test
+	void 캡션이_없는_실패_게시물은_저장할_때_캡션을_만든다() {
+		// given
+		post = uncaptionedFailedPost();
+		String composed = "훅\n\n★4.0\n\n" + BreweryBlock.render(kooksoondang) + "\n\n#막걸리";
+		when(captionService.compose(any())).thenReturn(new ComposedCaption(composed, "#막걸리"));
+
+		// when
+		service.update(POST_ID, captionless(""));
+
+		// then
+		verify(captionService).compose(any());
+		assertThat(post.getCaption()).isEqualTo(composed);
+		assertThat(post.isCaptionEdited()).isFalse();
+	}
+
+	@Test
+	void 캡션이_없고_재생성도_실패하면_400이다() {
+		// given
+		post = uncaptionedFailedPost();
+		when(captionService.compose(any())).thenThrow(new ClaudeUnavailableException("down"));
+
+		// when
+		ErrorCode code = errorOf(() -> service.update(POST_ID, captionless("")));
+
+		// then
+		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
+		assertThat(post.getCaption()).isNull();
+		verify(postRepository, never()).transition(any(), any(), any(), anyInt(), any());
+		verify(events, never()).publishEvent(any());
+	}
+
+	@Test
+	void 캡션이_없는_게시물에_머리를_직접_쓰면_그_문장을_쓴다() {
+		// given
+		post = uncaptionedFailedPost();
+
+		// when
+		service.update(POST_ID, captionless("내가 쓴 훅"));
+
+		// then
+		verifyNoInteractions(captionService);
+		assertThat(post.getCaption()).isEqualTo(new CaptionParts("내가 쓴 훅", "").join(kooksoondang));
+		assertThat(post.isCaptionEdited()).isTrue();
+	}
 }
