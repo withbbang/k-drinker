@@ -291,6 +291,8 @@ T0(인스타그램 프로페셔널 전환, Meta 앱, 새 텔레그램 봇)이 �
 
 ## 확인한 Meta 수치 (2026-11-16)
 
+> **변경 (2026-11-17):** 실제 연결에서 최신 Meta 앱은 Instagram Login 방식을 쓸 수 없고, 통합 로그인 구성의 시스템 사용자 토큰(`EAA…`, 만료 없음)만 발급된다는 것을 확인했다. 이 토큰은 `graph.facebook.com`에서만 통한다(`graph.instagram.com`은 토큰을 해석하지 못함). 그래서 `base-url`을 `https://graph.facebook.com`으로 바꾸고, 토큰 갱신(`refresh_access_token`, 매일 04:00 점검, 메시지 11)과 `refresh-before`·`refresh-cron`·`zone` 설정을 뺐다. `instagram_token.expires_at`은 V9에서 NULL 허용으로 바꿨다(NULL = 만료 없음). 같은 토큰으로 `/{ig-user-id}?fields=id,username,media_count`와 `/{ig-user-id}/content_publishing_limit`(24시간 100건)를 실제로 호출해 확인했다. 아래 중 갱신·`graph.instagram.com` 관련 항목은 당시 기록이다.
+
 출처는 Task 5 Step 1에서 읽은 Meta for Developers 공식 문서(콘텐츠 게시, 토큰 갱신, 오류 코드).
 
 - API 버전 `v27.0` (`https://graph.instagram.com/v27.0/...`). `refresh_access_token`만 버전 접두사 없이 `/refresh_access_token`으로 호출한다.
