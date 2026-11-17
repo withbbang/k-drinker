@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -14,6 +16,7 @@ import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
 import com.kdrinker.common.PageResponse;
 import com.kdrinker.post.dto.PostSummaryResponse;
+import com.kdrinker.post.service.PostEditService;
 import com.kdrinker.post.service.PostIntakeService;
 import com.kdrinker.post.service.PostQueryService;
 import java.util.List;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -45,6 +49,9 @@ class PostControllerTest {
 
 	@MockitoBean
 	private PostQueryService postQueryService;
+
+	@MockitoBean
+	private PostEditService postEditService;
 
 	private ResultActions post(int photos, String rating) throws Exception {
 		MockMultipartHttpServletRequestBuilder request = multipart("/api/v1/posts");
@@ -152,5 +159,19 @@ class PostControllerTest {
 		mockMvc.perform(get("/api/v1/posts/99"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error.code").value("COMMON_NOT_FOUND"));
+	}
+
+	@Test
+	void version이_없으면_400이다() throws Exception {
+		// given
+		String body = """
+				{"captionHead": "훅", "captionTail": "", "photos": [{"id": 1, "fitMode": "CROP"}]}
+				""";
+
+		// when / then
+		mockMvc.perform(put("/api/v1/posts/1").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+		verifyNoInteractions(postEditService);
 	}
 }

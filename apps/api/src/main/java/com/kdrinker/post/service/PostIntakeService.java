@@ -52,6 +52,11 @@ public class PostIntakeService {
 		if (photoCount < MIN_PHOTOS || photoCount > MAX_PHOTOS) {
 			throw new BusinessException(ErrorCode.POST_PHOTO_COUNT);
 		}
+		validateMemoAndRating(memo, rating);
+	}
+
+	/** 메모 길이·별점 범위 검증. 사진 개수를 따로 보는 수정 저장도 쓴다. */
+	public static void validateMemoAndRating(String memo, BigDecimal rating) {
 		if (memo != null && memo.length() > MAX_MEMO_LENGTH) {
 			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
 		}

@@ -2,6 +2,7 @@ package com.kdrinker.telegram;
 
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.event.PostAnalyzedEvent;
+import com.kdrinker.post.event.PostEditedEvent;
 import com.kdrinker.post.event.PostPublishFinishedEvent;
 import com.kdrinker.post.event.PostReceivedEvent;
 import org.springframework.context.event.EventListener;
@@ -22,6 +23,12 @@ public class PostNotificationListener {
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onReceived(PostReceivedEvent event) {
 		notifier.notifyReceived(event.postId());
+	}
+
+	/** 수정 저장이 커밋된 뒤 새 개요를 보낸다(이전 개요 버튼은 notifyReviewReady가 지운다). */
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	public void onEdited(PostEditedEvent event) {
+		notifier.notifyReviewReady(event.postId());
 	}
 
 	@EventListener

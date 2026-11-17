@@ -77,6 +77,10 @@ public class PostPhoto {
 		this.fitMode = fitMode;
 	}
 
+	public void moveTo(int position) {
+		this.position = position;
+	}
+
 	public void attachRendered(String renderedPath) {
 		this.renderedPath = renderedPath;
 	}

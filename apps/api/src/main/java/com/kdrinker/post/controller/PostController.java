@@ -4,7 +4,10 @@ import com.kdrinker.common.ApiResponse;
 import com.kdrinker.common.PageResponse;
 import com.kdrinker.post.dto.PostDetailResponse;
 import com.kdrinker.post.dto.PostSummaryResponse;
+import com.kdrinker.post.dto.PostUpdateRequest;
+import com.kdrinker.post.service.PostEditService;
 import com.kdrinker.post.service.PostQueryService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import com.kdrinker.post.dto.PostCreateResponse;
@@ -22,6 +25,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,6 +39,7 @@ public class PostController {
 
 	private final PostIntakeService postIntakeService;
 	private final PostQueryService postQueryService;
+	private final PostEditService postEditService;
 
 	@GetMapping
 	public ApiResponse<PageResponse<PostSummaryResponse>> list(
@@ -45,6 +51,13 @@ public class PostController {
 	@GetMapping("/{id}")
 	public ApiResponse<PostDetailResponse> detail(@PathVariable("id") Long id) {
 		return ApiResponse.success(postQueryService.detail(id));
+	}
+
+	/** 수정 화면 저장. 저장 뒤 다시 읽은 상세를 돌려준다. */
+	@PutMapping("/{id}")
+	public ApiResponse<PostDetailResponse> update(@PathVariable("id") Long id,
+			@Valid @RequestBody PostUpdateRequest request) {
+		return ApiResponse.success(postEditService.update(id, request));
 	}
 
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

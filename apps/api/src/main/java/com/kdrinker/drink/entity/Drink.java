@@ -59,6 +59,11 @@ public class Drink {
 		}
 	}
 
+	/** 수정 화면에서 고른 양조장으로 바꾼다. null이면 양조장 연결을 끊는다. */
+	public void changeBrewery(Brewery brewery) {
+		this.brewery = brewery;
+	}
+
 	public void updateSpec(String category, BigDecimal abv, Integer volumeMl, String aliases) {
 		this.category = category;
 		this.abv = abv;

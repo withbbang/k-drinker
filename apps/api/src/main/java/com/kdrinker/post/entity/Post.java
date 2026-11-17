@@ -133,6 +133,17 @@ public class Post {
 		this.pairing = pairing;
 	}
 
+	/** 수정 화면 저장: 캡션·해시태그와 직접 고침 여부를 함께 바꾼다. */
+	public void replaceCaption(String caption, String hashtags, boolean edited) {
+		this.caption = caption;
+		this.hashtags = hashtags;
+		this.captionEdited = edited;
+	}
+
+	public void updateMemo(String memo) {
+		this.memo = memo;
+	}
+
 	public void editCaption(String caption) {
 		this.caption = caption;
 		this.captionEdited = true;
