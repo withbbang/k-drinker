@@ -4,6 +4,9 @@ import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostStatus;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -37,5 +40,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	/** 상태가 같고 since 이후에 갱신된 게시물 id. 기동 알림 보정이 쓴다. */
 	@Query("select p.id from Post p where p.status = :status and p.updatedAt >= :since order by p.id")
 	List<Long> findIdsByStatusUpdatedSince(@Param("status") PostStatus status, @Param("since") Instant since);
+
+	@EntityGraph(attributePaths = { "drink", "drink.brewery" })
+	Page<Post> findAllByOrderByIdDesc(Pageable pageable);
 
 }

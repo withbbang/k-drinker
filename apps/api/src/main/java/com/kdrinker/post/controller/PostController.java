@@ -1,6 +1,12 @@
 package com.kdrinker.post.controller;
 
 import com.kdrinker.common.ApiResponse;
+import com.kdrinker.common.PageResponse;
+import com.kdrinker.post.dto.PostDetailResponse;
+import com.kdrinker.post.dto.PostSummaryResponse;
+import com.kdrinker.post.service.PostQueryService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import com.kdrinker.post.dto.PostCreateResponse;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostSource;
@@ -13,6 +19,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,6 +33,19 @@ import org.springframework.web.multipart.MultipartFile;
 public class PostController {
 
 	private final PostIntakeService postIntakeService;
+	private final PostQueryService postQueryService;
+
+	@GetMapping
+	public ApiResponse<PageResponse<PostSummaryResponse>> list(
+			@RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+			@RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size) {
+		return ApiResponse.success(postQueryService.list(page, size));
+	}
+
+	@GetMapping("/{id}")
+	public ApiResponse<PostDetailResponse> detail(@PathVariable("id") Long id) {
+		return ApiResponse.success(postQueryService.detail(id));
+	}
 
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResponseEntity<ApiResponse<PostCreateResponse>> create(

@@ -10,7 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kdrinker.common.GlobalExceptionHandler;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostSource;
+import com.kdrinker.common.BusinessException;
+import com.kdrinker.common.ErrorCode;
+import com.kdrinker.common.PageResponse;
+import com.kdrinker.post.dto.PostSummaryResponse;
 import com.kdrinker.post.service.PostIntakeService;
+import com.kdrinker.post.service.PostQueryService;
+import java.util.List;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -35,6 +42,9 @@ class PostControllerTest {
 
 	@MockitoBean
 	private PostIntakeService postIntakeService;
+
+	@MockitoBean
+	private PostQueryService postQueryService;
 
 	private ResultActions post(int photos, String rating) throws Exception {
 		MockMultipartHttpServletRequestBuilder request = multipart("/api/v1/posts");
@@ -112,4 +122,35 @@ class PostControllerTest {
 				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
 	}
 
+	@Test
+	void 목록은_페이지_형식이다() throws Exception {
+		// given
+		var item = new PostSummaryResponse(7L, "PENDING_REVIEW", "막걸리", null, null, null, Instant.EPOCH);
+		when(postQueryService.list(0, 20)).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
+
+		// when / then
+		mockMvc.perform(get("/api/v1/posts"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.items[0].id").value(7))
+				.andExpect(jsonPath("$.data.totalPages").value(1));
+	}
+
+	@Test
+	void size_101은_400이다() throws Exception {
+		// when / then
+		mockMvc.perform(get("/api/v1/posts").param("size", "101"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+	}
+
+	@Test
+	void 없는_게시물은_404다() throws Exception {
+		// given
+		when(postQueryService.detail(99L)).thenThrow(new BusinessException(ErrorCode.COMMON_NOT_FOUND));
+
+		// when / then
+		mockMvc.perform(get("/api/v1/posts/99"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code").value("COMMON_NOT_FOUND"));
+	}
 }
