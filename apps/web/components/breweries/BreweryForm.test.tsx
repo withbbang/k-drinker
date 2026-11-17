@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -95,5 +95,39 @@ describe("BreweryForm", () => {
       instagramHandle: null,
       otherSns: null,
     });
+  });
+  it("updates the created brewery on the second save", async () => {
+    apiFetchMock.mockImplementation(
+      async (_path: string, init?: RequestInit) => ({
+        id: 3,
+        name: "국순당",
+        address: null,
+        phone: null,
+        homepage: null,
+        instagramHandle: null,
+        otherSns: null,
+        source: "MANUAL",
+        verified: init?.method === "PUT",
+      }),
+    );
+    setup();
+
+    await userEvent.type(screen.getByLabelText("이름"), "국순당");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await screen.findByText(
+      "저장했습니다. 다음 게시물부터 이 정보가 쓰입니다.",
+    );
+    await userEvent.type(screen.getByLabelText("전화"), "02-123");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
+    const calls = apiFetchMock.mock.calls.map(([path, init]) => [
+      init.method,
+      path,
+    ]);
+    expect(calls).toEqual([
+      ["POST", "/api/v1/breweries"],
+      ["PUT", "/api/v1/breweries/3"],
+    ]);
   });
 });
