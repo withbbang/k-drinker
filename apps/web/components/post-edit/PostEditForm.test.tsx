@@ -190,6 +190,7 @@ describe("PostEditForm", () => {
     let detail = initial;
     apiFetchMock.mockImplementation(
       async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/breweries/6") return other;
         if (path?.startsWith("/api/v1/breweries?")) {
           return {
             items: [other],
@@ -202,6 +203,7 @@ describe("PostEditForm", () => {
         if (path?.startsWith("/api/v1/drinks?")) {
           return [
             { id: 11, name: "청주", breweryId: 6, breweryName: "배상면주가" },
+            { id: 12, name: "탁주", breweryId: null, breweryName: null },
           ];
         }
         if (init?.method === "PUT") {
@@ -283,5 +285,62 @@ describe("PostEditForm", () => {
     await waitFor(() => expect(putBodies()).toHaveLength(1));
     expect(putBodies()[0].drinkId).toBe(11);
     expect(putBodies()[0].newDrinkName).toBeNull();
+  });
+
+  it("shows the picked drink's brewery and bases brewery edit on it", async () => {
+    setupSearch(post());
+    await userEvent.type(await screen.findByLabelText("술 검색"), "청");
+    await userEvent.click(await screen.findByRole("button", { name: /청주/ }));
+
+    expect(
+      await screen.findByText("선택한 양조장: 배상면주가"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("전화")).toHaveValue("031-1");
+    await userEvent.type(screen.getByLabelText("홈페이지"), "x.kr");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    expect(putBodies()[0].drinkId).toBe(11);
+    expect(putBodies()[0].breweryId).toBeNull();
+    expect(putBodies()[0].breweryEdit).toEqual({
+      name: "배상면주가",
+      address: "경기",
+      phone: "031-1",
+      homepage: "x.kr",
+      instagramHandle: null,
+      otherSns: null,
+    });
+  });
+
+  it("shows no brewery after picking a drink without one", async () => {
+    setupSearch(post());
+    await userEvent.type(await screen.findByLabelText("술 검색"), "탁");
+    await userEvent.click(await screen.findByRole("button", { name: "탁주" }));
+
+    expect(
+      await screen.findByText("정해진 양조장이 없습니다."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("전화")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    expect(putBodies()[0].drinkId).toBe(12);
+    expect(putBodies()[0].breweryEdit).toBeNull();
+  });
+
+  it("shows no current brewery for a new drink name", async () => {
+    setup(post());
+    await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
+
+    expect(screen.getByText("정해진 양조장이 없습니다.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("전화")).toBeNull();
+  });
+
+  it("limits the memo to 2000 characters", async () => {
+    setup(post());
+    expect(await screen.findByLabelText("메모")).toHaveAttribute(
+      "maxLength",
+      "2000",
+    );
   });
 });

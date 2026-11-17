@@ -12,12 +12,14 @@ import {
 } from "@/components/post-edit/DrinkPicker";
 import { PhotoOrderList } from "@/components/post-edit/PhotoOrderList";
 import { RatingInput } from "@/components/ui/RatingInput";
+import { useBrewery } from "@/hooks/use-breweries";
 import { usePost } from "@/hooks/use-post";
 import { useUpdatePost } from "@/hooks/use-update-post";
 import { ApiError } from "@/lib/api";
 import type { BreweryResponse } from "@/types/api/brewery";
 import type { PostDetailResponse } from "@/types/api/post";
 
+const MAX_MEMO_LENGTH = 2000;
 const FALLBACK_ERROR = "저장에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TEXTAREA =
   "rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
@@ -43,28 +45,44 @@ function Editor({ post, onSave }: EditorProps) {
   const [drink, setDrink] = useState<DrinkChoice>({
     drinkId: post.drinkId,
     drinkName: post.drinkName,
+    breweryId: post.brewery?.id ?? null,
     newDrinkName: "",
   });
-  // 고른 양조장. 고르지 않으면 현재 양조장을 그대로 둔다.
+  // 고른 양조장. 고르지 않으면 술의 현재 양조장을 그대로 둔다.
   const [picked, setPicked] = useState<BreweryResponse | null>(null);
-  const base = picked ?? post.brewery;
-  const [fields, setFields] = useState(fieldsOf(post.brewery));
+  const newName = drink.newDrinkName.trim();
+  // 다른 술을 고르면 그 술의 양조장을, 새 이름이면 양조장 없음을 현재 양조장으로 보여 준다.
+  const drinkChanged = newName !== "" || drink.drinkId !== post.drinkId;
+  const drinkBrewery = useBrewery(
+    drinkChanged && newName === "" ? drink.breweryId : null,
+  );
+  const current = drinkChanged ? (drinkBrewery.data ?? null) : post.brewery;
+  const base = picked ?? current;
+  // 양조장 칸은 그 칸을 채운 양조장과 함께 둔다. 보이는 양조장이 바뀌면 그 양조장 값으로 다시 채운다.
+  const [edits, setEdits] = useState({
+    breweryId: post.brewery?.id ?? null,
+    fields: fieldsOf(post.brewery),
+  });
+  const baseId = base?.id ?? null;
+  const fields = edits.breweryId === baseId ? edits.fields : fieldsOf(base);
   const [rating, setRating] = useState(post.rating);
   const [memo, setMemo] = useState(post.memo ?? "");
   const [captionHead, setCaptionHead] = useState(post.captionHead ?? "");
   const [captionTail, setCaptionTail] = useState(post.captionTail ?? "");
   const [photos, setPhotos] = useState(post.photos);
 
-  const hasDrink = drink.drinkId !== null || drink.newDrinkName.trim() !== "";
+  const hasDrink = drink.drinkId !== null || newName !== "";
 
-  const handlePick = (brewery: BreweryResponse) => {
-    setPicked(brewery);
-    setFields(fieldsOf(brewery));
+  const handleDrinkChange = (next: DrinkChoice) => {
+    if (next.drinkId !== drink.drinkId) setPicked(null);
+    setDrink(next);
   };
+
+  const handleFieldsChange = (next: BreweryFields) =>
+    setEdits({ breweryId: baseId, fields: next });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const newName = drink.newDrinkName.trim();
     const original = fieldsOf(base);
     const changed = (Object.keys(fields) as (keyof BreweryFields)[]).some(
       (key) => orNull(fields[key]) !== orNull(original[key]),
@@ -95,13 +113,13 @@ function Editor({ post, onSave }: EditorProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <DrinkPicker value={drink} onChange={setDrink} />
+      <DrinkPicker value={drink} onChange={handleDrinkChange} />
       <BreweryPicker
         disabled={!hasDrink}
         brewery={base}
         fields={fields}
-        onPick={handlePick}
-        onFieldsChange={setFields}
+        onPick={setPicked}
+        onFieldsChange={handleFieldsChange}
       />
       <RatingInput value={rating} onChange={setRating} />
       <label className="flex flex-col gap-2">
@@ -109,6 +127,7 @@ function Editor({ post, onSave }: EditorProps) {
         <input
           type="text"
           value={memo}
+          maxLength={MAX_MEMO_LENGTH}
           onChange={(event) => setMemo(event.target.value)}
           className={TEXTAREA}
         />

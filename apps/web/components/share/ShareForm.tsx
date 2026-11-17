@@ -11,6 +11,8 @@ import { readSharedPhotos } from "@/lib/shared-photos";
 const MAX_PHOTOS = 10;
 const MAX_MEMO_LENGTH = 2000;
 const FALLBACK_ERROR = "전송에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+const SESSION_ERROR =
+  "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
 // URL 생성과 revoke를 ref 콜백 한 곳에 둬서 StrictMode 재마운트에도 안전하다.
 function PhotoPreview({ file, index }: { file: File; index: number }) {
@@ -41,13 +43,40 @@ export function ShareForm() {
 
   useEffect(() => {
     let cancelled = false;
-    readSharedPhotos().then((files) => {
-      if (!cancelled) setPhotos(files);
-    });
+    // 읽지 못하면 공유된 사진이 없는 것으로 본다.
+    readSharedPhotos()
+      .catch(() => [])
+      .then((files) => {
+        if (!cancelled) setPhotos(files);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // 401은 QueryProvider가 로그인 화면으로 보낸다. 그 밖의 오류는 다시 시도하게 한다.
+  if (
+    session.isError &&
+    !(
+      session.error instanceof ApiError &&
+      session.error.code === "AUTH_REQUIRED"
+    )
+  ) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p role="alert" className="text-sm text-red-700">
+          {SESSION_ERROR}
+        </p>
+        <button
+          type="button"
+          onClick={() => session.refetch()}
+          className="rounded-md border border-neutral-300 px-4 py-2.5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
 
   if (!session.isSuccess || photos === null) return null;
 

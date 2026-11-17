@@ -7,6 +7,8 @@ import { useDrinkSearch } from "@/hooks/use-drink-search";
 export type DrinkChoice = {
   drinkId: number | null;
   drinkName: string | null;
+  // 고른 술의 양조장. 술을 바꾸면 이 양조장을 현재 양조장으로 보여 준다.
+  breweryId: number | null;
   newDrinkName: string;
 };
 
@@ -52,6 +54,7 @@ export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
                   onChange({
                     drinkId: drink.id,
                     drinkName: drink.name,
+                    breweryId: drink.breweryId,
                     newDrinkName: "",
                   })
                 }

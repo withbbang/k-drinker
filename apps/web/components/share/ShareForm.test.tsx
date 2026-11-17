@@ -222,4 +222,36 @@ describe("ShareForm", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "보내기" })).toBeNull();
   });
+
+  it("shows guidance when reading shared photos fails", async () => {
+    // given
+    readMock.mockRejectedValue(new Error("cache"));
+
+    // when
+    renderForm();
+
+    // then
+    expect(
+      await screen.findByText(/공유된 사진이 없습니다/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a retry message when the session check fails", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    apiFetchMock.mockRejectedValue(
+      new ApiError("COMMON_NOT_FOUND", "찾을 수 없습니다."),
+    );
+
+    // when
+    renderForm();
+
+    // then
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    );
+    expect(
+      screen.getByRole("button", { name: "다시 시도" }),
+    ).toBeInTheDocument();
+  });
 });

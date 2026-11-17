@@ -14,10 +14,12 @@ export function useBreweries(q: string, page: number) {
   });
 }
 
-export function useBrewery(id: string) {
+/** id가 null이면 부르지 않는다. */
+export function useBrewery(id: string | number | null) {
   return useQuery({
-    queryKey: ["breweries", "detail", id],
+    queryKey: ["breweries", "detail", String(id)],
     queryFn: () => apiFetch<BreweryResponse>(`/api/v1/breweries/${id}`),
+    enabled: id !== null,
   });
 }
 
