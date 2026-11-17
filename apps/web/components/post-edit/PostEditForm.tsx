@@ -51,11 +51,10 @@ function Editor({ post, onSave }: EditorProps) {
   // 고른 양조장. 고르지 않으면 술의 현재 양조장을 그대로 둔다.
   const [picked, setPicked] = useState<BreweryResponse | null>(null);
   const newName = drink.newDrinkName.trim();
-  // 다른 술을 고르면 그 술의 양조장을, 새 이름이면 양조장 없음을 현재 양조장으로 보여 준다.
-  const drinkChanged = newName !== "" || drink.drinkId !== post.drinkId;
-  const drinkBrewery = useBrewery(
-    drinkChanged && newName === "" ? drink.breweryId : null,
-  );
+  // 다른 술을 고르면 그 술의 양조장을 현재 양조장으로 보여 준다.
+  // 새 이름이면 API가 게시물의 현재 양조장을 새 술에 붙이므로 그 양조장을 그대로 보여 준다.
+  const drinkChanged = newName === "" && drink.drinkId !== post.drinkId;
+  const drinkBrewery = useBrewery(drinkChanged ? drink.breweryId : null);
   const current = drinkChanged ? (drinkBrewery.data ?? null) : post.brewery;
   const base = picked ?? current;
   // 양조장 칸은 그 칸을 채운 양조장과 함께 둔다. 보이는 양조장이 바뀌면 그 양조장 값으로 다시 채운다.

@@ -328,12 +328,25 @@ describe("PostEditForm", () => {
     expect(putBodies()[0].breweryEdit).toBeNull();
   });
 
-  it("shows no current brewery for a new drink name", async () => {
+  it("keeps the current brewery for a new drink name", async () => {
     setup(post());
     await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
 
-    expect(screen.getByText("정해진 양조장이 없습니다.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("전화")).toBeNull();
+    expect(screen.getByText("선택한 양조장: 국순당")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("전화"), "02-9");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(putBody().newDrinkName).toBe("새 술"));
+    expect(putBody().drinkId).toBeNull();
+    expect(putBody().breweryId).toBeNull();
+    expect(putBody().breweryEdit).toEqual({
+      name: "국순당",
+      address: "서울",
+      phone: "02-9",
+      homepage: null,
+      instagramHandle: null,
+      otherSns: null,
+    });
   });
 
   it("limits the memo to 2000 characters", async () => {
