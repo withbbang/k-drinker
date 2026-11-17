@@ -1,0 +1,118 @@
+"use client";
+
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+
+import { RatingInput } from "@/components/ui/RatingInput";
+import { useCreatePost } from "@/hooks/use-create-post";
+import { useSession } from "@/hooks/use-session";
+import { ApiError } from "@/lib/api";
+import { clearSharedPhotos, readSharedPhotos } from "@/lib/shared-photos";
+
+const MAX_PHOTOS = 10;
+const MAX_MEMO_LENGTH = 2000;
+const FALLBACK_ERROR = "전송에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+
+export function ShareForm() {
+  const session = useSession();
+  const createPost = useCreatePost();
+  const [photos, setPhotos] = useState<File[] | null>(null);
+  const [rating, setRating] = useState<number | null>(null);
+  const [memo, setMemo] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    readSharedPhotos().then((files) => {
+      if (!cancelled) setPhotos(files);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const previewUrls = useMemo(
+    () => (photos ?? []).map((file) => URL.createObjectURL(file)),
+    [photos],
+  );
+  useEffect(
+    () => () => previewUrls.forEach((url) => URL.revokeObjectURL(url)),
+    [previewUrls],
+  );
+
+  if (!session.isSuccess || photos === null) return null;
+
+  if (createPost.isSuccess) {
+    return (
+      <p role="status">
+        접수했습니다. 분석이 끝나면 텔레그램으로 개요를 보내 드립니다.
+      </p>
+    );
+  }
+
+  if (photos.length === 0) {
+    return (
+      <p className="text-neutral-700">
+        공유된 사진이 없습니다. 갤러리에서 사진을 골라 k-drinker로 공유해
+        주세요.
+      </p>
+    );
+  }
+
+  const tooMany = photos.length > MAX_PHOTOS;
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const body = new FormData();
+    photos.forEach((file) => body.append("photos", file));
+    body.append("memo", memo);
+    if (rating !== null) body.append("rating", String(rating));
+    body.append("source", "SHARE");
+    createPost.mutate(body, { onSuccess: () => clearSharedPhotos() });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <ul className="grid grid-cols-3 gap-2">
+        {previewUrls.map((url, i) => (
+          <li key={url + i}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- blob 미리보기 */}
+            <img
+              src={url}
+              alt={`공유한 사진 ${i + 1}`}
+              className="aspect-square w-full rounded-md object-cover"
+            />
+          </li>
+        ))}
+      </ul>
+      <RatingInput value={rating} onChange={setRating} />
+      <label className="flex flex-col gap-2">
+        <span className="text-sm font-medium">메모</span>
+        <input
+          type="text"
+          value={memo}
+          maxLength={MAX_MEMO_LENGTH}
+          onChange={(event) => setMemo(event.target.value)}
+          className="rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
+        />
+      </label>
+      {tooMany && (
+        <p className="text-sm text-red-700">
+          사진은 1장 이상 10장 이하로 올려 주세요.
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={tooMany || createPost.isPending}
+        className="rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+      >
+        보내기
+      </button>
+      {createPost.isError && (
+        <p role="alert" className="text-sm text-red-700">
+          {createPost.error instanceof ApiError
+            ? createPost.error.message
+            : FALLBACK_ERROR}
+        </p>
+      )}
+    </form>
+  );
+}

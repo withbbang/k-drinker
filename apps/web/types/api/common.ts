@@ -11,3 +11,11 @@ export type ApiErrorBody = {
 
 export type ApiResponse<T> =
   { success: true; data: T } | { success: false; error: ApiErrorBody };
+
+export type PageResponse<T> = {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};

@@ -6,6 +6,10 @@ import { apiFetch } from "@/lib/api";
 export function useSession() {
   return useQuery({
     queryKey: ["session"],
-    queryFn: () => apiFetch<void>("/api/v1/sessions/current"),
+    // 204 본문 없음(undefined)은 React Query가 오류로 보므로 true로 바꾼다.
+    queryFn: async () => {
+      await apiFetch<void>("/api/v1/sessions/current");
+      return true;
+    },
   });
 }
