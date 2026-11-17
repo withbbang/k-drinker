@@ -341,13 +341,11 @@ Claude 사용량 model=claude-opus-5-5 input=1200 output=340 cacheRead=800 cache
 
 ```bash
 dc logs api | grep 'Claude 사용량'
-# 하루 합계 (호출 수, input, output 토큰). 날짜는 로그 줄 맨 앞 시각 기준
-dc logs -t api | grep 'Claude 사용량' | awk '{d=substr($1,1,10); for(i=1;i<=NF;i++){if($i~/^input=/)a[d]+=substr($i,7); if($i~/^output=/)b[d]+=substr($i,8)} n[d]++} END{for(d in n) print d, "calls="n[d], "input="a[d], "output="b[d]}'
+# 하루 합계 (호출 수, input, output 토큰). --no-log-prefix로 컨테이너 접두어를 떼고, 날짜는 -t가 붙인 맨 앞 시각(UTC) 기준
+dc logs --no-log-prefix -t api | grep 'Claude 사용량' | awk '{d=substr($1,1,10); for(i=1;i<=NF;i++){if($i~/^input=/)a[d]+=substr($i,7); if($i~/^output=/)b[d]+=substr($i,8)} n[d]++} END{for(d in n) print d, "calls="n[d], "input="a[d], "output="b[d]}' | sort
 ```
 
 로그는 컨테이너 로그가 도는 만큼만 남는다. 단가는 모델 요금표에 곱해 직접 계산한다.
-
----
 
 ---
 
