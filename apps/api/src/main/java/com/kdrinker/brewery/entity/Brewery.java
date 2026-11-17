@@ -93,6 +93,25 @@ public class Brewery {
 		this.sourceUrl = sourceUrl;
 	}
 
+	/**
+	 * 사용자가 직접 고친 값으로 덮어쓴다. 빈 문자열은 null로 둔다. 사용자가 본 값이므로 웹 출처 표시는 지운다.
+	 */
+	public void editManually(String name, String normalizedName, String address, String phone, String homepage,
+			String instagramHandle, String otherSns) {
+		this.name = name;
+		this.normalizedName = normalizedName;
+		this.address = blankToNull(address);
+		this.phone = blankToNull(phone);
+		this.homepage = blankToNull(homepage);
+		this.instagramHandle = blankToNull(instagramHandle);
+		this.otherSns = blankToNull(otherSns);
+		this.source = BrewerySource.MANUAL;
+		this.verified = true;
+		this.sourceUrl = null;
+		this.webFields = null;
+		this.webSourceUrl = null;
+	}
+
 	public void markResearched(Instant at) {
 		this.researchedAt = at;
 	}
@@ -163,6 +182,10 @@ public class Brewery {
 			case "otherSns" -> otherSns;
 			default -> null;
 		};
+	}
+
+	private static String blankToNull(String s) {
+		return isBlank(s) ? null : s;
 	}
 
 	private static boolean isBlank(String s) {

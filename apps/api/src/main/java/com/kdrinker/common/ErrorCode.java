@@ -19,6 +19,7 @@ public enum ErrorCode {
 	POST_PHOTO_TOO_LARGE(HttpStatus.BAD_REQUEST, "사진 한 장의 크기는 20MB 이하여야 합니다."),
 	POST_REQUEST_TOO_LARGE(HttpStatus.BAD_REQUEST, "한 번에 올릴 수 있는 사진 용량을 넘었습니다. 사진 수를 줄여 주세요."),
 	POST_INVALID_RATING(HttpStatus.BAD_REQUEST, "별점은 0에서 5 사이, 0.5 단위로 입력해 주세요."),
+	BREWERY_INVALID_INSTAGRAM(HttpStatus.BAD_REQUEST, "인스타그램 계정 형식이 올바르지 않습니다."),
 	INSTAGRAM_TOKEN_MISSING(HttpStatus.BAD_REQUEST, "INSTAGRAM_ACCESS_TOKEN 환경변수가 비어 있습니다.");
 
 	private final HttpStatus status;
