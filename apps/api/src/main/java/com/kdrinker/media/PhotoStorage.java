@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -79,11 +80,48 @@ public class PhotoStorage {
 
 	/** 스테이징 디렉터리를 통째로 지운다. 실패는 무시한다. */
 	public void deleteStagingQuietly(String stagingId) {
-		try {
-			if (stagingId == null || !TOKEN_PATTERN.matcher(stagingId).matches()) {
-				return;
+		if (stagingId == null || !TOKEN_PATTERN.matcher(stagingId).matches()) {
+			return;
+		}
+		deleteTreeQuietly(resolve("tmp/" + stagingId));
+	}
+
+	/** original/{postId}/ 디렉터리를 통째로 지운다. 없거나 실패해도 무시한다. */
+	public void deletePostOriginalDirQuietly(Long postId) {
+		if (postId == null) {
+			return;
+		}
+		deleteTreeQuietly(resolve("original/" + postId));
+	}
+
+	/** tmp/ 아래 수정 시각이 cutoff 보다 앞선 스테이징 디렉터리를 지우고 지운 개수를 돌려준다. 실패한 것은 건너뛴다. */
+	public int deleteStagingOlderThan(Instant cutoff) {
+		Path tmp = resolve("tmp");
+		if (!Files.isDirectory(tmp)) {
+			return 0;
+		}
+		int deleted = 0;
+		try (var children = Files.list(tmp)) {
+			for (Path child : children.filter(Files::isDirectory).toList()) {
+				try {
+					if (Files.getLastModifiedTime(child).toInstant().isBefore(cutoff)) {
+						deleteTreeQuietly(child);
+						if (!Files.exists(child)) {
+							deleted++;
+						}
+					}
+				} catch (IOException e) {
+					// 이 폴더는 건너뛴다.
+				}
 			}
-			Path dir = resolve("tmp/" + stagingId);
+		} catch (IOException | RuntimeException e) {
+			// 정리 실패는 무시한다.
+		}
+		return deleted;
+	}
+
+	private static void deleteTreeQuietly(Path dir) {
+		try {
 			if (!Files.exists(dir)) {
 				return;
 			}

@@ -107,4 +107,49 @@ class PhotoStorageTest {
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
+	@Test
+	void 하루_지난_임시_폴더만_지운다() throws Exception {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+		String stale = "B".repeat(43);
+		String fresh = "C".repeat(43);
+		storage.saveStaged(stale, "0.jpg", new byte[] { 1 });
+		storage.saveStaged(fresh, "0.jpg", new byte[] { 2 });
+		java.time.Instant cutoff = java.time.Instant.parse("2026-11-17T04:00:00Z");
+		Files.setLastModifiedTime(dir.resolve("tmp/" + stale),
+				java.nio.file.attribute.FileTime.from(cutoff.minusSeconds(1)));
+		Files.setLastModifiedTime(dir.resolve("tmp/" + fresh), java.nio.file.attribute.FileTime.from(cutoff));
+
+		// when
+		int deleted = storage.deleteStagingOlderThan(cutoff);
+
+		// then
+		assertThat(deleted).isEqualTo(1);
+		assertThat(Files.exists(dir.resolve("tmp/" + stale))).isFalse();
+		assertThat(Files.exists(dir.resolve("tmp/" + fresh + "/0.jpg"))).isTrue();
+	}
+
+	@Test
+	void tmp_폴더가_없어도_임시_폴더_정리는_0을_돌려준다() {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+
+		// when / then
+		assertThat(storage.deleteStagingOlderThan(java.time.Instant.now())).isZero();
+	}
+
+	@Test
+	void 게시물_원본_폴더를_통째로_지우고_없어도_오류가_없다() {
+		// given
+		PhotoStorage storage = new PhotoStorage(dir.toString());
+		storage.saveOriginal(9L, 0, "jpg", new byte[] { 1 });
+
+		// when
+		storage.deletePostOriginalDirQuietly(9L);
+		storage.deletePostOriginalDirQuietly(9L);
+
+		// then
+		assertThat(Files.exists(dir.resolve("original/9"))).isFalse();
+	}
+
 }

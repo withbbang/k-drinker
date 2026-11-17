@@ -41,6 +41,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("select p.id from Post p where p.status = :status and p.updatedAt >= :since order by p.id")
 	List<Long> findIdsByStatusUpdatedSince(@Param("status") PostStatus status, @Param("since") Instant since);
 
+	/** 상태가 같고 before 보다 먼저 갱신된(경계 제외) 게시물 id. 취소 사진 정리가 쓴다. */
+	@Query("select p.id from Post p where p.status = :status and p.updatedAt < :before order by p.id")
+	List<Long> findIdsByStatusUpdatedBefore(@Param("status") PostStatus status, @Param("before") Instant before);
+
 	@EntityGraph(attributePaths = { "drink", "drink.brewery" })
 	Page<Post> findAllByOrderByIdDesc(Pageable pageable);
 

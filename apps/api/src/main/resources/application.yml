@@ -26,6 +26,12 @@ server:
 app:
   media:
     dir: ${MEDIA_DIR:./.data/media}
+    # 취소 게시물 사진·오래된 임시 폴더 정리. 환경변수가 아니라 고정값이다.
+    cleanup:
+      cron: "0 0 4 * * *"
+      zone: Asia/Seoul
+      canceled-retention: 7d
+      staging-retention: 1d
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   auth:
     enabled: true

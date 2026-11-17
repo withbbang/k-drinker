@@ -249,4 +249,47 @@ class ClaudeCallsTest {
 		withoutClient.close();
 		assertThat(withoutClient.hasClient()).isFalse();
 	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void 응답의_토큰_사용량을_로그로_남긴다() {
+		// given
+		var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ClaudeCalls.class);
+		var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+		appender.start();
+		logger.addAppender(appender);
+		try {
+			StructuredMessage<Answer> message = mock(StructuredMessage.class);
+			when(message.stopReason()).thenReturn(Optional.of(BetaStopReason.END_TURN));
+			when(message.model()).thenReturn(com.anthropic.models.messages.Model.of("claude-opus-5-5"));
+			var usage = mock(com.anthropic.models.beta.messages.BetaUsage.class);
+			when(usage.inputTokens()).thenReturn(1200L);
+			when(usage.outputTokens()).thenReturn(340L);
+			when(usage.cacheReadInputTokens()).thenReturn(Optional.of(800L));
+			when(usage.cacheCreationInputTokens()).thenReturn(Optional.of(50L));
+			var serverTools = mock(com.anthropic.models.beta.messages.BetaServerToolUsage.class);
+			when(serverTools.webSearchRequests()).thenReturn(3L);
+			when(usage.serverToolUse()).thenReturn(Optional.of(serverTools));
+			when(message.usage()).thenReturn(usage);
+			StructuredTextBlock<Answer> text = mock(StructuredTextBlock.class);
+			when(text.text()).thenReturn(new Answer("ok"));
+			StructuredContentBlock<Answer> block = mock(StructuredContentBlock.class);
+			when(block.text()).thenReturn(Optional.of(text));
+			when(message.content()).thenReturn(List.of(block));
+			AnthropicClient client = mock(AnthropicClient.class, org.mockito.Answers.RETURNS_DEEP_STUBS);
+			when(client.beta().messages().create(any(StructuredMessageCreateParams.class))).thenReturn(message);
+			ClaudeCalls calls = new ClaudeCalls(
+					new ClaudeProperties("k", "claude-opus-5-5", Duration.ofSeconds(1), 0), client);
+
+			// when
+			calls.structured(calls.base().addUserMessage("x"), Answer.class);
+
+			// then
+			assertThat(appender.list).extracting(event -> event.getFormattedMessage())
+					.contains("Claude 사용량 model=claude-opus-5-5 input=1200 output=340 cacheRead=800 cacheWrite=50 webSearch=3");
+		} finally {
+			logger.detachAppender(appender);
+		}
+	}
+
 }

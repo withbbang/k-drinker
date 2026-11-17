@@ -322,6 +322,33 @@ dc start web
 - DB 덤프에는 테이블별 `DROP TABLE IF EXISTS`가 들어 있어 같은 DB에 그대로 덮어쓴다.
 - 사진 tar는 기존 파일 위에 덮어 풀기만 한다(지우지 않는다). DB와 사진은 같은 시각의 파일을 짝으로 쓴다.
 
+### 사진 정리
+
+api가 매일 04:00(Asia/Seoul)에 스스로 정리한다. 따로 등록할 작업은 없다.
+
+- **취소 게시물**: 취소한 지 7일이 지난 게시물의 사진(원본 `original/{게시물}/`·렌더링 `rendered/`)을 지운다. 게시물 행은 기록으로 남고, 게시된 게시물의 사진은 건드리지 않는다.
+- **임시 폴더**: `tmp/` 아래에서 하루 넘게 수정되지 않은 업로드 임시 폴더를 지운다.
+- 기간과 시각은 `application.yml`의 `app.media.cleanup.*` 고정값이다(환경변수 아님).
+- 확인: `dc logs api | grep '사진 정리'` → `사진 정리: 취소 게시물 N건, 사진 N장, 임시 폴더 N개`
+
+### Claude 사용량
+
+Claude를 부를 때마다 api 로그에 한 줄이 남는다.
+
+```
+Claude 사용량 model=claude-opus-5-5 input=1200 output=340 cacheRead=800 cacheWrite=50 webSearch=3
+```
+
+```bash
+dc logs api | grep 'Claude 사용량'
+# 하루 합계 (호출 수, input, output 토큰). 날짜는 로그 줄 맨 앞 시각 기준
+dc logs -t api | grep 'Claude 사용량' | awk '{d=substr($1,1,10); for(i=1;i<=NF;i++){if($i~/^input=/)a[d]+=substr($i,7); if($i~/^output=/)b[d]+=substr($i,8)} n[d]++} END{for(d in n) print d, "calls="n[d], "input="a[d], "output="b[d]}'
+```
+
+로그는 컨테이너 로그가 도는 만큼만 남는다. 단가는 모델 요금표에 곱해 직접 계산한다.
+
+---
+
 ---
 
 ## 5. 재부팅과 1주 운영
@@ -406,5 +433,14 @@ dc up -d                   # 바뀐 환경변수로 컨테이너 재생성
 1. 같은 화면 2단계에서 계정의 [토큰 생성]을 누르고 Instagram 계정으로 로그인·승인한다. 토큰은 한 번만 보여 주니 [복사]해서 바로 보관한다. 계정 ID(`INSTAGRAM_USER_ID`)도 이 표에 나온다.
 2. NAS의 `deploy/.env`에서 `INSTAGRAM_ACCESS_TOKEN`을 새 값으로 바꾼다.
 3. 환경변수는 컨테이너 기동 때 묶이므로 `dc up -d`로 api를 다시 만든다 (`dc restart api`로는 반영되지 않는다).
-4. API는 기동할 때 환경변수 토큰이 저장된 값과 다르면 덮어쓰므로 3단계로 반영된다. 기동 때 DB 오류 등으로 반영되지 않았으면(로그 "인스타그램 토큰 초기화에 실패했습니다") 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출해 기동 때 읽은 환경변수 값으로 다시 덮는다. 웹 설정 화면의 [토큰 다시 불러오기] 버튼은 P4 이후에 생기므로, 그때까지는 세션 쿠키를 실어 직접 호출한다 (예: `curl -X POST -b 'KD_SESSION=<세션 쿠키 값>' https://<도메인>/api/v1/instagram/token/reload`).
+4. API는 기동할 때 환경변수 토큰이 저장된 값과 다르면 덮어쓰므로 3단계로 반영된다. 기동 때 DB 오류 등으로 반영되지 않았으면(로그 "인스타그램 토큰 초기화에 실패했습니다") 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출해 기동 때 읽은 환경변수 값으로 다시 덮는다. 웹 설정 화면(`/settings`)에서 [토큰 다시 불러오기]를 누른다.
 5. `GET /api/v1/instagram/token`으로 확인한다. `expiresAt`이 `null`(만료 없음)이고 `refreshedAt`이 방금 저장한 시각이면 끝이다.
+
+---
+
+## 11. 휴대폰에 앱 설치·공유
+
+1. 안드로이드 크롬에서 `https://<도메인>`을 열고 로그인한다.
+2. 크롬 메뉴(⋮) → **[홈 화면에 추가]**(또는 [앱 설치])를 누른다.
+3. 갤러리에서 사진을 고르고 공유 버튼을 눌러 공유 목록에 **k-drinker**가 보이는지 확인한다. 보이면 거기서 바로 후기를 올릴 수 있다.
+4. 목록에 없으면 홈 화면에서 앱을 지우고 2번부터 다시 한다(공유 대상은 설치할 때 등록된다).

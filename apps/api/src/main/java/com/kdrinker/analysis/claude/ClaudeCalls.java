@@ -7,16 +7,21 @@ import com.anthropic.models.beta.messages.BetaContentBlockParam;
 import com.anthropic.models.beta.messages.BetaImageBlockParam;
 import com.anthropic.models.beta.messages.BetaMessage;
 import com.anthropic.models.beta.messages.BetaOutputConfig;
+import com.anthropic.models.beta.messages.BetaServerToolUsage;
 import com.anthropic.models.beta.messages.BetaStopReason;
 import com.anthropic.models.beta.messages.MessageCreateParams;
 import com.anthropic.models.beta.messages.StructuredMessage;
 import com.anthropic.models.beta.messages.StructuredMessageCreateParams;
+import com.anthropic.models.beta.messages.BetaUsage;
+import com.anthropic.models.messages.Model;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
 
 /** Claude 베타 Messages 호출의 공통부. 분석 단계(라벨·조사·캡션)가 base()에 내용을 더해 structured()로 부른다. */
+@Slf4j
 public class ClaudeCalls implements AutoCloseable {
 
 	static final long MAX_TOKENS = 16000L;
@@ -46,6 +51,7 @@ public class ClaudeCalls implements AutoCloseable {
 	/** 빌더에 T의 JSON 스키마 출력을 걸어 호출하고 T로 돌려준다. 어떤 실패든 ClaudeUnavailableException. */
 	public <T> T structured(MessageCreateParams.Builder builder, Class<T> type) {
 		return call(() -> client.beta().messages().create(toStructured(builder, type)), StructuredMessage::stopReason,
+				message -> logUsage(message.model(), message.usage()),
 				message -> message.content().stream()
 						.flatMap(block -> block.text().stream())
 						.map(text -> text.text())
@@ -58,16 +64,19 @@ public class ClaudeCalls implements AutoCloseable {
 	 * pause_turn은 실패가 아니다.
 	 */
 	public BetaMessage create(MessageCreateParams params) {
-		return call(() -> client.beta().messages().create(params), BetaMessage::stopReason, Function.identity());
+		return call(() -> client.beta().messages().create(params), BetaMessage::stopReason,
+				message -> logUsage(message.model(), message.usage()), Function.identity());
 	}
 
 	/** 키 없음·임의 RuntimeException·refusal·max_tokens를 모두 ClaudeUnavailableException으로 바꾼다. */
-	private <M, R> R call(Supplier<M> send, Function<M, Optional<BetaStopReason>> stopReason, Function<M, R> extract) {
+	private <M, R> R call(Supplier<M> send, Function<M, Optional<BetaStopReason>> stopReason,
+			Function<M, Runnable> usageLogger, Function<M, R> extract) {
 		if (client == null) {
 			throw new ClaudeUnavailableException("ANTHROPIC_API_KEY가 설정되지 않았다");
 		}
 		try {
 			M message = send.get();
+			usageLogger.apply(message).run();
 			Optional<BetaStopReason> stop = stopReason.apply(message);
 			if (stop.isPresent() && stop.get().equals(BetaStopReason.REFUSAL)) {
 				throw new ClaudeUnavailableException("Claude가 요청을 거절했다");
@@ -81,6 +90,23 @@ public class ClaudeCalls implements AutoCloseable {
 		} catch (RuntimeException e) {
 			throw new ClaudeUnavailableException("Claude 호출 실패: " + e.getMessage(), e);
 		}
+	}
+
+	/** 응답마다 모델과 토큰 사용량을 한 줄로 남긴다. 없는 값은 0이다. 로그 실패가 호출을 깨지 않게 한다. */
+	private Runnable logUsage(Model model, BetaUsage usage) {
+		return () -> {
+			try {
+				log.info("Claude 사용량 model={} input={} output={} cacheRead={} cacheWrite={} webSearch={}",
+						model != null ? model.asString() : props.model(),
+						usage != null ? usage.inputTokens() : 0L,
+						usage != null ? usage.outputTokens() : 0L,
+						usage != null ? usage.cacheReadInputTokens().orElse(0L) : 0L,
+						usage != null ? usage.cacheCreationInputTokens().orElse(0L) : 0L,
+						usage != null ? usage.serverToolUse().map(BetaServerToolUsage::webSearchRequests).orElse(0L) : 0L);
+			} catch (RuntimeException e) {
+				// 사용량 로그 실패는 호출 결과에 영향을 주지 않는다.
+			}
+		};
 	}
 
 	static <T> StructuredMessageCreateParams<T> toStructured(MessageCreateParams.Builder builder, Class<T> type) {
