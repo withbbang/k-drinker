@@ -48,10 +48,7 @@ app:
   instagram:
     access-token: ${INSTAGRAM_ACCESS_TOKEN:}
     user-id: ${INSTAGRAM_USER_ID:}
-    base-url: https://graph.instagram.com
+    base-url: https://graph.facebook.com
     api-version: v27.0
     container-poll-interval: 60s
     container-timeout: 5m
-    refresh-before: 30d
-    refresh-cron: "0 0 4 * * *"
-    zone: Asia/Seoul

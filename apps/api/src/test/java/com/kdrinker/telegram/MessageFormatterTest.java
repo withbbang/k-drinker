@@ -278,13 +278,6 @@ class MessageFormatterTest {
 	}
 
 	@Test
-	void tokenRefreshFailedShowsKoreanWeekday() {
-		// 2026-12-02 00:00 +09:00 = 2026-12-01T15:00Z
-		assertThat(MessageFormatter.tokenRefreshFailed(Instant.parse("2026-12-01T15:00:00Z")).html()).isEqualTo(
-				"인스타그램 토큰 갱신에 실패했습니다.\n만료 예정: 2026-12-02(수)\n토큰을 다시 발급해 주세요. 절차는 deploy/README.md에 있습니다.");
-	}
-
-	@Test
 	void staleButton() {
 		assertThat(MessageFormatter.staleButton()).isEqualTo("이미 처리했거나 오래된 버튼입니다. 최신 개요 메시지를 확인해 주세요.");
 	}

@@ -106,7 +106,7 @@ vi deploy/.env
 | `PUBLIC_BASE_URL` | web의 공개 HTTPS 주소. 예: `https://kdrinker.example.com` (끝 슬래시 없음, 2장의 도메인과 같아야 한다). 비어 있으면 compose와 워크플로가 배포를 막는다 |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | 텔레그램 접수·알림·버튼에 쓴다. 둘 중 하나라도 비면 폴링도 전송도 하지 않는다(기동은 정상) |
 | `ANTHROPIC_API_KEY` | 분석(라벨 인식·양조장 조사·캡션 생성)에 필수. 비워 두면 기동은 되지만 모든 게시물이 "분석 서버 응답에 문제가 있었습니다." 사유로 실패한다 |
-| `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | 인스타그램 게시에 쓰는 장기 토큰과 계정 ID. 재발급 절차는 10장 |
+| `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | 인스타그램 게시에 쓰는 시스템 사용자 토큰(`EAA…`, 만료 없음)과 Instagram 계정 ID. 발급·재발급 절차는 10장 |
 | `IMAGE_TAG` | 비워 둔다. 워크플로가 배포할 때마다 커밋 SHA를 써 넣는다 |
 
 - 비밀번호는 영문·숫자로만 만든다 (따옴표, `$`, 공백은 Compose 치환과 충돌한다). 예: `openssl rand -hex 24`.
@@ -393,19 +393,18 @@ dc up -d                   # 바뀐 환경변수로 컨테이너 재생성
 
 ---
 
-## 10. 인스타그램 장기 토큰 재발급
+## 10. 인스타그램 토큰 발급·재발급
 
-장기 토큰은 발급 후 60일 동안 유효하다. API가 자동으로 갱신하지만, 갱신이 계속 실패해 만료가 다가오면 텔레그램으로 "인스타그램 토큰 갱신에 실패했습니다." 알림(메시지 11)이 온다. 그때 아래 순서로 새 토큰을 넣는다. 새 환경변수는 없다.
+인스타그램 게시는 Instagram API with Facebook Login(통합 로그인)으로 `graph.facebook.com`을 호출한다. 최신 Meta 앱에서는 Instagram 로그인 방식(`graph.instagram.com`, `IGAA…` 토큰)을 쓸 수 없다. 토큰은 **만료되지 않는 시스템 사용자 토큰(`EAA…`)**이라 API가 갱신하지 않는다. 비밀번호 변경이나 권한 해제로 토큰이 무효가 되면 게시가 인증 실패(code 190)로 끝나고 게시 실패 알림이 온다. 그때 아래 순서로 새 토큰을 넣는다. 새 환경변수는 없다.
 
-자동 갱신
-- 매일 04:00(Asia/Seoul)에 점검한다 (`app.instagram.refresh-cron`, `app.instagram.zone`).
-- 만료가 30일 이내(`app.instagram.refresh-before`)이고 마지막 발급·갱신 후 24시간이 지났을 때만 갱신한다.
-- 갱신에 실패하면 그날 한 번 메시지 11을 보낸다(날짜별 중복 방지). 다음 날 04:00에 다시 시도한다.
-- 토큰을 처음 저장(기동 시 또는 reload)할 때 첫 갱신이 실패하면 실제 만료를 알 수 없어 만료일을 현재 시각 + 1일로 보수적으로 저장한다. 그러면 다음 날 점검에서 다시 갱신을 시도하고, 그때도 실패하면 메시지 11이 간다.
+처음 한 번 준비 (2026-11-17 완료)
+- 게시할 Instagram 계정을 프로페셔널(크리에이터 또는 비즈니스) 계정으로 전환한다.
+- Meta 앱 → 역할 → Instagram 테스터로 계정을 초대하고, Instagram 설정 → 앱 및 웹사이트 → 테스터 초대에서 수락한다.
+- Meta 앱 → 이용 사례 → Instagram API → "API setup with Unified login" → 1단계에서 구성(시스템 사용자 액세스 토큰, 만료 없음)을 만들어 선택한다.
 
-재발급 절차
-1. Meta 개발자 앱에서 인스타그램 장기 액세스 토큰을 새로 발급한다.
-2. NAS의 `deploy/.env`에서 `INSTAGRAM_ACCESS_TOKEN`을 새 값으로 바꾼다 (`INSTAGRAM_USER_ID`는 그대로).
+발급·재발급 절차
+1. 같은 화면 2단계에서 계정의 [토큰 생성]을 누르고 Instagram 계정으로 로그인·승인한다. 토큰은 한 번만 보여 주니 [복사]해서 바로 보관한다. 계정 ID(`INSTAGRAM_USER_ID`)도 이 표에 나온다.
+2. NAS의 `deploy/.env`에서 `INSTAGRAM_ACCESS_TOKEN`을 새 값으로 바꾼다.
 3. 환경변수는 컨테이너 기동 때 묶이므로 `dc up -d`로 api를 다시 만든다 (`dc restart api`로는 반영되지 않는다).
-4. 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출한다. 웹 설정 화면의 [토큰 다시 불러오기] 버튼은 P4 이후에 생기므로, 그때까지는 로그인한 세션 쿠키를 실어 직접 호출한다 (예: `curl -X POST -b 'KD_SESSION=<세션 쿠키 값>' https://<도메인>/api/v1/instagram/token/reload`). 환경변수 토큰으로 저장된 값을 덮어쓰고 갱신을 한 번 시도한다.
-5. `GET /api/v1/instagram/token`으로 만료 시각과 갱신 시각을 확인한다. 방금 발급한 토큰은 Meta가 발급 24시간 안의 갱신을 거부하므로, 다시 불러온 직후에는 "하루 뒤 만료"(현재 시각 + 1일)로 나오는 것이 정상이다. 실패가 아니다. 하루 이틀 뒤 04:00(Asia/Seoul) 점검이 지나고 같은 API로 다시 확인해 만료가 약 60일 뒤로 바뀌었으면 끝이다. 그때도 약 하루 뒤로 나오고 메시지 11까지 왔다면 진짜 갱신 실패이니 토큰 값과 `dc logs --tail 100 api`를 확인한다.
+4. DB에 이미 토큰이 있으면 기동만으로는 바뀌지 않는다. 로그인한 세션으로 `POST /api/v1/instagram/token/reload`를 호출해 환경변수 토큰으로 덮는다. 웹 설정 화면의 [토큰 다시 불러오기] 버튼은 P4 이후에 생기므로, 그때까지는 세션 쿠키를 실어 직접 호출한다 (예: `curl -X POST -b 'KD_SESSION=<세션 쿠키 값>' https://<도메인>/api/v1/instagram/token/reload`).
+5. `GET /api/v1/instagram/token`으로 확인한다. `expiresAt`이 `null`(만료 없음)이고 `refreshedAt`이 방금 저장한 시각이면 끝이다.

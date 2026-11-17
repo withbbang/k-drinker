@@ -1,5 +1,6 @@
 package com.kdrinker.telegram.entity;
 
+/** TOKEN_REFRESH_FAILED는 더 보내지 않지만 이미 저장된 행을 읽을 수 있게 남긴다. */
 public enum NotificationKind {
 
 	RECEIVED, ANALYSIS_FAILED, OVERVIEW, DETAIL, EDIT_LINK, CANCELED, PUBLISHING, PUBLISHED, PUBLISH_FAILED, TEXT_ONLY,

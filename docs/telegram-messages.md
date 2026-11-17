@@ -319,29 +319,11 @@
 
 - 메모는 사진 캡션에 적거나, 사진(앨범)을 보낸 직후 텍스트로 보내면 된다는 점을 위 문구가 가리킨다. 별도 `/help` 명령은 이번 범위에 없다
 
-### 11. 인스타그램 토큰 갱신 실패 · `TOKEN_REFRESH_FAILED`
+### 11. 인스타그램 토큰 갱신 실패 · `TOKEN_REFRESH_FAILED` (폐지)
 
-- **언제:** 장기 토큰 갱신이 실패했을 때. 만료 30일 전(`app.instagram.refresh-before`)부터 매일 04:00(Asia/Seoul) 점검에서 갱신에 실패할 때마다 보내며, 같은 날은 한 번만 보낸다
-- **중복 키:** 날짜 (`2026-11-14`)
-- **소스:** `MessageFormatter.tokenRefreshFailed(Instant expiresAt)`
-
-템플릿
-
-```text
-인스타그램 토큰 갱신에 실패했습니다.
-만료 예정: {만료일}({요일})
-토큰을 다시 발급해 주세요. 절차는 deploy/README.md에 있습니다.
-```
-
-예시
-
-```text
-인스타그램 토큰 갱신에 실패했습니다.
-만료 예정: 2026-12-02(수)
-토큰을 다시 발급해 주세요. 절차는 deploy/README.md에 있습니다.
-```
-
-- 재발급한 토큰은 환경변수를 바꾸고 웹 설정 화면의 [토큰 다시 불러오기]로 반영한다. 이 안내는 `deploy/README.md`에 둔다
+- **폐지 (2026-11-17):** 인스타그램 연동을 통합 로그인(Facebook Login)의 시스템 사용자 토큰으로 바꿨다. 이 토큰은 만료되지 않아 갱신하지 않으므로 이 메시지는 보내지 않는다. `MessageFormatter.tokenRefreshFailed`는 지웠고, 이미 저장된 알림 행을 읽을 수 있게 `NotificationKind.TOKEN_REFRESH_FAILED` 값만 남겼다
+- 토큰이 무효가 되면(비밀번호 변경, 권한 해제 등) 게시할 때 인증 실패(code 190)로 게시 실패 알림이 간다. 재발급 절차는 `deploy/README.md` 10장
+- 번호는 다른 메시지와 문서 참조가 어긋나지 않도록 비워 둔다
 
 ### 12. 사진 장수 초과 안내 · `TOO_MANY_PHOTOS`
 

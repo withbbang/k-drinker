@@ -20,12 +20,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 
 @RestClientTest(value = InstagramClient.class,
-		properties = { "app.instagram.base-url=https://graph.instagram.com", "app.instagram.api-version=v27.0",
+		properties = { "app.instagram.base-url=https://graph.facebook.com", "app.instagram.api-version=v27.0",
 				"app.instagram.user-id=1789" })
 class InstagramClientTest {
 
-	private static final String TOKEN = "IGAAsecret-token_123";
-	private static final String BASE = "https://graph.instagram.com/v27.0/";
+	private static final String TOKEN = "EAAsecret-token_123";
+	private static final String BASE = "https://graph.facebook.com/v27.0/";
 
 	@Autowired
 	private InstagramClient client;
@@ -153,23 +153,6 @@ class InstagramClientTest {
 		assertThat(new InstagramApiException(9004, 2207052, "m").classify()).isEqualTo(PublishFailure.IMAGE_FETCH);
 		assertThat(new InstagramApiException(-2, 2207003, "m").classify()).isEqualTo(PublishFailure.IMAGE_FETCH);
 		assertThat(new InstagramApiException(1, null, "m").classify()).isEqualTo(PublishFailure.UNKNOWN);
-	}
-
-	@Test
-	void refresh는_expires_in을_읽는다() {
-		// given
-		server.expect(requestTo(
-				"https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=" + TOKEN))
-			.andExpect(method(HttpMethod.GET))
-			.andRespond(withSuccess("{\"access_token\":\"NEW\",\"token_type\":\"bearer\",\"expires_in\":5184000}",
-					MediaType.APPLICATION_JSON));
-
-		// when
-		InstagramClient.RefreshedToken refreshed = client.refresh(TOKEN);
-
-		// then
-		assertThat(refreshed.accessToken()).isEqualTo("NEW");
-		assertThat(refreshed.expiresInSeconds()).isEqualTo(5_184_000L);
 	}
 
 	@Test

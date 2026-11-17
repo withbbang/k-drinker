@@ -12,9 +12,6 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -24,9 +21,6 @@ import java.util.Locale;
  * parse_mode HTML이므로 고정 문구 밖의 값은 {@link #escape}로 이스케이프한다.
  */
 public final class MessageFormatter {
-
-	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-	private static final String[] WEEKDAYS = {"월", "화", "수", "목", "금", "토", "일"};
 
 	private MessageFormatter() {
 	}
@@ -113,14 +107,6 @@ public final class MessageFormatter {
 
 	public static TelegramText intakeFailed() {
 		return TelegramText.of("사진을 받지 못했습니다. 잠시 뒤 다시 보내 주세요.");
-	}
-
-	public static TelegramText tokenRefreshFailed(Instant expiresAt) {
-		ZonedDateTime date = expiresAt.atZone(SEOUL);
-		String day = String.format(Locale.ROOT, "%04d-%02d-%02d(%s)", date.getYear(), date.getMonthValue(),
-				date.getDayOfMonth(), WEEKDAYS[date.getDayOfWeek().getValue() - 1]);
-		return TelegramText.of("인스타그램 토큰 갱신에 실패했습니다.\n만료 예정: " + day
-				+ "\n토큰을 다시 발급해 주세요. 절차는 deploy/README.md에 있습니다.");
 	}
 
 	/** 오래된 버튼 팝업. */

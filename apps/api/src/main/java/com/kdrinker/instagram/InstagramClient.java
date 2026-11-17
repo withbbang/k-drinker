@@ -18,7 +18,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Instagram API with Instagram Login 클라이언트. 모든 실패는 토큰이 없는 {@link InstagramApiException}으로 알린다.
+ * Instagram API with Facebook Login(통합 로그인, {@code graph.facebook.com}) 클라이언트. 토큰은 만료되지 않는
+ * 시스템 사용자 토큰이라 갱신 호출은 없다. 모든 실패는 토큰이 없는 {@link InstagramApiException}으로 알린다.
  * 토큰은 GET에서는 쿼리, POST에서는 폼 본문으로 보내고 예외 메시지에는 넣지 않는다.
  */
 @Component
@@ -27,9 +28,6 @@ public class InstagramClient {
 
 	public enum ContainerStatus {
 		IN_PROGRESS, FINISHED, PUBLISHED, ERROR, EXPIRED
-	}
-
-	public record RefreshedToken(String accessToken, long expiresInSeconds) {
 	}
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -93,18 +91,6 @@ public class InstagramClient {
 		} catch (InstagramApiException e) {
 			return Optional.empty();
 		}
-	}
-
-	/** 장기 토큰을 60일 더 연장한다. 발급 24시간 이내 토큰은 거절된다. */
-	public RefreshedToken refresh(String token) {
-		UriComponentsBuilder uri = UriComponentsBuilder.fromUriString(baseUrl)
-			.pathSegment("refresh_access_token")
-			.queryParam("grant_type", "ig_refresh_token");
-		RefreshResponse response = get(token, uri, RefreshResponse.class);
-		if (response == null || response.accessToken() == null || response.expiresIn() == null) {
-			throw new InstagramApiException(-1, null, "인스타그램 응답에 access_token 또는 expires_in이 없습니다.");
-		}
-		return new RefreshedToken(response.accessToken(), response.expiresIn());
 	}
 
 	private UriComponentsBuilder apiPath(String id, String queryName, String queryValue) {
@@ -173,11 +159,6 @@ public class InstagramClient {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record PermalinkResponse(String permalink) {
-	}
-
-	@JsonIgnoreProperties(ignoreUnknown = true)
-	record RefreshResponse(@JsonProperty("access_token") String accessToken,
-			@JsonProperty("expires_in") Long expiresIn) {
 	}
 
 }

@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** 인스타그램 액세스 토큰. 사용자가 한 명이라 행도 하나(id=1)다. */
+/** 인스타그램 액세스 토큰. 사용자가 한 명이라 행도 하나(id=1)다. expiresAt이 null이면 만료되지 않는 토큰이다. */
 @Getter
 @Entity
 @Table(name = "instagram_token")
