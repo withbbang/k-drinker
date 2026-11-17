@@ -13,6 +13,21 @@ self.addEventListener("fetch", (event) => {
 });
 
 async function handleShare(request) {
+  const shareUrl = new URL("/share", request.url);
+  try {
+    await storePhotos(request);
+  } catch {
+    // 저장에 실패해도 공유 화면으로 보낸다. 남은 조각은 비워 "공유된 사진이 없습니다"로 보이게 한다.
+    try {
+      await caches.delete(SHARE_CACHE);
+    } catch {
+      // 정리도 실패하면 어쩔 수 없다.
+    }
+  }
+  return Response.redirect(shareUrl.href, 303);
+}
+
+async function storePhotos(request) {
   const formData = await request.formData();
   const photos = formData.getAll("photos").filter((item) => typeof item !== "string");
 
@@ -32,5 +47,4 @@ async function handleShare(request) {
       headers: { "Content-Type": "application/json" },
     }),
   );
-  return Response.redirect("/share", 303);
 }
