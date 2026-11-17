@@ -1,16 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { RatingInput } from "@/components/ui/RatingInput";
 import { useCreatePost } from "@/hooks/use-create-post";
 import { useSession } from "@/hooks/use-session";
 import { ApiError } from "@/lib/api";
-import { clearSharedPhotos, readSharedPhotos } from "@/lib/shared-photos";
+import { readSharedPhotos } from "@/lib/shared-photos";
 
 const MAX_PHOTOS = 10;
 const MAX_MEMO_LENGTH = 2000;
 const FALLBACK_ERROR = "전송에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+
+// URL 생성과 revoke를 ref 콜백 한 곳에 둬서 StrictMode 재마운트에도 안전하다.
+function PhotoPreview({ file, index }: { file: File; index: number }) {
+  const attach = useCallback(
+    (img: HTMLImageElement) => {
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      return () => URL.revokeObjectURL(url);
+    },
+    [file],
+  );
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- blob 미리보기
+    <img
+      ref={attach}
+      alt={`공유한 사진 ${index}`}
+      className="aspect-square w-full rounded-md object-cover"
+    />
+  );
+}
 
 export function ShareForm() {
   const session = useSession();
@@ -28,15 +48,6 @@ export function ShareForm() {
       cancelled = true;
     };
   }, []);
-
-  const previewUrls = useMemo(
-    () => (photos ?? []).map((file) => URL.createObjectURL(file)),
-    [photos],
-  );
-  useEffect(
-    () => () => previewUrls.forEach((url) => URL.revokeObjectURL(url)),
-    [previewUrls],
-  );
 
   if (!session.isSuccess || photos === null) return null;
 
@@ -66,20 +77,15 @@ export function ShareForm() {
     body.append("memo", memo);
     if (rating !== null) body.append("rating", String(rating));
     body.append("source", "SHARE");
-    createPost.mutate(body, { onSuccess: () => clearSharedPhotos() });
+    createPost.mutate(body);
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <ul className="grid grid-cols-3 gap-2">
-        {previewUrls.map((url, i) => (
-          <li key={url + i}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- blob 미리보기 */}
-            <img
-              src={url}
-              alt={`공유한 사진 ${i + 1}`}
-              className="aspect-square w-full rounded-md object-cover"
-            />
+        {photos.map((file, i) => (
+          <li key={`${file.name}-${i}`}>
+            <PhotoPreview file={file} index={i + 1} />
           </li>
         ))}
       </ul>
