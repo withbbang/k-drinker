@@ -177,4 +177,111 @@ describe("PostEditForm", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("양조장 검색")).toBeDisabled();
   });
+
+  const other = {
+    ...brewery,
+    id: 6,
+    name: "배상면주가",
+    address: "경기",
+    phone: "031-1",
+  };
+
+  function setupSearch(initial: PostDetailResponse) {
+    let detail = initial;
+    apiFetchMock.mockImplementation(
+      async (path: string, init?: RequestInit) => {
+        if (path?.startsWith("/api/v1/breweries?")) {
+          return {
+            items: [other],
+            page: 0,
+            size: 20,
+            totalElements: 1,
+            totalPages: 1,
+          };
+        }
+        if (path?.startsWith("/api/v1/drinks?")) {
+          return [
+            { id: 11, name: "청주", breweryId: 6, breweryName: "배상면주가" },
+          ];
+        }
+        if (init?.method === "PUT") {
+          detail = { ...detail, version: detail.version + 1 };
+        }
+        return detail;
+      },
+    );
+    render(
+      <QueryProvider>
+        <PostEditForm id="7" />
+      </QueryProvider>,
+    );
+  }
+
+  function putBodies() {
+    return apiFetchMock.mock.calls
+      .filter(([, init]) => init?.method === "PUT")
+      .map(([, init]) => JSON.parse(init.body as string));
+  }
+
+  it("does not send breweryId or breweryEdit after clearing the drink", async () => {
+    setupSearch(post({ drinkId: null, drinkName: null, brewery: null }));
+    await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
+    await userEvent.type(screen.getByLabelText("양조장 검색"), "배");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "배상면주가" }),
+    );
+    await userEvent.type(screen.getByLabelText("전화"), "9");
+    await userEvent.clear(screen.getByLabelText("새 이름으로"));
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    expect(putBodies()[0].breweryId).toBeNull();
+    expect(putBodies()[0].breweryEdit).toBeNull();
+  });
+
+  it("uses the version from the previous save response", async () => {
+    setupSearch(post());
+    await userEvent.click(await screen.findByRole("button", { name: "저장" }));
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByText(/저장했습니다/)).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(putBodies()).toHaveLength(2));
+    expect(putBodies().map((b) => b.version)).toEqual([4, 5]);
+  });
+
+  it("bases brewery edit on the newly picked brewery", async () => {
+    setupSearch(post());
+    await userEvent.type(await screen.findByLabelText("양조장 검색"), "배");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "배상면주가" }),
+    );
+    expect(screen.getByLabelText("주소")).toHaveValue("경기");
+    expect(screen.getByLabelText("전화")).toHaveValue("031-1");
+    await userEvent.type(screen.getByLabelText("홈페이지"), "x.kr");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    expect(putBodies()[0].breweryId).toBe(6);
+    expect(putBodies()[0].breweryEdit).toEqual({
+      name: "배상면주가",
+      address: "경기",
+      phone: "031-1",
+      homepage: "x.kr",
+      instagramHandle: null,
+      otherSns: null,
+    });
+  });
+
+  it("sends drinkId of a searched drink without newDrinkName", async () => {
+    setupSearch(post());
+    await userEvent.type(await screen.findByLabelText("술 검색"), "청");
+    await userEvent.click(await screen.findByRole("button", { name: /청주/ }));
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    expect(putBodies()[0].drinkId).toBe(11);
+    expect(putBodies()[0].newDrinkName).toBeNull();
+  });
 });

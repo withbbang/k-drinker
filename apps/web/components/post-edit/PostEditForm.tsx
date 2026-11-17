@@ -73,7 +73,7 @@ function Editor({ post, onSave }: EditorProps) {
       version: post.version,
       drinkId: newName === "" ? drink.drinkId : null,
       newDrinkName: newName === "" ? null : newName,
-      breweryId: picked?.id ?? null,
+      breweryId: hasDrink ? (picked?.id ?? null) : null,
       breweryEdit:
         hasDrink && base && changed
           ? {
