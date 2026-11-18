@@ -250,6 +250,28 @@ describe("PhotoOrderList", () => {
     expect(onAdd).toHaveBeenCalledWith([added]);
   });
 
+  it("disables every photo control while disabled", () => {
+    // given / when
+    render(
+      <PhotoOrderList
+        photos={make(3)}
+        version={3}
+        disabled
+        onChange={vi.fn()}
+        onAdd={vi.fn()}
+        onOverflow={vi.fn()}
+      />,
+    );
+
+    // then
+    for (const name of ["위로", "아래로", "삭제", "여백 넣기"]) {
+      for (const button of screen.getAllByRole("button", { name })) {
+        expect(button).toBeDisabled();
+      }
+    }
+    expect(screen.getByRole("button", { name: "사진 추가" })).toBeDisabled();
+  });
+
   it("hides the add tile at 10 photos", () => {
     render(
       <PhotoOrderList

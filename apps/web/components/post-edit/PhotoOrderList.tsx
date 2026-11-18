@@ -10,6 +10,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 type PhotoOrderListProps = {
   photos: PhotoItem[];
   version: number;
+  // 저장 중처럼 바깥에서 목록을 잠글 때. 이동·삭제·여백·[+]를 모두 막는다.
+  disabled?: boolean;
   onChange: (photos: PhotoItem[]) => void;
   // 애니메이션이 끝나야 onChange로 반영되므로, 그동안 부모가 저장을 막을 수 있게 알린다.
   onBusyChange?: (busy: boolean) => void;
@@ -48,6 +50,7 @@ function prefersReducedMotion(): boolean {
 export function PhotoOrderList({
   photos,
   version,
+  disabled = false,
   onChange,
   onBusyChange,
   onAdd,
@@ -126,6 +129,8 @@ export function PhotoOrderList({
   };
 
   const locked = anim !== null;
+  // 버튼을 막는 조건. busy 알림(locked)과 달리 바깥 잠금도 포함한다.
+  const frozen = locked || disabled;
   const remaining = MAX_PHOTOS - photos.length;
 
   // 확인한 뒤에야 빼는 애니메이션을 시작한다
@@ -211,7 +216,7 @@ export function PhotoOrderList({
                   <button
                     type="button"
                     className={BUTTON}
-                    disabled={locked || i === 0}
+                    disabled={frozen || i === 0}
                     onClick={() => move(i, -1)}
                   >
                     위로
@@ -219,7 +224,7 @@ export function PhotoOrderList({
                   <button
                     type="button"
                     className={BUTTON}
-                    disabled={locked || i === photos.length - 1}
+                    disabled={frozen || i === photos.length - 1}
                     onClick={() => move(i, 1)}
                   >
                     아래로
@@ -227,7 +232,7 @@ export function PhotoOrderList({
                   <button
                     type="button"
                     className={BUTTON}
-                    disabled={locked || photos.length === 1}
+                    disabled={frozen || photos.length === 1}
                     onClick={() => setRemovingKey(photo.key)}
                   >
                     삭제
@@ -235,7 +240,7 @@ export function PhotoOrderList({
                   <button
                     type="button"
                     className={BUTTON}
-                    disabled={locked}
+                    disabled={frozen}
                     onClick={() =>
                       play({ kind: "fit", key: photo.key }, () =>
                         photos.map((p) =>
@@ -257,7 +262,7 @@ export function PhotoOrderList({
           <li>
             <AddPhotoTile
               remaining={remaining}
-              disabled={locked}
+              disabled={frozen}
               onAdd={onAdd}
               onOverflow={(skipped) => onOverflow?.(skipped)}
             />

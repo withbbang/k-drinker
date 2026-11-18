@@ -170,6 +170,7 @@ function Editor({ post, onSave }: EditorProps) {
       <RatingInput
         value={rating}
         onChange={(value) => change((prev) => ({ ...prev, rating: value }))}
+        disabled={onSave.isPending}
       />
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium">메모</span>
@@ -224,6 +225,8 @@ function Editor({ post, onSave }: EditorProps) {
       <PhotoOrderList
         photos={photos}
         version={post.version}
+        // 저장 중 바꾼 사진은 보낸 요청에 들어가지 않으므로 잠근다.
+        disabled={onSave.isPending}
         onChange={(next) => change((prev) => ({ ...prev, photos: next }))}
         onBusyChange={setPhotosBusy}
         onAdd={addPhotos}

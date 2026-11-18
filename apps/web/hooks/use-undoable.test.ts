@@ -50,6 +50,31 @@ describe("useUndoable", () => {
     expect(result.current.canUndo).toBe(false);
   });
 
+  it("필드 값이 모두 같은 새 객체 set은 기록 안 함", () => {
+    // given
+    const photos = ["a"];
+    const { result } = renderHook(() => useUndoable({ photos, rating: 3 }));
+
+    // when: 같은 별점을 다시 고른 것처럼 새 객체를 넘긴다
+    act(() => result.current.set((prev) => ({ ...prev, rating: 3 })));
+
+    // then
+    expect(result.current.canUndo).toBe(false);
+  });
+
+  it("필드 하나라도 다르면 기록한다", () => {
+    // given
+    const { result } = renderHook(() =>
+      useUndoable({ photos: ["a"], rating: 3 }),
+    );
+
+    // when: 내용이 같아도 다른 배열이면 다른 값으로 본다
+    act(() => result.current.set((prev) => ({ ...prev, photos: ["a"] })));
+
+    // then
+    expect(result.current.canUndo).toBe(true);
+  });
+
   it("함수 updater는 현재 값을 받는다", () => {
     const { result } = renderHook(() => useUndoable(1));
 

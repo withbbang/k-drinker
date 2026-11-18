@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AddPhotoTile, overflowMessage } from "@/components/ui/AddPhotoTile";
 import { BlobImage } from "@/components/ui/BlobImage";
@@ -137,13 +137,15 @@ function ShareEditor({ initialPhotos }: { initialPhotos: SharedPhoto[] }) {
     set(next);
   };
 
-  const addPhotos = (files: File[]) =>
-    change((prev) => {
-      // 새 id는 기존 최대 id 다음부터 (빼고 되돌려도 겹치지 않는다)
-      let nextId = Math.max(-1, ...prev.photos.map((p) => p.id)) + 1;
-      const added = files.map((file) => ({ id: nextId++, file }));
-      return { ...prev, photos: [...prev.photos, ...added] };
-    });
+  // 새 사진 id 순번. 공유된 사진 다음부터 쓰고, 되돌려도 다시 쓰지 않아 id가 겹치지 않는다(수정 화면과 같은 방식).
+  const seq = useRef(initialPhotos.length);
+
+  const addPhotos = (files: File[]) => {
+    const start = seq.current;
+    seq.current += files.length;
+    const added = files.map((file, i) => ({ id: start + i, file }));
+    change((prev) => ({ ...prev, photos: [...prev.photos, ...added] }));
+  };
 
   const removePhoto = () => {
     const id = removingId;

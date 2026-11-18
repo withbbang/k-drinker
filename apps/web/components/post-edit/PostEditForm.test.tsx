@@ -163,6 +163,36 @@ describe("PostEditForm", () => {
     expect(screen.queryByText(/텔레그램으로 새 개요/)).toBeNull();
   });
 
+  it("locks photo controls and rating while saving", async () => {
+    // given: 저장 요청이 끝나지 않는다
+    const detail = post();
+    apiFetchMock.mockImplementation((path: string, init?: RequestInit) =>
+      init?.method === "PUT"
+        ? new Promise(() => undefined)
+        : Promise.resolve(path === "/api/v1/posts/7" ? detail : undefined),
+    );
+    render(
+      <QueryProvider>
+        <PostEditForm id="7" />
+      </QueryProvider>,
+    );
+
+    // when
+    await userEvent.click(await screen.findByRole("button", { name: "저장" }));
+
+    // then
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "저장" })).toBeDisabled(),
+    );
+    for (const name of ["위로", "아래로", "삭제", "여백 넣기"]) {
+      for (const button of screen.getAllByRole("button", { name })) {
+        expect(button).toBeDisabled();
+      }
+    }
+    expect(screen.getByRole("button", { name: "사진 추가" })).toBeDisabled();
+    expect(screen.getByLabelText("별점")).toBeDisabled();
+  });
+
   it("disables save while a photo animation is pending, then saves the deletion", async () => {
     // 애니메이션을 켠다(모션 감소 아님)
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
