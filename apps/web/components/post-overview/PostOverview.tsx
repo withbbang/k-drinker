@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import Link from "next/link";
 
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { usePost } from "@/hooks/use-post";
 import { usePostAction } from "@/hooks/use-post-action";
 import { ApiError } from "@/lib/api";
@@ -103,12 +104,15 @@ function Overview({ post }: { post: PostDetailResponse }) {
     resetRetry();
   }, [post.status, resetConfirm, resetCancel, resetRetry]);
 
-  function run(
-    action: typeof confirm,
-    message: string | null,
-    version: number,
-  ) {
-    if (message && !window.confirm(message)) return;
+  // 확인이 필요한 동작은 모달에서 승인을 받은 뒤 실행한다.
+  const [pendingAction, setPendingAction] = useState<{
+    action: typeof confirm;
+    title: string;
+    confirmLabel: string;
+    cancelLabel: string;
+  } | null>(null);
+
+  function run(action: typeof confirm, version: number) {
     // 새 동작을 시작하면 다른 동작의 오류가 남아 새 오류를 가리지 않게 지운다.
     for (const other of [confirm, cancel, retry]) {
       if (other !== action) other.reset();
@@ -167,7 +171,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => run(retry, null, post.version)}
+                  onClick={() => run(retry, post.version)}
                   className={PRIMARY}
                 >
                   다시 시도
@@ -200,7 +204,12 @@ function Overview({ post }: { post: PostDetailResponse }) {
                 type="button"
                 disabled={busy}
                 onClick={() =>
-                  run(confirm, "인스타그램에 게시할까요?", post.version)
+                  setPendingAction({
+                    action: confirm,
+                    title: "인스타그램에 게시할까요?",
+                    confirmLabel: "확인",
+                    cancelLabel: "취소",
+                  })
                 }
                 className={PRIMARY}
               >
@@ -211,7 +220,12 @@ function Overview({ post }: { post: PostDetailResponse }) {
                 type="button"
                 disabled={busy}
                 onClick={() =>
-                  run(cancel, "이 게시물을 취소할까요?", post.version)
+                  setPendingAction({
+                    action: cancel,
+                    title: "이 게시물을 취소할까요?",
+                    confirmLabel: "게시물 취소",
+                    cancelLabel: "돌아가기",
+                  })
                 }
                 className={SECONDARY}
               >
@@ -234,6 +248,18 @@ function Overview({ post }: { post: PostDetailResponse }) {
   return (
     <div className="flex flex-col gap-4">
       {content}
+      {pendingAction && (
+        <ConfirmDialog
+          title={pendingAction.title}
+          confirmLabel={pendingAction.confirmLabel}
+          cancelLabel={pendingAction.cancelLabel}
+          onConfirm={() => {
+            setPendingAction(null);
+            run(pendingAction.action, post.version);
+          }}
+          onClose={() => setPendingAction(null)}
+        />
+      )}
       {error && (
         <p role="alert" className="text-sm text-red-700">
           {error instanceof ApiError ? error.message : FALLBACK_ERROR}

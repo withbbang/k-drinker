@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useLogout } from "@/hooks/use-logout";
 
 const ITEMS = [
@@ -14,6 +17,7 @@ const ITEMS = [
 export function AppNav() {
   const pathname = usePathname();
   const logout = useLogout();
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <nav
@@ -35,12 +39,24 @@ export function AppNav() {
       })}
       <button
         type="button"
-        onClick={() => logout.mutate()}
+        onClick={() => setConfirming(true)}
         disabled={logout.isPending}
         className="ml-auto rounded-full px-4 py-2 text-sm text-neutral-700 disabled:opacity-50"
       >
         로그아웃
       </button>
+      {confirming && (
+        <ConfirmDialog
+          title="로그아웃할까요?"
+          confirmLabel="로그아웃"
+          pending={logout.isPending}
+          onConfirm={() => {
+            setConfirming(false);
+            logout.mutate();
+          }}
+          onClose={() => setConfirming(false)}
+        />
+      )}
     </nav>
   );
 }

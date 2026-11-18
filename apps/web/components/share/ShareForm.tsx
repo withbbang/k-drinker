@@ -1,14 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { RatingInput } from "@/components/ui/RatingInput";
 import { useCreatePost } from "@/hooks/use-create-post";
 import { useSession } from "@/hooks/use-session";
@@ -44,27 +39,16 @@ function PhotoPreview({ file, index }: { file: File; index: number }) {
 
 type SharedPhoto = { id: number; file: File };
 
-// 네이티브 <dialog>를 모달로 연다. Esc로 닫히면 onClose로 상태를 맞춘다.
-function ConfirmDialog({
+// 보내기 전에 보여 주는 요약.
+function SendSummary({
   photoCount,
   rating,
   memo,
-  pending,
-  onConfirm,
-  onClose,
 }: {
   photoCount: number;
   rating: number | null;
   memo: string;
-  pending: boolean;
-  onConfirm: () => void;
-  onClose: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog && !dialog.open) dialog.showModal();
-  }, []);
   const memoPreview =
     memo === ""
       ? "없음"
@@ -72,51 +56,20 @@ function ConfirmDialog({
         ? `${memo.slice(0, MEMO_PREVIEW_LENGTH)}…`
         : memo;
   return (
-    <dialog
-      ref={ref}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!pending) onClose();
-      }}
-      aria-labelledby="share-confirm-title"
-      className="m-auto w-[min(90vw,24rem)] rounded-lg p-5 backdrop:bg-black/40"
-    >
-      <h2 id="share-confirm-title" className="mb-3 font-semibold">
-        이대로 보낼까요?
-      </h2>
-      <dl className="mb-4 flex flex-col gap-1 text-sm">
-        <div className="flex gap-2">
-          <dt className="text-neutral-600">사진</dt>
-          <dd>사진 {photoCount}장</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="text-neutral-600">별점</dt>
-          <dd>{rating === null ? "없음" : rating.toFixed(1)}</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="text-neutral-600">메모</dt>
-          <dd className="break-all">{memoPreview}</dd>
-        </div>
-      </dl>
+    <dl className="flex flex-col gap-1 text-sm">
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={pending}
-          className="flex-1 rounded-md border border-neutral-300 px-4 py-2.5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
-        >
-          돌아가기
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={pending}
-          className="flex-1 rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
-        >
-          보내기
-        </button>
+        <dt className="text-neutral-600">사진</dt>
+        <dd>사진 {photoCount}장</dd>
       </div>
-    </dialog>
+      <div className="flex gap-2">
+        <dt className="text-neutral-600">별점</dt>
+        <dd>{rating === null ? "없음" : rating.toFixed(1)}</dd>
+      </div>
+      <div className="flex gap-2">
+        <dt className="text-neutral-600">메모</dt>
+        <dd className="break-all">{memoPreview}</dd>
+      </div>
+    </dl>
   );
 }
 
@@ -241,13 +194,15 @@ export function ShareForm() {
       </button>
       {confirming && (
         <ConfirmDialog
-          photoCount={photos.length}
-          rating={rating}
-          memo={memo}
+          title="이대로 보낼까요?"
+          confirmLabel="보내기"
+          cancelLabel="돌아가기"
           pending={sending}
           onConfirm={send}
           onClose={() => setConfirming(false)}
-        />
+        >
+          <SendSummary photoCount={photos.length} rating={rating} memo={memo} />
+        </ConfirmDialog>
       )}
       {createPost.isError && (
         <p role="alert" className="text-sm text-red-700">

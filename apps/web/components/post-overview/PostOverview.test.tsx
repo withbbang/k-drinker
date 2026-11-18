@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -73,6 +79,15 @@ function setup(detail: PostDetailResponse) {
   );
 }
 
+// 화면 버튼을 눌러 확인 모달을 열고 모달의 버튼으로 진행한다.
+async function act(pageLabel: string, dialogLabel: string) {
+  await userEvent.click(await screen.findByRole("button", { name: pageLabel }));
+  const dialog = await screen.findByRole("dialog");
+  await userEvent.click(
+    within(dialog).getByRole("button", { name: dialogLabel }),
+  );
+}
+
 function postCalls() {
   return apiFetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
 }
@@ -80,7 +95,6 @@ function postCalls() {
 describe("PostOverview", () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -119,6 +133,11 @@ describe("PostOverview", () => {
   it("posts confirm with the version after the user agrees", async () => {
     setup(post());
     await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("인스타그램에 게시할까요?"),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "확인" }));
 
     await waitFor(() => expect(postCalls()).toHaveLength(1));
     const [path, init] = postCalls()[0];
@@ -127,10 +146,21 @@ describe("PostOverview", () => {
   });
 
   it("does not post when the user declines the confirm dialog", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     setup(post());
     await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "취소" }));
 
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(postCalls()).toHaveLength(0);
+  });
+
+  it("게시_확인_모달_배경_클릭이면_요청_없음", async () => {
+    setup(post());
+    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    fireEvent.click(await screen.findByRole("dialog"));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(postCalls()).toHaveLength(0);
   });
 
@@ -147,7 +177,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await act("확인", "확인");
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "확인" })).toBeDisabled(),
@@ -171,7 +201,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await act("확인", "확인");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "이미 상태가 바뀌었습니다.",
@@ -196,7 +226,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await act("확인", "확인");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "캡션이 너무 깁니다.",
@@ -289,12 +319,12 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "취소" }));
+    await act("취소", "게시물 취소");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "취소하지 못했습니다.",
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "확인" }));
+    await act("확인", "확인");
 
     await waitFor(() =>
       expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
@@ -328,7 +358,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await act("확인", "확인");
     await userEvent.click(
       await screen.findByRole("button", { name: "다시 시도" }),
     );
