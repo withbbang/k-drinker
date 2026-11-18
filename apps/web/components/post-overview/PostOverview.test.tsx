@@ -56,6 +56,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
     permalink: null,
     channel: "WEB",
     publishCaption: "머리 문장\n\n국순당\n서울 강남구\n\n#막걸리",
+    retryable: false,
     ...overrides,
   };
 }
@@ -240,12 +241,100 @@ describe("PostOverview", () => {
   });
 
   it("shows the failure reason with retry and edit when failed", async () => {
-    setup(post({ status: "FAILED", failureReason: "게시에 실패했습니다" }));
+    setup(
+      post({
+        status: "FAILED",
+        failureReason: "게시에 실패했습니다",
+        retryable: true,
+      }),
+    );
     expect(await screen.findByText("게시에 실패했습니다")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
     await waitFor(() => expect(postCalls()).toHaveLength(1));
     expect(postCalls()[0][0]).toBe("/api/v1/posts/7/retry");
     expect(screen.getByRole("link", { name: "수정" })).toBeInTheDocument();
+  });
+
+  it("hides retry and asks to edit when the failure is not retryable", async () => {
+    setup(
+      post({
+        status: "FAILED",
+        failedStage: "PUBLISHING",
+        failureReason: "캡션이 2,200자를 넘었습니다.",
+        retryable: false,
+      }),
+    );
+    expect(
+      await screen.findByText("[수정]에서 고친 뒤 다시 게시해 주세요."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "다시 시도" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "수정" })).toBeInTheDocument();
+  });
+
+  it("clears an earlier error when another action starts", async () => {
+    let release: (v: PostDetailResponse) => void = () => {};
+    apiFetchMock.mockImplementation(async (p: string, init?: RequestInit) => {
+      if (p === "/api/v1/posts/7/cancel") {
+        throw new ApiError("COMMON_INTERNAL_ERROR", "취소하지 못했습니다.");
+      }
+      if (init?.method === "POST") {
+        return new Promise<PostDetailResponse>((r) => (release = r));
+      }
+      return post();
+    });
+    render(
+      <QueryProvider>
+        <PostOverview id="7" />
+      </QueryProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "취소" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "취소하지 못했습니다.",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "확인" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    release(post({ status: "PUBLISHING" }));
+  });
+
+  it("clears the confirm error after the post fails and retry succeeds", async () => {
+    let current = post();
+    apiFetchMock.mockImplementation(async (p: string) => {
+      if (p === "/api/v1/posts/7/confirm") {
+        current = post({
+          status: "FAILED",
+          failedStage: "PUBLISHING",
+          failureReason: "게시에 실패했습니다",
+          retryable: true,
+        });
+        throw new ApiError(
+          "POST_VERSION_CONFLICT",
+          "이미 상태가 바뀌었습니다.",
+        );
+      }
+      if (p === "/api/v1/posts/7/retry") {
+        current = post({ status: "PUBLISHING" });
+        return current;
+      }
+      return current;
+    });
+    render(
+      <QueryProvider>
+        <PostOverview id="7" />
+      </QueryProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "다시 시도" }),
+    );
+
+    expect(await screen.findByText("게시 중입니다")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows the publish caption as is, not reassembled parts", async () => {

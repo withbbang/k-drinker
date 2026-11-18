@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import Link from "next/link";
 
 import { usePost } from "@/hooks/use-post";
@@ -90,6 +92,16 @@ function Overview({ post }: { post: PostDetailResponse }) {
   const busy = confirm.isPending || cancel.isPending || retry.isPending;
   const error = confirm.error ?? cancel.error ?? retry.error;
   const web = post.channel === "WEB";
+  const resetConfirm = confirm.reset;
+  const resetCancel = cancel.reset;
+  const resetRetry = retry.reset;
+
+  // 상태가 바뀌면 이전 동작의 오류는 더 이상 맞지 않으므로 지운다.
+  useEffect(() => {
+    resetConfirm();
+    resetCancel();
+    resetRetry();
+  }, [post.status, resetConfirm, resetCancel, resetRetry]);
 
   function run(
     action: typeof confirm,
@@ -97,6 +109,10 @@ function Overview({ post }: { post: PostDetailResponse }) {
     version: number,
   ) {
     if (message && !window.confirm(message)) return;
+    // 새 동작을 시작하면 다른 동작의 오류가 남아 새 오류를 가리지 않게 지운다.
+    for (const other of [confirm, cancel, retry]) {
+      if (other !== action) other.reset();
+    }
     action.mutate(version);
   }
 
@@ -147,14 +163,22 @@ function Overview({ post }: { post: PostDetailResponse }) {
           <p className="text-sm text-red-700">{post.failureReason}</p>
           {web ? (
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => run(retry, null, post.version)}
-                className={PRIMARY}
-              >
-                다시 시도
-              </button>
+              {post.retryable ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(retry, null, post.version)}
+                  className={PRIMARY}
+                >
+                  다시 시도
+                </button>
+              ) : (
+                <p className="text-sm">
+                  {post.editable
+                    ? "[수정]에서 고친 뒤 다시 게시해 주세요."
+                    : "다시 시도할 수 없는 게시물입니다."}
+                </p>
+              )}
               {edit}
             </div>
           ) : (

@@ -49,6 +49,8 @@ export type PostDetailResponse = {
   channel: PostChannel;
   /** 실제로 게시될 캡션(저장된 캡션에서 마커만 뺀 값). 개요 화면은 이 값을 그대로 보여 준다. */
   publishCaption: string;
+  /** 서버가 [다시 시도]를 받아 주는 실패인지. false면 [수정]으로 고쳐야 한다. */
+  retryable: boolean;
 };
 
 export type PhotoEdit = {
