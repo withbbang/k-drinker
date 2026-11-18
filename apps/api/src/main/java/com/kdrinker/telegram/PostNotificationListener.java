@@ -26,7 +26,7 @@ public class PostNotificationListener {
 	}
 
 	/**
-	 * 수정 저장이 커밋된 뒤, 이번 저장으로 웹 담당이 됐으면 텔레그램 개요 버튼을 지운다.
+	 * 수정 저장이 커밋된 뒤, 이번 저장으로 웹 담당이 됐으면 텔레그램 개요·실패 알림 버튼을 지운다.
 	 * 저장 뒤 게시물은 항상 웹 담당이라 새 개요는 보내지 않는다.
 	 */
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

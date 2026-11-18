@@ -62,7 +62,7 @@ public final class MessageFormatter {
 
 	public static TelegramText editLink(String url) {
 		return TelegramText.of("수정 화면에서 고칠 수 있습니다.\n<a href=\"" + escapeAttr(url)
-				+ "\">수정하기</a>\n저장하면 새 개요를 보내 드립니다.");
+				+ "\">수정하기</a>\n저장하면 이후 확인과 게시는 웹 화면에서 진행합니다.");
 	}
 
 	public static TelegramText canceled(Post post) {

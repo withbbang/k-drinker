@@ -80,11 +80,19 @@ public class PostNotifier {
 		}
 	}
 
-	/** 웹 담당으로 넘어간 게시물의 텔레그램 개요 버튼을 모두 지운다. 하나가 실패해도 나머지는 계속 지운다. */
+	/** 버튼이 달리는 알림 종류. 웹 담당으로 넘어가면 이 메시지들의 버튼을 지운다. */
+	private static final List<NotificationKind> BUTTON_KINDS = List.of(NotificationKind.OVERVIEW,
+			NotificationKind.ANALYSIS_FAILED, NotificationKind.PUBLISH_FAILED);
+
+	/**
+	 * 웹 담당으로 넘어간 게시물의 텔레그램 버튼(개요·실패 알림)을 모두 지운다. 하나가 실패해도 나머지는 계속 지운다.
+	 */
 	@Async(TelegramExecutorConfig.EXECUTOR)
 	public void removeOverviewButtons(Long postId) {
-		for (Long messageId : sender.messageIds(postId, NotificationKind.OVERVIEW)) {
-			removeKeyboard(postId, messageId);
+		for (NotificationKind kind : BUTTON_KINDS) {
+			for (Long messageId : sender.messageIds(postId, kind)) {
+				removeKeyboard(postId, messageId);
+			}
 		}
 	}
 
@@ -92,7 +100,7 @@ public class PostNotifier {
 		try {
 			client.removeKeyboard(messageId);
 		} catch (RuntimeException e) {
-			log.warn("개요 버튼 제거 실패. postId={}, messageId={}: {}", postId, messageId, e.getMessage());
+			log.warn("버튼 제거 실패. postId={}, messageId={}: {}", postId, messageId, e.getMessage());
 		}
 	}
 

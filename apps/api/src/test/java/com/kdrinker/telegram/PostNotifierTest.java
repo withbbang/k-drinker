@@ -139,6 +139,32 @@ class PostNotifierTest {
 	}
 
 	@Test
+	void 웹_담당_게시물은_게시_완료여도_알림을_보내지_않는다() {
+		// given
+		Post post = post(PostStatus.PUBLISHED, 6);
+		post.moveToWeb();
+
+		// when
+		notifier.notifyPublishFinished(5L);
+
+		// then
+		verify(sender, never()).send(any(), any(), any(), any());
+	}
+
+	@Test
+	void 웹_담당_게시물은_게시_실패여도_알림을_보내지_않는다() {
+		// given
+		Post post = post(PostStatus.FAILED, 6);
+		post.moveToWeb();
+
+		// when
+		notifier.notifyPublishFinished(5L);
+
+		// then
+		verify(sender, never()).send(any(), any(), any(), any());
+	}
+
+	@Test
 	void 웹_담당_게시물이라도_캡션_길이_검사는_먼저_한다() {
 		// given
 		Post post = post(PostStatus.PENDING_REVIEW, 3);
@@ -166,6 +192,23 @@ class PostNotifierTest {
 		verify(client).removeKeyboard(71L);
 		verify(client).removeKeyboard(72L);
 		verify(sender, never()).send(any(), any(), any(), any());
+	}
+
+	@Test
+	void 웹으로_넘어가면_실패_알림의_버튼도_지운다() {
+		// given
+		when(sender.messageIds(5L, NotificationKind.OVERVIEW)).thenReturn(List.of(70L));
+		when(sender.messageIds(5L, NotificationKind.ANALYSIS_FAILED)).thenReturn(List.of(80L));
+		when(sender.messageIds(5L, NotificationKind.PUBLISH_FAILED)).thenReturn(List.of(90L, 91L));
+
+		// when
+		notifier.removeOverviewButtons(5L);
+
+		// then
+		verify(client).removeKeyboard(70L);
+		verify(client).removeKeyboard(80L);
+		verify(client).removeKeyboard(90L);
+		verify(client).removeKeyboard(91L);
 	}
 
 }

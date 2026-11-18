@@ -257,7 +257,7 @@ class MessageFormatterTest {
 		assertThat(MessageFormatter.received(3).html())
 				.isEqualTo("접수했습니다. 사진 3장\n분석이 끝나면 개요를 보내 드립니다.");
 		assertThat(MessageFormatter.editLink("https://w/e?a=1&b=2").html()).isEqualTo(
-				"수정 화면에서 고칠 수 있습니다.\n<a href=\"https://w/e?a=1&amp;b=2\">수정하기</a>\n저장하면 새 개요를 보내 드립니다.");
+				"수정 화면에서 고칠 수 있습니다.\n<a href=\"https://w/e?a=1&amp;b=2\">수정하기</a>\n저장하면 이후 확인과 게시는 웹 화면에서 진행합니다.");
 		assertThat(MessageFormatter.canceled(post).html()).isEqualTo("게시를 취소했습니다. 화요 25\n사진은 7일 뒤에 삭제됩니다.");
 		assertThat(MessageFormatter.publishing(post).html()).isEqualTo("인스타그램에 게시하는 중입니다. 화요 25");
 		assertThat(MessageFormatter.textOnly().html())
