@@ -62,6 +62,37 @@ class PostQueryServiceTest {
 	}
 
 	@Test
+	void 게시용_캡션은_저장된_캡션을_따른다() {
+		// given — 캡션을 쓴 뒤 양조장 연락처가 바뀌었다
+		Brewery brewery = Brewery.of("국순당", "국순당", BrewerySource.PUBLIC_DATA);
+		Post post = post(PostStatus.PENDING_REVIEW);
+		post.assignDrink(Drink.of("막걸리", "막걸리", brewery));
+		post.writeCaption("훅\n\n" + BreweryBlock.render(brewery) + "\n\n#태그", "#태그", null, null);
+		brewery.updateContact("서울시", "02-000-0000", null, null, null, null);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when
+		PostDetailResponse detail = service.detail(1L);
+
+		// then
+		assertThat(detail.publishCaption()).isEqualTo("훅\n\n🍶 국순당\n\n#태그")
+				.doesNotContain(BreweryBlock.MARKER).doesNotContain("02-000-0000");
+		assertThat(detail.breweryBlock()).contains("02-000-0000");
+	}
+
+	@Test
+	void 캡션이_없으면_게시용_캡션은_빈_문자열이다() {
+		// given
+		Post post = post(PostStatus.RECEIVED);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when / then
+		assertThat(service.detail(1L).publishCaption()).isEmpty();
+	}
+
+	@Test
 	void 컨테이너가_있는_실패는_편집_불가다() {
 		// given
 		Post withContainer = post(PostStatus.FAILED);

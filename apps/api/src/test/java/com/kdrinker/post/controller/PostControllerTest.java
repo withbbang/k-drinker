@@ -183,7 +183,7 @@ class PostControllerTest {
 
 	private static PostDetailResponse detailWithStatus(String status) {
 		return new PostDetailResponse(5L, status, 3, false, null, null, null, null, null, null, null, "", "", "",
-				false, 0, List.of(), null, "WEB");
+				false, 0, List.of(), null, "WEB", "");
 	}
 
 	@Test

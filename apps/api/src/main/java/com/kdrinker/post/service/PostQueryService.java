@@ -54,7 +54,8 @@ public class PostQueryService {
 				brewery == null ? null : BreweryResponse.from(brewery), post.getRating(), post.getMemo(),
 				parts.head(), displayBlock(brewery), parts.tail(), post.isCaptionEdited(),
 				post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption()), photos,
-				post.getPermalink(), post.getChannel().name());
+				post.getPermalink(), post.getChannel().name(),
+				post.getCaption() == null ? "" : CaptionAssembler.stripMarkers(post.getCaption()));
 	}
 
 	/** 검토 대기이거나, 인스타그램 컨테이너가 아직 없는 실패일 때만 고칠 수 있다. */
