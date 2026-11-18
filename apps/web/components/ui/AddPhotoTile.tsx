@@ -2,6 +2,8 @@
 
 import { useRef } from "react";
 
+const ACCEPTED_TYPES = ["image/jpeg", "image/png"];
+
 export function overflowMessage(skipped: number): string {
   return `사진은 10장까지 넣을 수 있어 ${skipped}장은 넣지 않았습니다.`;
 }
@@ -35,11 +37,14 @@ export function AddPhotoTile({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png"
         multiple
         hidden
         onChange={(event) => {
-          const picked = Array.from(event.target.files ?? []);
+          // 서버는 JPEG·PNG만 읽을 수 있어 다른 형식은 걸러 낸다.
+          const picked = Array.from(event.target.files ?? []).filter((f) =>
+            ACCEPTED_TYPES.includes(f.type),
+          );
           event.target.value = "";
           if (picked.length === 0) return;
           onAdd(picked.slice(0, remaining));

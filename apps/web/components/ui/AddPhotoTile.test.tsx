@@ -24,6 +24,26 @@ describe("AddPhotoTile", () => {
     expect(onOverflow).toHaveBeenCalledWith(2);
   });
 
+  it("accepts only jpeg and png and drops other formats", async () => {
+    const onAdd = vi.fn();
+    const onOverflow = vi.fn();
+    const { container } = render(
+      <AddPhotoTile remaining={3} onAdd={onAdd} onOverflow={onOverflow} />,
+    );
+    const input = container.querySelector(
+      "input[type=file]",
+    ) as HTMLInputElement;
+    const webp = new File(["x"], "a.webp", { type: "image/webp" });
+    const jpeg = file("b.jpg");
+
+    // 선택기 단계 필터를 건너뛰고 직접 고른 경우도 걸러야 한다.
+    await userEvent.upload(input, [webp, jpeg], { applyAccept: false });
+
+    expect(input).toHaveAttribute("accept", "image/jpeg,image/png");
+    expect(onAdd).toHaveBeenCalledWith([jpeg]);
+    expect(onOverflow).not.toHaveBeenCalled();
+  });
+
   it("remaining=0이면 사진 추가 버튼 없음", () => {
     render(<AddPhotoTile remaining={0} onAdd={vi.fn()} onOverflow={vi.fn()} />);
 

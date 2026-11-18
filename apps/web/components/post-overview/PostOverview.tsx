@@ -105,12 +105,35 @@ function Overview({ post }: { post: PostDetailResponse }) {
   }, [post.status, resetConfirm, resetCancel, resetRetry]);
 
   // 확인이 필요한 동작은 모달에서 승인을 받은 뒤 실행한다.
-  const [pendingAction, setPendingAction] = useState<{
-    action: typeof confirm;
-    title: string;
-    confirmLabel: string;
-    cancelLabel: string;
+  // 버튼을 누른 시점의 version을 함께 저장해, 모달이 열린 사이 글이 바뀌면 충돌로 처리되게 한다.
+  const [clicked, setPendingAction] = useState<{
+    kind: "confirm" | "cancel";
+    version: number;
+    status: string;
   } | null>(null);
+
+  // 상태나 버전이 바뀌면 사용자가 보지 못한 내용을 승인하지 않도록 모달을 닫는다.
+  const pendingAction =
+    clicked &&
+    clicked.version === post.version &&
+    clicked.status === post.status
+      ? clicked
+      : null;
+
+  const dialog =
+    pendingAction?.kind === "confirm"
+      ? {
+          title: "인스타그램에 게시할까요?",
+          confirmLabel: "확인",
+          cancelLabel: "취소",
+        }
+      : pendingAction?.kind === "cancel"
+        ? {
+            title: "이 게시물을 취소할까요?",
+            confirmLabel: "게시물 취소",
+            cancelLabel: "돌아가기",
+          }
+        : null;
 
   function run(action: typeof confirm, version: number) {
     // 새 동작을 시작하면 다른 동작의 오류가 남아 새 오류를 가리지 않게 지운다.
@@ -205,10 +228,9 @@ function Overview({ post }: { post: PostDetailResponse }) {
                 disabled={busy}
                 onClick={() =>
                   setPendingAction({
-                    action: confirm,
-                    title: "인스타그램에 게시할까요?",
-                    confirmLabel: "확인",
-                    cancelLabel: "취소",
+                    kind: "confirm",
+                    version: post.version,
+                    status: post.status,
                   })
                 }
                 className={PRIMARY}
@@ -221,10 +243,9 @@ function Overview({ post }: { post: PostDetailResponse }) {
                 disabled={busy}
                 onClick={() =>
                   setPendingAction({
-                    action: cancel,
-                    title: "이 게시물을 취소할까요?",
-                    confirmLabel: "게시물 취소",
-                    cancelLabel: "돌아가기",
+                    kind: "cancel",
+                    version: post.version,
+                    status: post.status,
                   })
                 }
                 className={SECONDARY}
@@ -248,14 +269,17 @@ function Overview({ post }: { post: PostDetailResponse }) {
   return (
     <div className="flex flex-col gap-4">
       {content}
-      {pendingAction && (
+      {pendingAction && dialog && (
         <ConfirmDialog
-          title={pendingAction.title}
-          confirmLabel={pendingAction.confirmLabel}
-          cancelLabel={pendingAction.cancelLabel}
+          title={dialog.title}
+          confirmLabel={dialog.confirmLabel}
+          cancelLabel={dialog.cancelLabel}
           onConfirm={() => {
             setPendingAction(null);
-            run(pendingAction.action, post.version);
+            run(
+              pendingAction.kind === "confirm" ? confirm : cancel,
+              pendingAction.version,
+            );
           }}
           onClose={() => setPendingAction(null)}
         />

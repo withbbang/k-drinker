@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -143,6 +144,46 @@ describe("PostOverview", () => {
     const [path, init] = postCalls()[0];
     expect(path).toBe("/api/v1/posts/7/confirm");
     expect(JSON.parse(init.body as string)).toEqual({ version: 4 });
+  });
+
+  it("closes the confirm dialog when the post version changes", async () => {
+    let current = post();
+    apiFetchMock.mockImplementation(async () => current);
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <PostOverview id="7" />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    current = post({ version: 5 });
+    await client.invalidateQueries({ queryKey: ["posts", "7"] });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(postCalls()).toHaveLength(0);
+  });
+
+  it("closes the confirm dialog when the post status changes", async () => {
+    let current = post();
+    apiFetchMock.mockImplementation(async () => current);
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <PostOverview id="7" />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    current = post({ status: "PUBLISHING", version: 5 });
+    await client.invalidateQueries({ queryKey: ["posts", "7"] });
+
+    expect(await screen.findByText("게시 중입니다")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("does not post when the user declines the confirm dialog", async () => {
