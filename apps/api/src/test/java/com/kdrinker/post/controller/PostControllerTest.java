@@ -132,7 +132,7 @@ class PostControllerTest {
 	@Test
 	void 목록은_페이지_형식이다() throws Exception {
 		// given
-		var item = new PostSummaryResponse(7L, "PENDING_REVIEW", "막걸리", null, null, null, Instant.EPOCH);
+		var item = new PostSummaryResponse(7L, "PENDING_REVIEW", "막걸리", null, null, null, Instant.EPOCH, "WEB");
 		when(postQueryService.list(0, 20)).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
 
 		// when / then

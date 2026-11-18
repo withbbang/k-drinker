@@ -2,12 +2,16 @@ package com.kdrinker.post;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.post.dto.PostUpdateRequest;
 import com.kdrinker.post.dto.PostUpdateRequest.PhotoEdit;
 import com.kdrinker.post.entity.FitMode;
 import com.kdrinker.post.entity.Post;
+import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
@@ -153,5 +157,39 @@ class PostEditIntegrationTest {
 		assertThat(MEDIA_DIR.resolve(middle.getOriginalPath())).exists();
 		assertThat(postPhotoRepository.findByPostIdOrderByPositionAsc(saved.postId())).hasSize(3);
 		assertThat(postRepository.findById(saved.postId()).orElseThrow().getVersion()).isEqualTo(saved.version());
+	}
+
+	@Test
+	void 텔레그램_담당_게시물을_저장하면_웹_담당이_되고_개요_버튼을_지운다() throws IOException {
+		// given
+		Saved saved = savePost();
+		jdbc.update("UPDATE post SET channel = 'TELEGRAM' WHERE id = ?", saved.postId());
+		List<PhotoEdit> keep = saved.photos().stream().map(p -> new PhotoEdit(p.getId(), FitMode.CROP)).toList();
+
+		// when
+		postEditService.update(saved.postId(), request(saved.version(), keep));
+
+		// then
+		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel()).isEqualTo(PostChannel.WEB);
+		verify(postNotifier).removeOverviewButtons(saved.postId());
+		verify(postNotifier, never()).notifyReviewReady(any());
+	}
+
+	@Test
+	void 저장이_롤백되면_담당은_텔레그램_그대로다() throws IOException {
+		// given: 남은 사진의 원본이 없어 다시 렌더링이 실패한다
+		Saved saved = savePost();
+		jdbc.update("UPDATE post SET channel = 'TELEGRAM' WHERE id = ?", saved.postId());
+		PostPhoto first = saved.photos().get(0);
+		Files.delete(MEDIA_DIR.resolve(first.getOriginalPath()));
+		PostUpdateRequest req = request(saved.version(), List.of(new PhotoEdit(first.getId(), FitMode.PAD)));
+
+		// when
+		assertThatThrownBy(() -> postEditService.update(saved.postId(), req));
+
+		// then
+		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel())
+				.isEqualTo(PostChannel.TELEGRAM);
+		verify(postNotifier, never()).removeOverviewButtons(any());
 	}
 }

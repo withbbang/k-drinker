@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kdrinker.post.entity.FitMode;
 import com.kdrinker.post.entity.Post;
+import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
@@ -102,6 +103,35 @@ class PostRepositoryTest {
 		assertThat(reloaded.getStatus()).isEqualTo(PostStatus.PUBLISHING);
 		assertThat(reloaded.getVersion()).isEqualTo(1);
 		assertThat(reloaded.getCaption()).isEqualTo("수정한 캡션");
+	}
+
+	@Test
+	void 담당을_적지_않고_넣은_행은_텔레그램_담당이다() {
+		// given: V10 이전에 있던 행처럼 channel 없이 넣는다
+		em.createNativeQuery("INSERT INTO post (caption_edited, status, version, source, created_at, updated_at) "
+				+ "VALUES (FALSE, 'PENDING_REVIEW', 0, 'TELEGRAM', ?1, ?1)")
+				.setParameter(1, java.sql.Timestamp.from(NOW))
+				.executeUpdate();
+
+		// when
+		Object channel = em.createNativeQuery("SELECT channel FROM post").getSingleResult();
+
+		// then
+		assertThat(channel).isEqualTo("TELEGRAM");
+	}
+
+	@Test
+	void 웹으로_넘긴_담당이_저장된다() {
+		// given
+		Post post = postRepository.saveAndFlush(Post.receive(PostSource.TELEGRAM, null, null, CLOCK));
+
+		// when
+		post.moveToWeb();
+		postRepository.saveAndFlush(post);
+		em.clear();
+
+		// then
+		assertThat(postRepository.findById(post.getId()).orElseThrow().getChannel()).isEqualTo(PostChannel.WEB);
 	}
 
 	@Test

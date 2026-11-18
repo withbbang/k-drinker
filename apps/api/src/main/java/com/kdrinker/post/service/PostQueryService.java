@@ -54,7 +54,7 @@ public class PostQueryService {
 				brewery == null ? null : BreweryResponse.from(brewery), post.getRating(), post.getMemo(),
 				parts.head(), displayBlock(brewery), parts.tail(), post.isCaptionEdited(),
 				post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption()), photos,
-				post.getPermalink());
+				post.getPermalink(), post.getChannel().name());
 	}
 
 	/** 검토 대기이거나, 인스타그램 컨테이너가 아직 없는 실패일 때만 고칠 수 있다. */
@@ -73,6 +73,7 @@ public class PostQueryService {
 				.filter(p -> p.getPosition() == 0).findFirst().map(photoService::publicUrl).orElse(null);
 		Drink drink = post.getDrink();
 		return new PostSummaryResponse(post.getId(), post.getStatus().name(), drink == null ? null : drink.getName(),
-				post.getRating(), thumbnail, post.getPermalink(), post.getCreatedAt());
+				post.getRating(), thumbnail, post.getPermalink(), post.getCreatedAt(),
+				post.getChannel().name());
 	}
 }

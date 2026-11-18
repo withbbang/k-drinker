@@ -3,6 +3,7 @@ package com.kdrinker.telegram;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.drink.entity.Drink;
 import com.kdrinker.post.entity.Post;
+import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
@@ -55,7 +56,7 @@ public class PostNotifier {
 			.ifPresent(p -> sender.send("RECEIVED:" + postId, NotificationKind.RECEIVED, postId, p.text()));
 	}
 
-	/** P4의 수정 저장도 이 메서드를 부른다. */
+	/** 캡션 길이 검사(담당과 무관한 도메인 검사)를 먼저 하고, 웹 담당이면 보내지 않는다. */
 	@Async(TelegramExecutorConfig.EXECUTOR)
 	public void notifyReviewReady(Long postId) {
 		if (captionLengthGuard.failIfTooLong(postId)) {
@@ -73,14 +74,25 @@ public class PostNotifier {
 			return;
 		}
 		for (Long old : sender.messageIds(postId, NotificationKind.OVERVIEW)) {
-			if (old.equals(sent.get())) {
-				continue;
+			if (!old.equals(sent.get())) {
+				removeKeyboard(postId, old);
 			}
-			try {
-				client.removeKeyboard(old);
-			} catch (RuntimeException e) {
-				log.warn("이전 개요 버튼 제거 실패. postId={}, messageId={}: {}", postId, old, e.getMessage());
-			}
+		}
+	}
+
+	/** 웹 담당으로 넘어간 게시물의 텔레그램 개요 버튼을 모두 지운다. 하나가 실패해도 나머지는 계속 지운다. */
+	@Async(TelegramExecutorConfig.EXECUTOR)
+	public void removeOverviewButtons(Long postId) {
+		for (Long messageId : sender.messageIds(postId, NotificationKind.OVERVIEW)) {
+			removeKeyboard(postId, messageId);
+		}
+	}
+
+	private void removeKeyboard(Long postId, Long messageId) {
+		try {
+			client.removeKeyboard(messageId);
+		} catch (RuntimeException e) {
+			log.warn("개요 버튼 제거 실패. postId={}, messageId={}: {}", postId, messageId, e.getMessage());
 		}
 	}
 
@@ -118,9 +130,17 @@ public class PostNotifier {
 			.ifPresent(p -> sender.send("CANCELED:" + postId, NotificationKind.CANCELED, postId, p.text()));
 	}
 
+	/** 웹 담당 게시물이면 비운다. 텔레그램 알림은 텔레그램 담당 게시물에만 보낸다. */
 	private Optional<Prepared> prepare(Long postId, Function<Post, TelegramText> formatter) {
 		try {
 			return Optional.ofNullable(readTx.execute(status -> postRepository.findById(postId)
+				.filter(post -> {
+					if (post.getChannel() == PostChannel.WEB) {
+						log.debug("웹 담당 게시물이라 텔레그램 알림을 보내지 않습니다. postId={}", postId);
+						return false;
+					}
+					return true;
+				})
 				.map(post -> new Prepared(post.getStatus(), post.getVersion(), formatter.apply(post)))
 				.orElse(null)));
 		} catch (RuntimeException e) {

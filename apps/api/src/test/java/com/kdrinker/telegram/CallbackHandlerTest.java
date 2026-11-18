@@ -277,4 +277,22 @@ class CallbackHandlerTest {
 		verify(client, times(1)).answerCallback(eq("cb1"), any());
 	}
 
+	@Test
+	void 웹_담당_게시물의_버튼은_모두_오래된_버튼으로_답한다() {
+		// given
+		post(PostStatus.PENDING_REVIEW, 2, null).moveToWeb();
+
+		// when
+		for (String act : List.of("ok", "cancel", "detail", "edit")) {
+			handler.handle(query(act + ":128:2"));
+		}
+		post(PostStatus.FAILED, 2, PostStatus.PUBLISHING).moveToWeb();
+		handler.handle(query("retry:128:2"));
+
+		// then
+		verify(client, times(5)).answerCallback("cb1", STALE);
+		verify(client, never()).removeKeyboard(anyLong());
+		verifyNoInteractions(publishService, analysisService, sender, notifier);
+	}
+
 }

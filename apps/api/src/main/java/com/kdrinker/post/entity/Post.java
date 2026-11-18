@@ -77,6 +77,11 @@ public class Post {
 	@Enumerated(EnumType.STRING)
 	private PostSource source;
 
+	/** 게시물을 맡은 화면. 텔레그램에서 웹으로 한 방향으로만 바뀐다. */
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 16)
+	private PostChannel channel;
+
 	@Column(name = "telegram_message_id")
 	private Long telegramMessageId;
 
@@ -105,6 +110,7 @@ public class Post {
 		Post post = new Post();
 		Instant now = clock.instant();
 		post.source = source;
+		post.channel = source == PostSource.SHARE ? PostChannel.WEB : PostChannel.TELEGRAM;
 		post.memo = memo;
 		post.rating = rating;
 		post.status = PostStatus.RECEIVED;
@@ -112,6 +118,11 @@ public class Post {
 		post.createdAt = now;
 		post.updatedAt = now;
 		return post;
+	}
+
+	/** 웹 수정 화면에서 저장하면 웹 담당이 된다. 이미 웹 담당이면 그대로다. */
+	public void moveToWeb() {
+		this.channel = PostChannel.WEB;
 	}
 
 	public void linkTelegramMessage(Long telegramMessageId) {

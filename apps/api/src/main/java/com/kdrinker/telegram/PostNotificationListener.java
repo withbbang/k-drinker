@@ -25,10 +25,15 @@ public class PostNotificationListener {
 		notifier.notifyReceived(event.postId());
 	}
 
-	/** 수정 저장이 커밋된 뒤 새 개요를 보낸다(이전 개요 버튼은 notifyReviewReady가 지운다). */
+	/**
+	 * 수정 저장이 커밋된 뒤, 이번 저장으로 웹 담당이 됐으면 텔레그램 개요 버튼을 지운다.
+	 * 저장 뒤 게시물은 항상 웹 담당이라 새 개요는 보내지 않는다.
+	 */
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
 	public void onEdited(PostEditedEvent event) {
-		notifier.notifyReviewReady(event.postId());
+		if (event.handedOverToWeb()) {
+			notifier.removeOverviewButtons(event.postId());
+		}
 	}
 
 	@EventListener

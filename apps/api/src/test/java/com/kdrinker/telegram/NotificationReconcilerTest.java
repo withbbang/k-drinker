@@ -145,4 +145,21 @@ class NotificationReconcilerTest {
 		verify(client, never()).sendMessage(any());
 		assertThat(notificationCount()).isZero();
 	}
+
+	@Test
+	void 웹_담당_게시물에는_알림을_보내지_않는다() throws Exception {
+		// given
+		Instant recent = clock.instant().minus(1, ChronoUnit.DAYS);
+		Long pending = post(PostStatus.PENDING_REVIEW, null, recent);
+		Long failed = post(PostStatus.FAILED, PostStatus.ANALYZING, recent);
+		jdbc.update("UPDATE post SET channel = 'WEB' WHERE id IN (?, ?)", pending, failed);
+
+		// when
+		reconciler.reconcileNow();
+		drain();
+
+		// then
+		verify(client, never()).sendMessage(any());
+		assertThat(notificationCount()).isZero();
+	}
 }

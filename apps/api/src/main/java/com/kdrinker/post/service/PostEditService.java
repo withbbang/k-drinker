@@ -23,6 +23,7 @@ import com.kdrinker.post.dto.PostDetailResponse;
 import com.kdrinker.post.dto.PostUpdateRequest;
 import com.kdrinker.post.dto.PostUpdateRequest.PhotoEdit;
 import com.kdrinker.post.entity.Post;
+import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.event.PostEditedEvent;
@@ -48,7 +49,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 웹 수정 화면의 저장. 검토 대기(또는 컨테이너가 없는 실패) 게시물을 고친 뒤 버전 검사 전이로 PENDING_REVIEW에 두고
- * {@link PostEditedEvent}로 새 개요를 보낸다.
+ * 웹 담당으로 바꾼다. 텔레그램 담당이던 게시물이면 {@link PostEditedEvent}로 텔레그램 개요 버튼을 지운다.
  * <p>
  * 클래스·메서드에 {@code @Transactional}을 두지 않는다. 캡션 재생성(Claude 호출)은 트랜잭션 밖에서 하고, DB 쓰기는
  * {@link TransactionTemplate}으로 짧게 한다({@code AnalysisService}와 같은 이유). 텔레그램 [확인]과 동시에 저장되면
@@ -108,7 +109,7 @@ public class PostEditService {
 				status.setRollbackOnly();
 				throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
 			}
-			events.publishEvent(new PostEditedEvent(id));
+			events.publishEvent(new PostEditedEvent(id, snapshot.channel() == PostChannel.TELEGRAM));
 		});
 		return postQueryService.detail(id);
 	}
@@ -181,7 +182,7 @@ public class PostEditService {
 		boolean identityChanged = req.newDrinkName() != null
 				|| !Objects.equals(targetDrink == null ? null : targetDrink.getId(), currentDrinkId)
 				|| !Objects.equals(targetBreweryId, currentBreweryId) || req.breweryEdit() != null;
-		return new Snapshot(post.getStatus(), post.getVersion(), CaptionParts.split(post.getCaption()),
+		return new Snapshot(post.getStatus(), post.getVersion(), post.getChannel(), CaptionParts.split(post.getCaption()),
 				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId, post.getRating(),
 				post.getCaption() == null || post.getCaption().isBlank());
 	}
@@ -253,6 +254,8 @@ public class PostEditService {
 		post.replaceCaption(caption.caption(), caption.hashtags(), caption.edited());
 		applyPhotos(id, req.photos());
 		post.clearFailure();
+		// 웹에서 저장한 순간부터 웹 담당이다. 텔레그램 개요 버튼은 커밋 뒤 리스너가 지운다.
+		post.moveToWeb();
 	}
 
 	private Drink resolveDrink(Post post, PostUpdateRequest req, Snapshot snapshot) {
@@ -345,7 +348,7 @@ public class PostEditService {
 		return copy;
 	}
 
-	private record Snapshot(PostStatus status, int version, CaptionParts parts, boolean captionEdited,
+	private record Snapshot(PostStatus status, int version, PostChannel channel, CaptionParts parts, boolean captionEdited,
 			boolean identityChanged, LabelResult label, Brewery captionBrewery, Long targetBreweryId,
 			BigDecimal rating, boolean captionMissing) {
 	}

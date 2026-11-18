@@ -90,4 +90,38 @@ class PostQueryServiceTest {
 		assertThat(page.items().get(0).thumbnailUrl()).isNull();
 		assertThat(page.totalElements()).isEqualTo(1);
 	}
+
+	@Test
+	void 상세와_목록에_담당_채널을_준다() {
+		// given
+		Post post = post(PostStatus.PENDING_REVIEW);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postRepository.findAllByOrderByIdDesc(PageRequest.of(0, 20)))
+				.thenReturn(new PageImpl<>(List.of(post), PageRequest.of(0, 20), 1));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when
+		PostDetailResponse detail = service.detail(1L);
+		var page = service.list(0, 20);
+
+		// then
+		assertThat(detail.channel()).isEqualTo("WEB");
+		assertThat(page.items().get(0).channel()).isEqualTo("WEB");
+	}
+
+	@Test
+	void 텔레그램_담당이면_TELEGRAM을_준다() {
+		// given
+		Post post = Post.receive(PostSource.TELEGRAM, null, null, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
+		ReflectionTestUtils.setField(post, "id", 1L);
+		ReflectionTestUtils.setField(post, "status", PostStatus.PENDING_REVIEW);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when
+		PostDetailResponse detail = service.detail(1L);
+
+		// then
+		assertThat(detail.channel()).isEqualTo("TELEGRAM");
+	}
 }

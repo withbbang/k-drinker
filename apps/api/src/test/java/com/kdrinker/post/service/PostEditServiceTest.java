@@ -37,6 +37,7 @@ import com.kdrinker.post.dto.PostUpdateRequest;
 import com.kdrinker.post.dto.PostUpdateRequest.PhotoEdit;
 import com.kdrinker.post.entity.FitMode;
 import com.kdrinker.post.entity.Post;
+import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
@@ -188,8 +189,49 @@ class PostEditServiceTest {
 		// then
 		verify(postRepository).transition(eq(POST_ID), eq(PostStatus.PENDING_REVIEW), eq(PostStatus.PENDING_REVIEW),
 				eq(VERSION), any());
-		verify(events).publishEvent(new PostEditedEvent(POST_ID));
+		verify(events).publishEvent(new PostEditedEvent(POST_ID, false));
 		verify(postQueryService).detail(POST_ID);
+	}
+
+	@Test
+	void 텔레그램_담당_게시물을_저장하면_웹_담당이_되고_넘겨받았다는_이벤트를_낸다() {
+		// given
+		ReflectionTestUtils.setField(post, "channel", PostChannel.TELEGRAM);
+
+		// when
+		service.update(POST_ID, unchanged());
+
+		// then
+		assertThat(post.getChannel()).isEqualTo(PostChannel.WEB);
+		verify(events).publishEvent(new PostEditedEvent(POST_ID, true));
+	}
+
+	@Test
+	void 이미_웹_담당인_게시물을_저장하면_넘겨받지_않은_이벤트를_낸다() {
+		// given
+		assertThat(post.getChannel()).isEqualTo(PostChannel.WEB);
+
+		// when
+		service.update(POST_ID, unchanged());
+
+		// then
+		assertThat(post.getChannel()).isEqualTo(PostChannel.WEB);
+		verify(events).publishEvent(new PostEditedEvent(POST_ID, false));
+	}
+
+	@Test
+	void 버전_충돌로_저장이_실패하면_이벤트를_내지_않는다() {
+		// given
+		ReflectionTestUtils.setField(post, "channel", PostChannel.TELEGRAM);
+		when(postRepository.transition(eq(POST_ID), any(), eq(PostStatus.PENDING_REVIEW), eq(VERSION), any()))
+				.thenReturn(0);
+
+		// when
+		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged()));
+
+		// then
+		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
+		verify(events, never()).publishEvent(any());
 	}
 
 	@Test
@@ -361,7 +403,7 @@ class PostEditServiceTest {
 		// then
 		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅\n\n★4.0", "#막걸리").join(hwayo));
 		assertThat(post.isCaptionEdited()).isFalse();
-		verify(events).publishEvent(new PostEditedEvent(POST_ID));
+		verify(events).publishEvent(new PostEditedEvent(POST_ID, false));
 	}
 
 	@Test
@@ -465,7 +507,7 @@ class PostEditServiceTest {
 
 		// then
 		assertThat(CaptionAssembler.length(post.getCaption())).isEqualTo(2200);
-		verify(events).publishEvent(new PostEditedEvent(POST_ID));
+		verify(events).publishEvent(new PostEditedEvent(POST_ID, false));
 	}
 
 	@Test

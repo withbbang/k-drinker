@@ -4,6 +4,7 @@ import com.kdrinker.analysis.AnalysisExecutorConfig;
 import com.kdrinker.analysis.AnalysisService;
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.post.entity.Post;
+import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
@@ -105,6 +106,10 @@ public class CallbackHandler implements CallbackSink {
 		CallbackData data = parsed.get();
 		Post post = postRepository.findById(data.postId()).orElse(null);
 		if (post == null || post.getVersion() != data.version()) {
+			return stale();
+		}
+		if (post.getChannel() == PostChannel.WEB) {
+			// 웹에서 저장해 웹 담당이 된 게시물. 남아 있는 텔레그램 버튼으로는 아무것도 하지 않는다.
 			return stale();
 		}
 		return switch (data.act()) {
