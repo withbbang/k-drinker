@@ -14,10 +14,50 @@ const BUTTON =
 const PRIMARY = `${BUTTON} bg-neutral-900 text-white hover:bg-neutral-800`;
 const SECONDARY = `${BUTTON} border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100`;
 
+/** 실패 단계(`failedStage`, 실패 직전 상태) → 표시 문구. */
+const FAILED_STAGE: Record<string, string> = {
+  ANALYZING: "분석 실패",
+  PUBLISHING: "게시 실패",
+};
+
+function Progress({ message }: { message: string }) {
+  return (
+    <p role="status" className="flex items-center gap-2">
+      <span
+        aria-hidden="true"
+        className="inline-block size-2.5 animate-pulse rounded-full bg-neutral-500"
+      />
+      {message}
+    </p>
+  );
+}
+
+function BreweryInfo({
+  brewery,
+}: {
+  brewery: NonNullable<PostDetailResponse["brewery"]>;
+}) {
+  const contacts = [
+    brewery.phone,
+    brewery.homepage,
+    brewery.instagramHandle ? `@${brewery.instagramHandle}` : null,
+  ].filter((v): v is string => !!v);
+  return (
+    <div className="text-sm text-neutral-700">
+      <p>
+        {brewery.name}
+        {brewery.address ? ` · ${brewery.address}` : ""}
+      </p>
+      {contacts.map((contact) => (
+        <p key={contact} className="break-all">
+          {contact}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function Review({ post }: { post: PostDetailResponse }) {
-  const caption = [post.captionHead, post.breweryBlock, post.captionTail]
-    .filter((part): part is string => !!part)
-    .join("\n\n");
   return (
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-2">
@@ -33,16 +73,11 @@ function Review({ post }: { post: PostDetailResponse }) {
         ))}
       </ul>
       <p className="text-lg font-semibold">{post.drinkName ?? "이름 미확인"}</p>
-      {post.brewery && (
-        <p className="text-sm text-neutral-700">
-          {post.brewery.name}
-          {post.brewery.address ? ` · ${post.brewery.address}` : ""}
-        </p>
-      )}
+      {post.brewery && <BreweryInfo brewery={post.brewery} />}
       <p className="text-sm text-neutral-700">
         {post.rating !== null ? `★ ${post.rating.toFixed(1)}` : "별점 없음"}
       </p>
-      <p className="whitespace-pre-wrap text-sm">{caption}</p>
+      <p className="whitespace-pre-wrap text-sm">{post.publishCaption}</p>
     </div>
   );
 }
@@ -75,14 +110,15 @@ function Overview({ post }: { post: PostDetailResponse }) {
   switch (post.status) {
     case "RECEIVED":
     case "ANALYZING":
-      content = <p role="status">분석 중입니다</p>;
+      content = <Progress message="분석 중입니다" />;
       break;
     case "PUBLISHING":
-      content = <p role="status">게시 중입니다</p>;
+      content = <Progress message="게시 중입니다" />;
       break;
     case "PUBLISHED":
       content = (
         <>
+          <p className="font-semibold">게시했습니다</p>
           <Review post={post} />
           {post.permalink && (
             <a
@@ -103,6 +139,11 @@ function Overview({ post }: { post: PostDetailResponse }) {
     case "FAILED":
       content = (
         <>
+          {post.failedStage && FAILED_STAGE[post.failedStage] && (
+            <p className="font-semibold text-red-700">
+              {FAILED_STAGE[post.failedStage]}
+            </p>
+          )}
           <p className="text-sm text-red-700">{post.failureReason}</p>
           {web ? (
             <div className="flex flex-col gap-2">

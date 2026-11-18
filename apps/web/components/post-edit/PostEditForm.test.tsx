@@ -58,6 +58,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
     ],
     permalink: null,
     channel: "WEB",
+    publishCaption: "",
     ...overrides,
   };
 }

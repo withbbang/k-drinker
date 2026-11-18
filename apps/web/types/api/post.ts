@@ -47,6 +47,8 @@ export type PostDetailResponse = {
   photos: PostPhotoResponse[];
   permalink: string | null;
   channel: PostChannel;
+  /** 실제로 게시될 캡션(저장된 캡션에서 마커만 뺀 값). 개요 화면은 이 값을 그대로 보여 준다. */
+  publishCaption: string;
 };
 
 export type PhotoEdit = {

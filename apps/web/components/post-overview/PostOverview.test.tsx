@@ -55,6 +55,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
     ],
     permalink: null,
     channel: "WEB",
+    publishCaption: "머리 문장\n\n국순당\n서울 강남구\n\n#막걸리",
     ...overrides,
   };
 }
@@ -245,6 +246,76 @@ describe("PostOverview", () => {
     await waitFor(() => expect(postCalls()).toHaveLength(1));
     expect(postCalls()[0][0]).toBe("/api/v1/posts/7/retry");
     expect(screen.getByRole("link", { name: "수정" })).toBeInTheDocument();
+  });
+
+  it("shows the publish caption as is, not reassembled parts", async () => {
+    setup(
+      post({
+        captionHead: "옛 머리",
+        breweryBlock: "바뀐 양조장 블록",
+        publishCaption: "게시될 캡션 전문",
+      }),
+    );
+    expect(await screen.findByText("게시될 캡션 전문")).toBeInTheDocument();
+    expect(screen.queryByText(/옛 머리/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/바뀐 양조장 블록/)).not.toBeInTheDocument();
+  });
+
+  it("shows brewery phone, homepage and instagram when present", async () => {
+    setup(
+      post({
+        brewery: {
+          ...brewery,
+          phone: "02-123-4567",
+          homepage: "https://ksd.example",
+          instagramHandle: "ksd_official",
+        },
+      }),
+    );
+    expect(await screen.findByText(/02-123-4567/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/ksd\.example/)).toBeInTheDocument();
+    expect(screen.getByText(/@ksd_official/)).toBeInTheDocument();
+  });
+
+  it("omits brewery contact fields that are missing", async () => {
+    setup(post());
+    await screen.findByText("막걸리");
+    expect(screen.queryByText(/@/)).not.toBeInTheDocument();
+  });
+
+  it("shows a completion message when published", async () => {
+    setup(
+      post({ status: "PUBLISHED", permalink: "https://instagram.com/p/abc" }),
+    );
+    expect(await screen.findByText("게시했습니다")).toBeInTheDocument();
+  });
+
+  it("shows the analysis failure stage", async () => {
+    setup(
+      post({
+        status: "FAILED",
+        failedStage: "ANALYZING",
+        failureReason: "라벨을 읽지 못했습니다",
+      }),
+    );
+    expect(await screen.findByText("분석 실패")).toBeInTheDocument();
+  });
+
+  it("shows the publish failure stage", async () => {
+    setup(
+      post({
+        status: "FAILED",
+        failedStage: "PUBLISHING",
+        failureReason: "게시에 실패했습니다",
+      }),
+    );
+    expect(await screen.findByText("게시 실패")).toBeInTheDocument();
+  });
+
+  it("shows a progress indicator while analyzing and publishing", async () => {
+    setup(post({ status: "ANALYZING" }));
+    const status = await screen.findByRole("status");
+    expect(status.querySelector(".animate-pulse")).not.toBeNull();
   });
 
   it("shows a canceled message", async () => {
