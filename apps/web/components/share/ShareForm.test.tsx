@@ -172,6 +172,46 @@ describe("ShareForm", () => {
     expect(clearMock).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps send disabled after success so it cannot send twice", async () => {
+    // given — 화면 이동이 끝나기 전 상태 (router.replace 모킹)
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when
+    await submit();
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/posts/12"));
+
+    // then
+    const sendButtons = screen.getAllByRole("button", { name: "보내기" });
+    sendButtons.forEach((button) => expect(button).toBeDisabled());
+    await userEvent.click(sendButtons[0]);
+    expect(postCalls()).toHaveLength(1);
+  });
+
+  it("closes the modal and shows the error when sending fails", async () => {
+    // given
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === "/api/v1/posts") {
+        throw new ApiError("COMMON_VALIDATION_FAILED", "사진을 확인해 주세요.");
+      }
+      return undefined;
+    });
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when
+    await submit();
+
+    // then
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "사진을 확인해 주세요.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "보내기" })).toBeEnabled();
+  });
+
   it("keeps shared photos until sent", async () => {
     // given
     readMock.mockResolvedValue(photos(1));

@@ -178,10 +178,12 @@ export function ShareForm() {
   }
 
   const tooMany = photos.length > MAX_PHOTOS;
+  // 성공한 뒤에도 화면 이동이 끝날 때까지 잠가 둔다. 다시 누르면 게시물이 하나 더 생긴다.
+  const sending = createPost.isPending || createPost.isSuccess;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!tooMany) setConfirming(true);
+    if (!tooMany && !sending) setConfirming(true);
   };
 
   const send = () => {
@@ -192,7 +194,7 @@ export function ShareForm() {
     body.append("source", "SHARE");
     createPost.mutate(body, {
       onSuccess: (created) => router.replace(`/posts/${created.id}`),
-      onSettled: () => setConfirming(false),
+      onError: () => setConfirming(false),
     });
   };
 
@@ -230,7 +232,7 @@ export function ShareForm() {
       </label>
       <button
         type="submit"
-        disabled={tooMany}
+        disabled={tooMany || sending}
         className="rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
       >
         {tooMany
@@ -242,7 +244,7 @@ export function ShareForm() {
           photoCount={photos.length}
           rating={rating}
           memo={memo}
-          pending={createPost.isPending}
+          pending={sending}
           onConfirm={send}
           onClose={() => setConfirming(false)}
         />
