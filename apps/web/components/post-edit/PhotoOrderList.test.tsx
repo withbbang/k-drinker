@@ -108,8 +108,57 @@ describe("PhotoOrderList", () => {
     mockReducedMotion(false);
     render(<Harness initial={make(2)} />);
     fireEvent.click(screen.getAllByRole("button", { name: "아래로" })[0]);
-    fireEvent.transitionEnd(screen.getAllByRole("listitem")[0]);
+    fireEvent.transitionEnd(screen.getAllByRole("listitem")[0], {
+      propertyName: "transform",
+    });
     expect(screen.getByTestId("order")).toHaveTextContent("2:CROP,1:CROP");
+  });
+
+  it("ignores transitionend of other properties and other items", () => {
+    // given
+    vi.useFakeTimers();
+    mockReducedMotion(false);
+    render(<Harness initial={make(3)} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "아래로" })[0]);
+
+    // when — 투명도 전환과, 움직이지 않는 세 번째 사진의 전환
+    const items = screen.getAllByRole("listitem");
+    fireEvent.transitionEnd(items[0], { propertyName: "opacity" });
+    fireEvent.transitionEnd(items[2], { propertyName: "transform" });
+
+    // then
+    expect(screen.getByTestId("order")).toHaveTextContent(
+      "1:CROP,2:CROP,3:CROP",
+    );
+  });
+
+  it("resets transform without transition on the commit render", () => {
+    // given
+    vi.useFakeTimers();
+    mockReducedMotion(false);
+    render(<Harness initial={make(2)} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "아래로" })[0]);
+
+    // when
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+
+    // then — 순서가 바뀐 렌더에서는 되돌아가는 전환이 없다
+    for (const li of screen.getAllByRole("listitem")) {
+      expect(li).toHaveClass("transition-none");
+      expect(li.style.transform).toBe("");
+    }
+
+    // when — 다음 프레임
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // then — 전환을 되돌린다
+    for (const li of screen.getAllByRole("listitem")) {
+      expect(li).not.toHaveClass("transition-none");
+    }
   });
 
   it("delays delete and padding toggle too", () => {

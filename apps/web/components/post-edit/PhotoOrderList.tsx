@@ -42,9 +42,12 @@ export function PhotoOrderList({
   onChange,
 }: PhotoOrderListProps) {
   const [anim, setAnim] = useState<Anim | null>(null);
+  // 순서를 바꾼 렌더에서는 transform을 전환 없이 0으로 돌린다. 안 그러면 제자리로 한 번 더 미끄러진다.
+  const [settling, setSettling] = useState(false);
   const items = useRef<(HTMLLIElement | null)[]>([]);
   const commit = useRef<(() => void) | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const frame = useRef<number | null>(null);
 
   const finish = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -54,11 +57,21 @@ export function PhotoOrderList({
     if (!run) return;
     run();
     setAnim(null);
+    setSettling(true);
+    // 전환 없는 스타일이 한 번 그려진 뒤(다음 다음 프레임)에 전환을 되돌린다
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        setSettling(false);
+      });
+    });
   }, []);
 
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
     },
     [],
   );
@@ -69,6 +82,10 @@ export function PhotoOrderList({
       return;
     }
     commit.current = () => onChange(apply());
+    // 되돌림 프레임을 기다리는 중에 다시 눌렀으면 전환을 바로 되살린다
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    setSettling(false);
     setAnim(next);
     timer.current = setTimeout(finish, FALLBACK_MS);
   };
@@ -96,6 +113,11 @@ export function PhotoOrderList({
 
   const locked = anim !== null;
 
+  // 이 사진이 지금 애니메이션에서 transform이 바뀌는 대상인지
+  const animating = (i: number, id: number) =>
+    (anim?.kind === "move" && (i === anim.from || i === anim.to)) ||
+    (anim?.kind === "delete" && anim.id === id);
+
   const liStyle = (i: number, id: number) => {
     if (anim?.kind === "move" && (i === anim.from || i === anim.to)) {
       const dy = i === anim.from ? anim.fromDy : anim.toDy;
@@ -120,10 +142,20 @@ export function PhotoOrderList({
             ref={(el) => {
               items.current[i] = el;
             }}
-            className="transition-[transform,opacity] duration-200 ease-out"
+            className={
+              settling
+                ? "transition-none"
+                : "transition-[transform,opacity] duration-200 ease-out"
+            }
             style={liStyle(i, photo.id)}
             onTransitionEnd={(event) => {
-              if (event.target === event.currentTarget) finish();
+              if (
+                event.target === event.currentTarget &&
+                event.propertyName === "transform" &&
+                animating(i, photo.id)
+              ) {
+                finish();
+              }
             }}
           >
             <div className="relative overflow-hidden rounded-md">

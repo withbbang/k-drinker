@@ -43,7 +43,9 @@ export function SearchCombobox<T>({
       // IME 조합 중 Enter는 글자 확정이므로 건드리지 않는다. 폼 제출은 항상 막는다.
       if (event.nativeEvent.isComposing) return;
       event.preventDefault();
-      if (open) pick(items[active >= 0 ? active : 0]);
+      // 결과가 줄어 가리키던 항목이 사라졌으면 고르지 않는다.
+      const index = active >= 0 ? active : 0;
+      if (open && index < items.length) pick(items[index]);
     } else if (event.key === "ArrowDown" && open) {
       event.preventDefault();
       setActive((current) => (current + 1) % items.length);
