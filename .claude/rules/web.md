@@ -14,3 +14,5 @@ paths:
 - 스타일: Tailwind만. 인라인 `style={}` 금지. 공통 변형은 `cva` 또는 유틸 함수로.
 - import 순서: react → next → 외부 패키지 → `@/` 절대경로 → 상대경로. 절대경로는 `@/`만 사용.
 - 접근성: 버튼은 `<button>`, 링크는 `<Link>`. `div onClick` 금지.
+- `react-hooks/set-state-in-effect` lint가 effect 안 setState를 막는다 → 상태를 effect로 동기화하지 말고 렌더에서 파생해 쓴다.
+- 사진 파일 입력은 `accept="image/jpeg,image/png"` — API(`ImageDecoder`)가 JPEG·PNG만 받는다.
