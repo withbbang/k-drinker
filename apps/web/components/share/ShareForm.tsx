@@ -206,14 +206,16 @@ function ShareEditor({ initialPhotos }: { initialPhotos: SharedPhoto[] }) {
             </button>
           </li>
         ))}
-        <li>
-          <AddPhotoTile
-            remaining={remaining}
-            disabled={sending}
-            onAdd={addPhotos}
-            onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
-          />
-        </li>
+        {remaining > 0 && (
+          <li>
+            <AddPhotoTile
+              remaining={remaining}
+              disabled={sending}
+              onAdd={addPhotos}
+              onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
+            />
+          </li>
+        )}
       </ul>
       {notice !== null && (
         <p role="status" className="text-sm text-neutral-700">

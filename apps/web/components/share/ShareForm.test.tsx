@@ -59,10 +59,6 @@ async function removePhoto(n: number) {
   await userEvent.click(within(dialog).getByRole("button", { name: "빼기" }));
 }
 
-function altOrder() {
-  return screen.getAllByRole("img").map((img) => img.getAttribute("alt"));
-}
-
 function postCalls() {
   return apiFetchMock.mock.calls.filter(([path]) => path === "/api/v1/posts");
 }
@@ -382,25 +378,28 @@ describe("ShareForm", () => {
   });
 
   it("restores a removed photo to its place on undo and redo", async () => {
-    // given
-    readMock.mockResolvedValue(photos(3));
+    // given — object URL을 파일 이름으로 돌려줘 사진 정체성을 구분한다
+    URL.createObjectURL = vi.fn((file: Blob) => `blob:${(file as File).name}`);
+    readMock.mockResolvedValue([photo("a"), photo("b"), photo("c")]);
     renderForm();
     await screen.findAllByRole("img");
-    const original = altOrder();
+    const order = () =>
+      screen.getAllByRole("img").map((img) => img.getAttribute("src"));
+    expect(order()).toEqual(["blob:a", "blob:b", "blob:c"]);
     await removePhoto(2);
-    expect(screen.getAllByRole("img")).toHaveLength(2);
+    expect(order()).toEqual(["blob:a", "blob:c"]);
 
     // when
     await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
 
     // then
-    expect(altOrder()).toEqual(original);
+    expect(order()).toEqual(["blob:a", "blob:b", "blob:c"]);
 
     // when
     await userEvent.click(screen.getByRole("button", { name: "다시 하기" }));
 
     // then
-    expect(screen.getAllByRole("img")).toHaveLength(2);
+    expect(order()).toEqual(["blob:a", "blob:c"]);
   });
 
   it("undoes the rating too", async () => {
