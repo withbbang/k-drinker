@@ -54,6 +54,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
       { id: 2, position: 1, url: "/m/2.jpg", fitMode: "CROP" },
     ],
     permalink: null,
+    channel: "WEB",
     ...overrides,
   };
 }

@@ -1,5 +1,7 @@
 import type { BreweryRequest, BreweryResponse } from "@/types/api/brewery";
 
+export type PostChannel = "TELEGRAM" | "WEB";
+
 export type FitMode = "CROP" | "PAD";
 
 export type PostCreateResponse = {
@@ -14,6 +16,7 @@ export type PostSummaryResponse = {
   rating: number | null;
   thumbnailUrl: string | null;
   permalink: string | null;
+  channel: PostChannel;
   createdAt: string;
 };
 
@@ -43,6 +46,7 @@ export type PostDetailResponse = {
   captionLength: number;
   photos: PostPhotoResponse[];
   permalink: string | null;
+  channel: PostChannel;
 };
 
 export type PhotoEdit = {

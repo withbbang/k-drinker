@@ -54,26 +54,11 @@ function PostRow({ post }: { post: PostSummaryResponse }) {
     </>
   );
 
-  if (post.status === "PENDING_REVIEW" || post.status === "FAILED") {
-    return (
-      <Link href={`/posts/${post.id}/edit`} className={ROW}>
-        {body}
-      </Link>
-    );
-  }
-  if (post.status === "PUBLISHED" && post.permalink) {
-    return (
-      <a
-        href={post.permalink}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={ROW}
-      >
-        {body}
-      </a>
-    );
-  }
-  return <div className={ROW}>{body}</div>;
+  return (
+    <Link href={`/posts/${post.id}`} className={ROW}>
+      {body}
+    </Link>
+  );
 }
 
 export function PostList() {

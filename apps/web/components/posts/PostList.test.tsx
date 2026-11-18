@@ -28,6 +28,7 @@ function summary(
     rating: 4.5,
     thumbnailUrl: "/m/1.jpg",
     permalink: null,
+    channel: "WEB",
     createdAt: "2026-11-17T16:00:00Z",
     ...overrides,
   };
@@ -54,7 +55,7 @@ describe("PostList", () => {
     apiFetchMock.mockReset();
   });
 
-  it("links reviewable posts to the edit screen", async () => {
+  it("links reviewable posts to the overview screen", async () => {
     setup([
       summary({ id: 7 }),
       summary({ id: 8, status: "FAILED", drinkName: "청주" }),
@@ -62,16 +63,16 @@ describe("PostList", () => {
 
     expect(await screen.findByRole("link", { name: /막걸리/ })).toHaveAttribute(
       "href",
-      "/posts/7/edit",
+      "/posts/7",
     );
     expect(screen.getByRole("link", { name: /청주/ })).toHaveAttribute(
       "href",
-      "/posts/8/edit",
+      "/posts/8",
     );
     expect(apiFetchMock).toHaveBeenCalledWith("/api/v1/posts?page=1&size=20");
   });
 
-  it("links published posts to instagram", async () => {
+  it("links published posts to the overview screen too", async () => {
     setup([
       summary({
         status: "PUBLISHED",
@@ -80,8 +81,7 @@ describe("PostList", () => {
     ]);
 
     const link = await screen.findByRole("link", { name: /막걸리/ });
-    expect(link).toHaveAttribute("href", "https://instagram.com/p/abc");
-    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("href", "/posts/1");
   });
 
   it("shows status labels in Korean and the Seoul date", async () => {
