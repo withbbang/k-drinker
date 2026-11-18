@@ -57,12 +57,14 @@ class PostIntakeServiceTest {
 			Arrays.fill(bytes, (byte) 7);
 		}
 	};
+	private static final String ORIGINAL_0_JPG = "original/5/[A-Za-z0-9_-]{43}\\.jpg";
+	private static final String ORIGINAL_1_PNG = "original/5/[A-Za-z0-9_-]{43}\\.png";
 	private PostIntakeService service;
 
 	@BeforeEach
 	void setUp() {
-		service = new PostIntakeService(postRepository, postPhotoRepository, photoStorage, new ImageDecoder(),
-				new PhotoTransformer(), fixedRandom, Clock.fixed(Instant.EPOCH, ZoneOffset.UTC), events);
+		service = new PostIntakeService(postRepository, postPhotoRepository, photoStorage, new PhotoStager(photoStorage,
+				new ImageDecoder(), new PhotoTransformer(), fixedRandom), Clock.fixed(Instant.EPOCH, ZoneOffset.UTC), events);
 		when(postRepository.save(any(Post.class))).thenAnswer(inv -> {
 			Post post = inv.getArgument(0);
 			ReflectionTestUtils.setField(post, "id", 5L);
@@ -111,15 +113,15 @@ class PostIntakeServiceTest {
 
 		// then
 		assertThat(post.getId()).isEqualTo(5L);
-		verify(photoStorage).promote(anyString(), eq("original/5/0.jpg"));
-		verify(photoStorage).promote(anyString(), eq("original/5/1.png"));
+		verify(photoStorage).promote(anyString(), org.mockito.ArgumentMatchers.matches(ORIGINAL_0_JPG));
+		verify(photoStorage).promote(anyString(), org.mockito.ArgumentMatchers.matches(ORIGINAL_1_PNG));
 		ArgumentCaptor<PostPhoto> captor = ArgumentCaptor.forClass(PostPhoto.class);
 		verify(postPhotoRepository, org.mockito.Mockito.times(2)).save(captor.capture());
 		PostPhoto first = captor.getAllValues().get(0);
 		assertThat(first.getPublicToken()).hasSize(43).matches("^[A-Za-z0-9_-]{43}$");
 		assertThat(first.getFitMode()).isEqualTo(FitMode.CROP);
 		assertThat(first.getRenderedPath()).isEqualTo("rendered/" + first.getPublicToken() + ".jpg");
-		assertThat(first.getOriginalPath()).isEqualTo("original/5/0.jpg");
+		assertThat(first.getOriginalPath()).matches(ORIGINAL_0_JPG);
 		verify(photoStorage, org.mockito.Mockito.atLeastOnce()).promote(anyString(), eq(first.getRenderedPath())); // 고정 난수라 두 장의 토큰이 같다
 		verify(events).publishEvent(new PostReceivedEvent(5L));
 		verify(photoStorage).deleteStagingQuietly(anyString());
@@ -193,7 +195,7 @@ class PostIntakeServiceTest {
 
 		// then
 		assertThat(post.getId()).isEqualTo(5L);
-		verify(photoStorage).deleteQuietly("original/5/0.jpg");
+		verify(photoStorage).deleteQuietly(org.mockito.ArgumentMatchers.matches(ORIGINAL_0_JPG));
 		verify(photoStorage).deleteQuietly(captor.getValue().getRenderedPath());
 	}
 
@@ -220,7 +222,7 @@ class PostIntakeServiceTest {
 		// when / then
 		assertThatThrownBy(() -> service.receive(PostSource.SHARE, null, null, List.of(image("jpg"))))
 				.isInstanceOf(IllegalStateException.class);
-		verify(photoStorage).deleteQuietly("original/5/0.jpg");
+		verify(photoStorage).deleteQuietly(org.mockito.ArgumentMatchers.matches(ORIGINAL_0_JPG));
 	}
 
 	@Test

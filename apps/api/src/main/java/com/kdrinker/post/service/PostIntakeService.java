@@ -2,20 +2,14 @@ package com.kdrinker.post.service;
 
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
-import com.kdrinker.common.Tokens;
-import com.kdrinker.media.ImageDecoder;
 import com.kdrinker.media.PhotoStorage;
-import com.kdrinker.media.PhotoTransformer;
 import com.kdrinker.post.entity.FitMode;
 import com.kdrinker.post.entity.Post;
-import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.event.PostReceivedEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +17,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +25,6 @@ public class PostIntakeService {
 
 	static final int MIN_PHOTOS = 1;
 	static final int MAX_PHOTOS = 10;
-	static final int MAX_PHOTO_BYTES = 20 * 1024 * 1024;
 	static final int MAX_MEMO_LENGTH = 2000;
 	private static final BigDecimal MAX_RATING = new BigDecimal("5");
 	private static final BigDecimal HALF = new BigDecimal("0.5");
@@ -41,9 +32,7 @@ public class PostIntakeService {
 	private final PostRepository postRepository;
 	private final PostPhotoRepository postPhotoRepository;
 	private final PhotoStorage photoStorage;
-	private final ImageDecoder imageDecoder;
-	private final PhotoTransformer photoTransformer;
-	private final SecureRandom secureRandom;
+	private final PhotoStager photoStager;
 	private final Clock clock;
 	private final ApplicationEventPublisher events;
 
@@ -80,26 +69,18 @@ public class PostIntakeService {
 	@Transactional
 	public Post receiveInputs(PostSource source, String memo, BigDecimal rating, List<PhotoInput> photos) {
 		validate(photos.size(), memo, rating);
-		String stagingId = Tokens.random(secureRandom);
-		List<Staged> staged = new ArrayList<>();
+		String stagingId = photoStager.newStagingId();
+		List<PhotoStager.Staged> staged = new ArrayList<>();
 		List<String> written = new ArrayList<>();
 		try {
 			for (int i = 0; i < photos.size(); i++) {
-				staged.add(stage(stagingId, i, photos.get(i)));
+				staged.add(photoStager.stage(stagingId, i, photos.get(i), FitMode.CROP));
 			}
 
 			Post post = postRepository.save(Post.receive(source, memo, rating, clock));
-			registerRollbackCleanup(written);
+			photoStager.registerRollbackCleanup(written);
 			for (int i = 0; i < staged.size(); i++) {
-				Staged p = staged.get(i);
-				String originalPath = photoStorage.promote(p.originalStaged(),
-						PhotoStorage.originalPath(post.getId(), i, p.format()));
-				written.add(originalPath);
-				String renderedPath = photoStorage.promote(p.renderedStaged(), PhotoStorage.renderedPath(p.token()));
-				written.add(renderedPath);
-				PostPhoto photo = PostPhoto.of(post, i, originalPath, p.token(), FitMode.CROP);
-				photo.attachRendered(renderedPath);
-				postPhotoRepository.save(photo);
+				postPhotoRepository.save(photoStager.promote(post, i, staged.get(i), written));
 			}
 			events.publishEvent(new PostReceivedEvent(post.getId()));
 			return post;
@@ -107,47 +88,8 @@ public class PostIntakeService {
 			written.forEach(photoStorage::deleteQuietly);
 			throw e;
 		} finally {
-			photoStorage.deleteStagingQuietly(stagingId);
+			photoStager.deleteStaging(stagingId);
 		}
-	}
-
-	/** 사진 한 장을 읽어 스테이징한다. 원본 바이트는 이 메서드가 끝나면 참조가 사라진다. */
-	private Staged stage(String stagingId, int position, PhotoInput input) {
-		if (input.size() > MAX_PHOTO_BYTES) {
-			throw new BusinessException(ErrorCode.POST_PHOTO_TOO_LARGE);
-		}
-		byte[] original;
-		try {
-			original = input.readAllBytes();
-		} catch (IOException e) {
-			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-		}
-		if (original.length > MAX_PHOTO_BYTES) {
-			throw new BusinessException(ErrorCode.POST_PHOTO_TOO_LARGE);
-		}
-		String format = imageDecoder.detectFormat(original);
-		byte[] rendered = photoTransformer.render(imageDecoder.decode(original), null, FitMode.CROP);
-		String originalStaged = photoStorage.saveStaged(stagingId, position + "." + format, original);
-		String renderedStaged = photoStorage.saveStaged(stagingId, position + ".rendered.jpg", rendered);
-		return new Staged(format, Tokens.random(secureRandom), originalStaged, renderedStaged);
-	}
-
-	/** 커밋 단계에서 실패해 롤백되면 이미 옮긴 파일을 지운다. 트랜잭션 밖이면 등록하지 않는다. */
-	private void registerRollbackCleanup(List<String> written) {
-		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-			return;
-		}
-		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-			@Override
-			public void afterCompletion(int status) {
-				if (status == STATUS_ROLLED_BACK) {
-					written.forEach(photoStorage::deleteQuietly);
-				}
-			}
-		});
-	}
-
-	private record Staged(String format, String token, String originalStaged, String renderedStaged) {
 	}
 
 }

@@ -32,6 +32,16 @@ class PhotoStorageTest {
 	}
 
 	@Test
+	void 원본_경로는_이름으로_만든다() {
+		// when / then
+		assertThat(PhotoStorage.originalPath(7L, TOKEN, "jpg")).isEqualTo("original/7/" + TOKEN + ".jpg");
+		assertThatThrownBy(() -> PhotoStorage.originalPath(7L, "../x", "jpg"))
+				.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> PhotoStorage.originalPath(7L, TOKEN, "gif"))
+				.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
 	void 렌더링_파일을_덮어써도_임시_파일이_남지_않는다() throws Exception {
 		// given
 		PhotoStorage storage = new PhotoStorage(dir.toString());

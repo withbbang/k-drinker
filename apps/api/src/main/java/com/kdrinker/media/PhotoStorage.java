@@ -35,6 +35,17 @@ public class PhotoStorage {
 		return "original/" + postId + "/" + position + "." + format;
 	}
 
+	/** DB에 저장하는 원본 상대 경로: original/{postId}/{name}.{jpg|png}. name 은 43자 토큰이라 같은 게시물 안에서도 겹치지 않는다. */
+	public static String originalPath(Long postId, String name, String format) {
+		if (name == null || !TOKEN_PATTERN.matcher(name).matches()) {
+			throw new IllegalArgumentException("원본 이름 형식이 올바르지 않음");
+		}
+		if (!"jpg".equals(format) && !"png".equals(format)) {
+			throw new IllegalArgumentException("지원하지 않는 형식");
+		}
+		return "original/" + postId + "/" + name + "." + format;
+	}
+
 	/** DB에 저장하는 렌더링 상대 경로: rendered/{token}.jpg */
 	public static String renderedPath(String token) {
 		if (token == null || !TOKEN_PATTERN.matcher(token).matches()) {
