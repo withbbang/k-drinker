@@ -195,6 +195,36 @@ class PostControllerTest {
 	}
 
 	@Test
+	void 수정_저장을_JSON으로_보내면_400이다() throws Exception {
+		// given
+		String body = """
+				{"version": 1, "captionHead": "훅", "captionTail": "", "photos": []}
+				""";
+
+		// when / then
+		mockMvc.perform(MockMvcRequestBuilders.put("/api/v1/posts/1")
+				.contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+		verifyNoInteractions(postEditService);
+	}
+
+	@Test
+	void 수정_저장의_multipart가_깨지면_400이다() throws Exception {
+		// given
+		String body = """
+				{"version": 1, "captionHead": "훅", "captionTail": "", "photos": [{"id": 1, "fitMode": "CROP"}]}
+				""";
+		when(postEditService.update(eq(1L), any(), any()))
+				.thenThrow(new org.springframework.web.multipart.MultipartException("깨진 multipart"));
+
+		// when / then
+		mockMvc.perform(putMultipart("/api/v1/posts/1").file(requestPart(body)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+	}
+
+	@Test
 	void 수정_저장은_multipart로_받는다() throws Exception {
 		// given
 		String body = """

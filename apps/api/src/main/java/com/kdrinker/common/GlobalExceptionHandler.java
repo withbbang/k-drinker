@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -46,7 +47,7 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler({ HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
-			MissingServletRequestPartException.class })
+			MissingServletRequestPartException.class, MultipartException.class })
 	public ResponseEntity<ApiResponse<Void>> handleUnreadable(Exception e) {
 		return respond(ErrorCode.COMMON_VALIDATION_FAILED);
 	}
