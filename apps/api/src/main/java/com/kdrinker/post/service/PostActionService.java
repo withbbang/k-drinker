@@ -59,7 +59,7 @@ public class PostActionService {
 	}
 
 	/**
-	 * 실패 단계가 분석이면 분석 실행기에 재분석을 넣고, 게시면 {@link PublishService#retry}를 부른다.
+	 * 실패 단계가 분석이면 ANALYZING으로 바꾼 뒤 분석 실행기에 이어서 분석을 넣고, 게시면 {@link PublishService#retry}를 부른다.
 	 * 실패 상태가 아니거나 버전이 다르면 STALE.
 	 */
 	public ConfirmResult retry(Long postId, int version) {
@@ -68,8 +68,12 @@ public class PostActionService {
 			return ConfirmResult.STALE;
 		}
 		if (state.failedStage() == PostStatus.ANALYZING) {
-			// analyze가 조건부 전이로 경합을 막는다. 분석 실행기에서 트랜잭션 밖으로 돈다.
-			analysisExecutor.execute(() -> analysisService.analyze(postId, PostStatus.FAILED));
+			// FAILED → ANALYZING 버전 검사 전이는 여기서 바로 한다. 응답이 ANALYZING을 보여 주고, 두 번 눌러도 한 번만 넣는다.
+			// 분석 본체(Claude 호출)는 분석 실행기에서 트랜잭션 밖으로 돈다.
+			if (!analysisService.startRetry(postId, version)) {
+				return ConfirmResult.STALE;
+			}
+			analysisExecutor.execute(() -> analysisService.resume(postId));
 			return ConfirmResult.STARTED;
 		}
 		if (state.failedStage() == PostStatus.PUBLISHING) {

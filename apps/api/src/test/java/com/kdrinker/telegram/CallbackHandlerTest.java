@@ -224,10 +224,13 @@ class CallbackHandlerTest {
 	@Test
 	void retryAnalysisSubmitsAnalyze() {
 		post(PostStatus.FAILED, 2, PostStatus.ANALYZING);
+		when(analysisService.startRetry(128L, 2)).thenReturn(true);
 
 		handler.handle(query("retry:128:2"));
 
-		verify(analysisService).analyze(128L, PostStatus.FAILED);
+		verify(analysisService).startRetry(128L, 2);
+		verify(analysisService).resume(128L);
+		verify(notifier, never()).notifyPublishing(anyLong());
 		verifyNoInteractions(publishService);
 		verify(client).answerCallback("cb1", "다시 시도합니다.");
 		verify(client).removeKeyboard(77L);
@@ -299,6 +302,21 @@ class CallbackHandlerTest {
 		verify(client, times(5)).answerCallback("cb1", STALE);
 		verify(client, never()).removeKeyboard(anyLong());
 		verifyNoInteractions(publishService, analysisService, sender, notifier);
+	}
+
+	@Test
+	void 분석_재시도를_다른_곳에서_먼저_시작했으면_오래된_버튼으로_답한다() {
+		// given
+		post(PostStatus.FAILED, 2, PostStatus.ANALYZING);
+		when(analysisService.startRetry(128L, 2)).thenReturn(false);
+
+		// when
+		handler.handle(query("retry:128:2"));
+
+		// then
+		verify(client).answerCallback("cb1", STALE);
+		verify(client, never()).removeKeyboard(anyLong());
+		verify(analysisService, never()).resume(anyLong());
 	}
 
 }

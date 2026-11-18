@@ -101,6 +101,52 @@ public class AnalysisService {
 		if (!start(postId, from)) {
 			return;
 		}
+		runAndPublish(postId);
+	}
+
+	/**
+	 * 분석 단계 실패 재시도의 1단계만 호출 스레드에서 한다. FAILED(failedStage=ANALYZING, 버전 일치)의 실패 정보를 지우고
+	 * 버전 검사 전이로 ANALYZING에 둔다. 같은 버전으로 두 번 부르면 두 번째는 false다. 이어서 분석 실행기에서
+	 * {@link #resume}을 불러야 한다(실행기가 작업을 버려도 게시물은 ANALYZING으로 남아 다음 기동 때 복구가 실패로 바꾼다).
+	 */
+	public boolean startRetry(Long postId, int version) {
+		return Boolean.TRUE.equals(tx.execute(status -> {
+			Post post = postRepository.findById(postId).orElse(null);
+			if (post == null || post.getStatus() != PostStatus.FAILED || post.getVersion() != version
+					|| post.getFailedStage() != PostStatus.ANALYZING) {
+				return false;
+			}
+			post.clearFailure();
+			if (postRepository.transition(postId, PostStatus.FAILED, PostStatus.ANALYZING, version,
+					clock.instant()) == 0) {
+				status.setRollbackOnly();
+				return false;
+			}
+			return true;
+		}));
+	}
+
+	/**
+	 * {@link #startRetry}로 이미 ANALYZING이 된 게시물의 2단계부터를 돈다. ANALYZING이 아니면 아무것도 하지 않는다.
+	 * 끝난 뒤 {@link PostAnalyzedEvent}를 한 번 발행한다.
+	 *
+	 * @throws IllegalStateException 트랜잭션 안에서 부른 경우(호출 쪽 버그).
+	 */
+	public void resume(Long postId) {
+		if (TransactionSynchronizationManager.isActualTransactionActive()) {
+			throw new IllegalStateException("resume은 트랜잭션 밖에서 불러야 합니다. postId=" + postId);
+		}
+		Boolean analyzing = tx.execute(status -> postRepository.findById(postId)
+			.map(post -> post.getStatus() == PostStatus.ANALYZING)
+			.orElse(false));
+		if (!Boolean.TRUE.equals(analyzing)) {
+			return;
+		}
+		runAndPublish(postId);
+	}
+
+	/** 2~7단계와 결과 이벤트. 분석 중 예외는 밖으로 던지지 않는다. */
+	private void runAndPublish(Long postId) {
 		PostStatus result;
 		try {
 			run(postId);

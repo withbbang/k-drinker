@@ -179,20 +179,54 @@ class PostActionServiceTest {
 	}
 
 	@Test
-	void 분석_단계_실패를_재시도하면_분석_실행기에_재분석을_넣는다() {
+	void 분석_단계_실패를_재시도하면_응답_전에_분석_중으로_바꾸고_실행기에는_이어서_분석을_넣는다() {
 		// given
 		post(PostSource.SHARE, PostStatus.FAILED, 2, PostStatus.ANALYZING);
+		when(analysisService.startRetry(ID, 2)).thenReturn(true);
 
 		// when
 		PostDetailResponse result = service.retryFromWeb(ID, 2);
 
 		// then
+		verify(analysisService).startRetry(ID, 2);
 		assertThat(submitted).hasSize(1);
-		verifyNoInteractions(analysisService);
+		verify(analysisService, never()).resume(anyLong());
 		submitted.get(0).run();
-		verify(analysisService).analyze(ID, PostStatus.FAILED);
+		verify(analysisService).resume(ID);
+		verify(analysisService, never()).analyze(anyLong(), any());
 		verifyNoInteractions(publishService);
 		assertThat(result).isSameAs(detail);
+	}
+
+	@Test
+	void 분석_재시도_전이를_이미_다른_요청이_가져갔으면_POST_VERSION_CONFLICT이고_아무것도_넣지_않는다() {
+		// given
+		post(PostSource.SHARE, PostStatus.FAILED, 2, PostStatus.ANALYZING);
+		when(analysisService.startRetry(ID, 2)).thenReturn(false);
+
+		// when / then
+		assertCode(() -> service.retryFromWeb(ID, 2), ErrorCode.POST_VERSION_CONFLICT);
+		assertThat(submitted).isEmpty();
+	}
+
+	@Test
+	void 게시_재시도_결과가_CAPTION_TOO_LONG이면_POST_CAPTION_TOO_LONG이다() {
+		// given
+		post(PostSource.SHARE, PostStatus.FAILED, 2, PostStatus.PUBLISHING);
+		when(publishService.retry(ID, 2)).thenReturn(ConfirmResult.CAPTION_TOO_LONG);
+
+		// when / then
+		assertCode(() -> service.retryFromWeb(ID, 2), ErrorCode.POST_CAPTION_TOO_LONG);
+	}
+
+	@Test
+	void 게시_중인_게시물을_확인하면_POST_VERSION_CONFLICT다() {
+		// given
+		post(PostSource.SHARE, PostStatus.PUBLISHING, 2, null);
+
+		// when / then
+		assertCode(() -> service.confirmFromWeb(ID, 2), ErrorCode.POST_VERSION_CONFLICT);
+		verifyNoInteractions(publishService);
 	}
 
 	@Test
@@ -242,6 +276,7 @@ class PostActionServiceTest {
 		// then
 		assertThat(result).isEqualTo(ConfirmResult.STALE);
 		assertThat(submitted).isEmpty();
+		verifyNoInteractions(analysisService);
 	}
 
 }

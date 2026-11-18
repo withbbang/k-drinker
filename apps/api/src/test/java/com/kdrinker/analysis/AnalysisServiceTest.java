@@ -554,4 +554,88 @@ class AnalysisServiceTest {
 		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.RECEIVED);
 		verifyNoInteractions(labelReader);
 	}
+
+	@Test
+	void 재시도_시작은_버전이_맞으면_바로_분석_중으로_바꾸고_실패_정보를_지운다() {
+		// given
+		Fixture f = post(PostStatus.FAILED, null);
+		int version = reload(f.postId()).getVersion();
+
+		// when
+		boolean started = analysisService.startRetry(f.postId(), version);
+
+		// then
+		assertThat(started).isTrue();
+		Post post = reload(f.postId());
+		assertThat(post.getStatus()).isEqualTo(PostStatus.ANALYZING);
+		assertThat(post.getVersion()).isEqualTo(version + 1);
+		assertThat(post.getFailedStage()).isNull();
+		assertThat(post.getFailureReason()).isNull();
+		verifyNoInteractions(labelReader);
+	}
+
+	@Test
+	void 같은_버전으로_재시도를_두_번_시작하면_두_번째는_거절된다() {
+		// given
+		Fixture f = post(PostStatus.FAILED, null);
+		int version = reload(f.postId()).getVersion();
+		analysisService.startRetry(f.postId(), version);
+
+		// when
+		boolean second = analysisService.startRetry(f.postId(), version);
+
+		// then
+		assertThat(second).isFalse();
+		assertThat(reload(f.postId()).getVersion()).isEqualTo(version + 1);
+	}
+
+	@Test
+	void 재시도_시작은_버전이_다르거나_게시_단계_실패면_아무것도_바꾸지_않는다() {
+		// given
+		Fixture f = post(PostStatus.FAILED, null);
+		int version = reload(f.postId()).getVersion();
+		Fixture published = post(PostStatus.FAILED, null);
+		jdbc.update("UPDATE post SET failed_stage = 'PUBLISHING' WHERE id = ?", published.postId());
+		int publishedVersion = reload(published.postId()).getVersion();
+
+		// when
+		boolean wrongVersion = analysisService.startRetry(f.postId(), version + 1);
+		boolean wrongStage = analysisService.startRetry(published.postId(), publishedVersion);
+
+		// then
+		assertThat(wrongVersion).isFalse();
+		assertThat(wrongStage).isFalse();
+		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.FAILED);
+		assertThat(reload(f.postId()).getFailureReason()).isEqualTo("이전 실패");
+		assertThat(reload(published.postId()).getStatus()).isEqualTo(PostStatus.FAILED);
+	}
+
+	@Test
+	void 재시도로_분석_중이_된_게시물을_이어서_분석하면_검토_대기가_되고_이벤트를_낸다() {
+		// given
+		Fixture f = post(PostStatus.FAILED, null);
+		analysisService.startRetry(f.postId(), reload(f.postId()).getVersion());
+		givenPortsSucceed(label("새술", null));
+
+		// when
+		analysisService.resume(f.postId());
+
+		// then
+		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.PENDING_REVIEW);
+		assertThat(analyzedEvents()).containsExactly(new PostAnalyzedEvent(f.postId(), PostStatus.PENDING_REVIEW));
+	}
+
+	@Test
+	void 분석_중이_아닌_게시물은_이어서_분석하지_않는다() {
+		// given
+		Fixture f = post(PostStatus.FAILED, null);
+
+		// when
+		analysisService.resume(f.postId());
+
+		// then
+		assertThat(reload(f.postId()).getStatus()).isEqualTo(PostStatus.FAILED);
+		verifyNoInteractions(labelReader);
+		assertThat(analyzedEvents()).isEmpty();
+	}
 }
