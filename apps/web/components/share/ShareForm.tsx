@@ -1,12 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
+import { AddPhotoTile, overflowMessage } from "@/components/ui/AddPhotoTile";
+import { BlobImage } from "@/components/ui/BlobImage";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { RatingInput } from "@/components/ui/RatingInput";
+import { UndoRedoBar } from "@/components/ui/UndoRedoBar";
 import { useCreatePost } from "@/hooks/use-create-post";
 import { useSession } from "@/hooks/use-session";
+import { useUndoable } from "@/hooks/use-undoable";
 import { ApiError } from "@/lib/api";
 import { readSharedPhotos } from "@/lib/shared-photos";
 
@@ -17,27 +21,8 @@ const FALLBACK_ERROR = "전송에 실패했습니다. 잠시 후 다시 시도�
 const SESSION_ERROR =
   "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
-// URL 생성과 revoke를 ref 콜백 한 곳에 둬서 StrictMode 재마운트에도 안전하다.
-function PhotoPreview({ file, index }: { file: File; index: number }) {
-  const attach = useCallback(
-    (img: HTMLImageElement) => {
-      const url = URL.createObjectURL(file);
-      img.src = url;
-      return () => URL.revokeObjectURL(url);
-    },
-    [file],
-  );
-  return (
-    // eslint-disable-next-line @next/next/no-img-element -- blob 미리보기
-    <img
-      ref={attach}
-      alt={`공유한 사진 ${index}`}
-      className="aspect-square w-full rounded-md object-cover"
-    />
-  );
-}
-
 type SharedPhoto = { id: number; file: File };
+type EditState = { photos: SharedPhoto[]; rating: number | null };
 
 // 보내기 전에 보여 주는 요약.
 function SendSummary({
@@ -74,13 +59,8 @@ function SendSummary({
 }
 
 export function ShareForm() {
-  const router = useRouter();
   const session = useSession();
-  const createPost = useCreatePost();
-  const [photos, setPhotos] = useState<SharedPhoto[] | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [rating, setRating] = useState<number | null>(null);
-  const [memo, setMemo] = useState("");
+  const [initial, setInitial] = useState<SharedPhoto[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +68,7 @@ export function ShareForm() {
     readSharedPhotos()
       .catch(() => [])
       .then((files) => {
-        if (!cancelled) setPhotos(files.map((file, id) => ({ id, file })));
+        if (!cancelled) setInitial(files.map((file, id) => ({ id, file })));
       });
     return () => {
       cancelled = true;
@@ -119,9 +99,9 @@ export function ShareForm() {
     );
   }
 
-  if (!session.isSuccess || photos === null) return null;
+  if (!session.isSuccess || initial === null) return null;
 
-  if (photos.length === 0) {
+  if (initial.length === 0) {
     return (
       <p className="text-neutral-700">
         공유된 사진이 없습니다. 갤러리에서 사진을 골라 k-drinker로 공유해
@@ -130,9 +110,50 @@ export function ShareForm() {
     );
   }
 
+  // 읽은 뒤에 마운트해서 초기 사진은 되돌리기 기록이 아니다.
+  return <ShareEditor initialPhotos={initial} />;
+}
+
+function ShareEditor({ initialPhotos }: { initialPhotos: SharedPhoto[] }) {
+  const router = useRouter();
+  const createPost = useCreatePost();
+  const { state, set, undo, redo, canUndo, canRedo } = useUndoable<EditState>({
+    photos: initialPhotos,
+    rating: null,
+  });
+  const { photos, rating } = state;
+  const [confirming, setConfirming] = useState(false);
+  const [removingId, setRemovingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [memo, setMemo] = useState("");
+
   const tooMany = photos.length > MAX_PHOTOS;
+  const remaining = MAX_PHOTOS - photos.length;
   // 성공한 뒤에도 화면 이동이 끝날 때까지 잠가 둔다. 다시 누르면 게시물이 하나 더 생긴다.
   const sending = createPost.isPending || createPost.isSuccess;
+
+  const change = (next: (prev: EditState) => EditState) => {
+    setNotice(null);
+    set(next);
+  };
+
+  const addPhotos = (files: File[]) =>
+    change((prev) => {
+      // 새 id는 기존 최대 id 다음부터 (빼고 되돌려도 겹치지 않는다)
+      let nextId = Math.max(-1, ...prev.photos.map((p) => p.id)) + 1;
+      const added = files.map((file) => ({ id: nextId++, file }));
+      return { ...prev, photos: [...prev.photos, ...added] };
+    });
+
+  const removePhoto = () => {
+    const id = removingId;
+    setRemovingId(null);
+    if (id === null) return;
+    change((prev) => ({
+      ...prev,
+      photos: prev.photos.filter((photo) => photo.id !== id),
+    }));
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -153,25 +174,57 @@ export function ShareForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <UndoRedoBar
+        canUndo={canUndo}
+        canRedo={canRedo}
+        disabled={sending}
+        onUndo={() => {
+          setNotice(null);
+          undo();
+        }}
+        onRedo={() => {
+          setNotice(null);
+          redo();
+        }}
+      />
       <ul className="grid grid-cols-3 gap-2">
         {photos.map(({ id, file }, i) => (
-          <li key={id} className="flex flex-col gap-1">
-            <PhotoPreview file={file} index={i + 1} />
+          <li key={id} className="relative">
+            <BlobImage
+              file={file}
+              alt={`공유한 사진 ${i + 1}`}
+              className="aspect-square w-full rounded-md object-cover"
+            />
             <button
               type="button"
-              disabled={photos.length <= 1}
+              disabled={photos.length <= 1 || sending}
               aria-label={`사진 ${i + 1} 빼기`}
-              onClick={() =>
-                setPhotos(photos.filter((photo) => photo.id !== id))
-              }
-              className="rounded-md border border-neutral-300 px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+              onClick={() => setRemovingId(id)}
+              className="absolute top-1 right-1 min-h-11 min-w-11 rounded-full bg-red-600 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
             >
-              빼기
+              ✕
             </button>
           </li>
         ))}
+        <li>
+          <AddPhotoTile
+            remaining={remaining}
+            disabled={sending}
+            onAdd={addPhotos}
+            onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
+          />
+        </li>
       </ul>
-      <RatingInput value={rating} onChange={setRating} disabled={tooMany} />
+      {notice !== null && (
+        <p role="status" className="text-sm text-neutral-700">
+          {notice}
+        </p>
+      )}
+      <RatingInput
+        value={rating}
+        onChange={(value) => change((prev) => ({ ...prev, rating: value }))}
+        disabled={tooMany}
+      />
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium">메모</span>
         <input
@@ -203,6 +256,14 @@ export function ShareForm() {
         >
           <SendSummary photoCount={photos.length} rating={rating} memo={memo} />
         </ConfirmDialog>
+      )}
+      {removingId !== null && (
+        <ConfirmDialog
+          title="이 사진을 뺄까요?"
+          confirmLabel="빼기"
+          onConfirm={removePhoto}
+          onClose={() => setRemovingId(null)}
+        />
       )}
       {createPost.isError && (
         <p role="alert" className="text-sm text-red-700">

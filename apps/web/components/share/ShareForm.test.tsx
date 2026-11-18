@@ -52,6 +52,17 @@ async function submit() {
   await userEvent.click(within(dialog).getByRole("button", { name: "보내기" }));
 }
 
+// 사진 N의 [빼기] → 확인 모달의 [빼기]
+async function removePhoto(n: number) {
+  await userEvent.click(screen.getByRole("button", { name: `사진 ${n} 빼기` }));
+  const dialog = await screen.findByRole("dialog");
+  await userEvent.click(within(dialog).getByRole("button", { name: "빼기" }));
+}
+
+function altOrder() {
+  return screen.getAllByRole("img").map((img) => img.getAttribute("alt"));
+}
+
 function postCalls() {
   return apiFetchMock.mock.calls.filter(([path]) => path === "/api/v1/posts");
 }
@@ -309,7 +320,7 @@ describe("ShareForm", () => {
     expect(screen.queryByText(/1장 이상 10장 이하/)).toBeNull();
 
     // when
-    await userEvent.click(screen.getAllByRole("button", { name: /빼기/ })[0]);
+    await removePhoto(1);
 
     // then
     expect(screen.getByRole("button", { name: "보내기" })).toBeEnabled();
@@ -336,7 +347,7 @@ describe("ShareForm", () => {
     await screen.findAllByRole("img");
 
     // when
-    await userEvent.click(screen.getAllByRole("button", { name: /빼기/ })[0]);
+    await removePhoto(1);
     await submit();
 
     // then
@@ -345,6 +356,130 @@ describe("ShareForm", () => {
       .getAll("photos")
       .map((f) => (f as File).name);
     expect(names).toEqual(["p1.jpg", "p2.jpg"]);
+  });
+
+  it("removes a photo only after confirmation", async () => {
+    // given
+    readMock.mockResolvedValue(photos(3));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when — 취소
+    await userEvent.click(screen.getByRole("button", { name: "사진 2 빼기" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("이 사진을 뺄까요?");
+    await userEvent.click(within(dialog).getByRole("button", { name: "취소" }));
+
+    // then
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getAllByRole("img")).toHaveLength(3);
+
+    // when — 확인
+    await removePhoto(2);
+
+    // then
+    expect(screen.getAllByRole("img")).toHaveLength(2);
+  });
+
+  it("restores a removed photo to its place on undo and redo", async () => {
+    // given
+    readMock.mockResolvedValue(photos(3));
+    renderForm();
+    await screen.findAllByRole("img");
+    const original = altOrder();
+    await removePhoto(2);
+    expect(screen.getAllByRole("img")).toHaveLength(2);
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    expect(altOrder()).toEqual(original);
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "다시 하기" }));
+
+    // then
+    expect(screen.getAllByRole("img")).toHaveLength(2);
+  });
+
+  it("undoes the rating too", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "별점" }),
+      "4.0",
+    );
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    expect(screen.getByRole("combobox", { name: "별점" })).toHaveValue("");
+  });
+
+  it("does not record memo changes for undo", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when
+    await userEvent.type(screen.getByRole("textbox", { name: "메모" }), "좋음");
+
+    // then
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
+  });
+
+  it("appends added photos and notes the overflow", async () => {
+    // given
+    readMock.mockResolvedValue(photos(9));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await userEvent.upload(input, [
+      photo("a.jpg"),
+      photo("b.jpg"),
+      photo("c.jpg"),
+    ]);
+
+    // then
+    expect(screen.getAllByRole("img")).toHaveLength(10);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "사진은 10장까지 넣을 수 있어 2장은 넣지 않았습니다.",
+    );
+    expect(screen.queryByRole("button", { name: "사진 추가" })).toBeNull();
+
+    // when — 다음 조작에서 안내가 사라진다
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("sends added photos in order after the shared ones", async () => {
+    // given
+    readMock.mockResolvedValue(photos(2));
+    renderForm();
+    await screen.findAllByRole("img");
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await userEvent.upload(input, photo("added.jpg"));
+
+    // when
+    await submit();
+
+    // then
+    await waitFor(() => expect(postCalls()).toHaveLength(1));
+    const names = (postCalls()[0][1].body as FormData)
+      .getAll("photos")
+      .map((f) => (f as File).name);
+    expect(names).toEqual(["p0.jpg", "p1.jpg", "added.jpg"]);
   });
 
   it("shows guidance when nothing was shared", async () => {
