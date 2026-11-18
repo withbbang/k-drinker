@@ -24,6 +24,8 @@ import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import com.kdrinker.post.service.PostActionService;
+import com.kdrinker.post.service.PostQueryService;
 import com.kdrinker.publish.ConfirmResult;
 import com.kdrinker.publish.PublishService;
 import com.kdrinker.telegram.dto.CallbackQuery;
@@ -67,8 +69,12 @@ class CallbackHandlerTest {
 		notifier = mock(PostNotifier.class);
 		photoStorage = mock(PhotoStorage.class);
 		when(client.isOwnerChat(OWNER)).thenReturn(true);
-		handler = new CallbackHandler(client, sender, postRepository, photoRepository, publishService,
-				analysisService, notifier, photoStorage, Runnable::run, CLOCK, "https://k.example/", mock(org.springframework.transaction.PlatformTransactionManager.class));
+		// cancel·retry는 실제 PostActionService를 거친다(저장소·게시·분석은 목).
+		PostActionService actions = new PostActionService(postRepository, publishService, analysisService,
+				Runnable::run, mock(PostQueryService.class), CLOCK,
+				mock(org.springframework.transaction.PlatformTransactionManager.class));
+		handler = new CallbackHandler(client, sender, postRepository, photoRepository, publishService, actions,
+				notifier, photoStorage, "https://k.example/");
 	}
 
 	private Post post(PostStatus status, int version, PostStatus failedStage) {

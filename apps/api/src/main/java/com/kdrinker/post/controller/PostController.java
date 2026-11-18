@@ -2,9 +2,11 @@ package com.kdrinker.post.controller;
 
 import com.kdrinker.common.ApiResponse;
 import com.kdrinker.common.PageResponse;
+import com.kdrinker.post.dto.PostActionRequest;
 import com.kdrinker.post.dto.PostDetailResponse;
 import com.kdrinker.post.dto.PostSummaryResponse;
 import com.kdrinker.post.dto.PostUpdateRequest;
+import com.kdrinker.post.service.PostActionService;
 import com.kdrinker.post.service.PostEditService;
 import com.kdrinker.post.service.PostQueryService;
 import jakarta.validation.Valid;
@@ -40,6 +42,7 @@ public class PostController {
 	private final PostIntakeService postIntakeService;
 	private final PostQueryService postQueryService;
 	private final PostEditService postEditService;
+	private final PostActionService postActionService;
 
 	@GetMapping
 	public ApiResponse<PageResponse<PostSummaryResponse>> list(
@@ -58,6 +61,27 @@ public class PostController {
 	public ApiResponse<PostDetailResponse> update(@PathVariable("id") Long id,
 			@Valid @RequestBody PostUpdateRequest request) {
 		return ApiResponse.success(postEditService.update(id, request));
+	}
+
+	/** 웹 [확인]. 웹 담당 검토 대기 게시물의 게시를 시작하고 갱신된 상세를 돌려준다. */
+	@PostMapping("/{id}/confirm")
+	public ApiResponse<PostDetailResponse> confirm(@PathVariable("id") Long id,
+			@Valid @RequestBody PostActionRequest request) {
+		return ApiResponse.success(postActionService.confirmFromWeb(id, request.version()));
+	}
+
+	/** 웹 [취소]. 웹 담당 검토 대기 게시물을 취소한다. */
+	@PostMapping("/{id}/cancel")
+	public ApiResponse<PostDetailResponse> cancel(@PathVariable("id") Long id,
+			@Valid @RequestBody PostActionRequest request) {
+		return ApiResponse.success(postActionService.cancelFromWeb(id, request.version()));
+	}
+
+	/** 웹 [재시도]. 웹 담당 실패 게시물을 실패 단계부터 다시 시도한다. */
+	@PostMapping("/{id}/retry")
+	public ApiResponse<PostDetailResponse> retry(@PathVariable("id") Long id,
+			@Valid @RequestBody PostActionRequest request) {
+		return ApiResponse.success(postActionService.retryFromWeb(id, request.version()));
 	}
 
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

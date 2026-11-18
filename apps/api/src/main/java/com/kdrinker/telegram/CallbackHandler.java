@@ -1,7 +1,5 @@
 package com.kdrinker.telegram;
 
-import com.kdrinker.analysis.AnalysisExecutorConfig;
-import com.kdrinker.analysis.AnalysisService;
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostChannel;
@@ -9,21 +7,17 @@ import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import com.kdrinker.post.service.PostActionService;
 import com.kdrinker.publish.ConfirmResult;
 import com.kdrinker.publish.PublishService;
 import com.kdrinker.telegram.dto.CallbackQuery;
 import com.kdrinker.telegram.entity.NotificationKind;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 소유자 chat의 인라인 버튼 콜백을 처리한다. 폴러 스레드에서 불리며 텔레그램 HTTP 호출을 트랜잭션 밖에서 한다.
@@ -44,30 +38,22 @@ public class CallbackHandler implements CallbackSink {
 	private final PostRepository postRepository;
 	private final PostPhotoRepository photoRepository;
 	private final PublishService publishService;
-	private final AnalysisService analysisService;
+	private final PostActionService postActionService;
 	private final PostNotifier notifier;
 	private final PhotoStorage photoStorage;
-	private final Executor analysisExecutor;
-	private final Clock clock;
 	private final String publicBaseUrl;
-	private final TransactionTemplate tx;
 
 	public CallbackHandler(TelegramClient client, TelegramSender sender, PostRepository postRepository,
-			PostPhotoRepository photoRepository, PublishService publishService, AnalysisService analysisService,
-			PostNotifier notifier, PhotoStorage photoStorage,
-			@Qualifier(AnalysisExecutorConfig.EXECUTOR) Executor analysisExecutor, Clock clock,
-			@Value("${app.public-base-url}") String publicBaseUrl, PlatformTransactionManager transactionManager) {
+			PostPhotoRepository photoRepository, PublishService publishService, PostActionService postActionService,
+			PostNotifier notifier, PhotoStorage photoStorage, @Value("${app.public-base-url}") String publicBaseUrl) {
 		this.client = client;
 		this.sender = sender;
 		this.postRepository = postRepository;
 		this.photoRepository = photoRepository;
 		this.publishService = publishService;
-		this.analysisService = analysisService;
+		this.postActionService = postActionService;
 		this.notifier = notifier;
 		this.photoStorage = photoStorage;
-		this.analysisExecutor = analysisExecutor;
-		this.clock = clock;
-		this.tx = new TransactionTemplate(transactionManager);
 		this.publicBaseUrl = publicBaseUrl.endsWith("/") ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
 				: publicBaseUrl;
 	}
@@ -142,10 +128,8 @@ public class CallbackHandler implements CallbackSink {
 		if (post.getStatus() != PostStatus.PENDING_REVIEW) {
 			return stale();
 		}
-		// 갱신 쿼리는 트랜잭션이 필요하다. 알림(HTTP)은 트랜잭션 밖에서 보낸다.
-		Integer updated = tx.execute(status -> postRepository.transition(data.postId(), PostStatus.PENDING_REVIEW,
-				PostStatus.CANCELED, data.version(), clock.instant()));
-		if (updated == null || updated == 0) {
+		// 전이는 서비스가 자기 트랜잭션에서 한다. 알림(HTTP)은 트랜잭션 밖에서 보낸다.
+		if (postActionService.cancel(data.postId(), data.version()) != ConfirmResult.STARTED) {
 			return stale();
 		}
 		notifier.notifyCanceled(data.postId());
@@ -183,23 +167,18 @@ public class CallbackHandler implements CallbackSink {
 			return stale();
 		}
 		Long id = data.postId();
-		if (post.getFailedStage() == PostStatus.ANALYZING) {
-			// analyze가 조건부 전이로 경합을 막는다. 분석 실행기에서 트랜잭션 밖으로 돈다.
-			analysisExecutor.execute(() -> analysisService.analyze(id, PostStatus.FAILED));
-			return new Outcome(MessageFormatter.accepted("retry"), true);
-		}
-		if (post.getFailedStage() == PostStatus.PUBLISHING) {
-			ConfirmResult result = publishService.retry(id, data.version());
-			if (result == ConfirmResult.STALE) {
-				return stale();
+		ConfirmResult result = postActionService.retry(id, data.version());
+		return switch (result) {
+			case STARTED -> {
+				// 게시 단계 재시도만 "게시 중" 알림을 보낸다. 재분석은 팝업만 띄운다.
+				if (post.getFailedStage() == PostStatus.PUBLISHING) {
+					notifier.notifyPublishing(id);
+				}
+				yield new Outcome(MessageFormatter.accepted("retry"), true);
 			}
-			if (result == ConfirmResult.STARTED) {
-				notifier.notifyPublishing(id);
-				return new Outcome(MessageFormatter.accepted("retry"), true);
-			}
-			return new Outcome(null, true);
-		}
-		return stale();
+			case CAPTION_TOO_LONG -> new Outcome(null, true);
+			case STALE -> stale();
+		};
 	}
 
 	private static Outcome stale() {

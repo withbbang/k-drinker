@@ -16,6 +16,8 @@ import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
 import com.kdrinker.common.PageResponse;
 import com.kdrinker.post.dto.PostSummaryResponse;
+import com.kdrinker.post.dto.PostDetailResponse;
+import com.kdrinker.post.service.PostActionService;
 import com.kdrinker.post.service.PostEditService;
 import com.kdrinker.post.service.PostIntakeService;
 import com.kdrinker.post.service.PostQueryService;
@@ -36,6 +38,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 @WebMvcTest(PostController.class)
 @Import(GlobalExceptionHandler.class)
@@ -52,6 +55,9 @@ class PostControllerTest {
 
 	@MockitoBean
 	private PostEditService postEditService;
+
+	@MockitoBean
+	private PostActionService postActionService;
 
 	private ResultActions post(int photos, String rating) throws Exception {
 		MockMultipartHttpServletRequestBuilder request = multipart("/api/v1/posts");
@@ -173,5 +179,59 @@ class PostControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
 		verifyNoInteractions(postEditService);
+	}
+
+	private static PostDetailResponse detailWithStatus(String status) {
+		return new PostDetailResponse(5L, status, 3, false, null, null, null, null, null, null, null, "", "", "",
+				false, 0, List.of(), null, "WEB");
+	}
+
+	@Test
+	void 확인_취소_재시도는_200과_바뀐_상태를_돌려준다() throws Exception {
+		// given
+		when(postActionService.confirmFromWeb(5L, 2)).thenReturn(detailWithStatus("PUBLISHING"));
+		when(postActionService.cancelFromWeb(5L, 2)).thenReturn(detailWithStatus("CANCELED"));
+		when(postActionService.retryFromWeb(5L, 2)).thenReturn(detailWithStatus("ANALYZING"));
+		String body = "{\"version\": 2}";
+
+		// when / then
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/confirm").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.status").value("PUBLISHING"));
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/cancel").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("CANCELED"));
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/retry").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("ANALYZING"));
+	}
+
+	@Test
+	void 동작_요청에_version이_없으면_400이다() throws Exception {
+		// when / then
+		for (String action : List.of("confirm", "cancel", "retry")) {
+			mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/" + action).contentType(MediaType.APPLICATION_JSON).content("{}"))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+		}
+		verifyNoInteractions(postActionService);
+	}
+
+	@Test
+	void 동작_서비스의_409를_그대로_전달한다() throws Exception {
+		// given
+		when(postActionService.confirmFromWeb(5L, 2)).thenThrow(new BusinessException(ErrorCode.POST_NOT_EDITABLE));
+		when(postActionService.cancelFromWeb(5L, 2))
+			.thenThrow(new BusinessException(ErrorCode.POST_VERSION_CONFLICT));
+		String body = "{\"version\": 2}";
+
+		// when / then
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/confirm").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code").value("POST_NOT_EDITABLE"));
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/cancel").contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code").value("POST_VERSION_CONFLICT"));
 	}
 }
