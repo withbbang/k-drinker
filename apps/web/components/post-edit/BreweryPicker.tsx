@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { SearchCombobox } from "@/components/post-edit/SearchCombobox";
 import { useBrewerySearch } from "@/hooks/use-brewery-search";
 import type { BreweryResponse } from "@/types/api/brewery";
 
@@ -53,30 +54,17 @@ export function BreweryPicker({
           ? `선택한 양조장: ${brewery.name}`
           : "정해진 양조장이 없습니다."}
       </p>
-      <label className="flex flex-col gap-1">
-        <span className="text-sm">양조장 검색</span>
-        <input
-          type="search"
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          className={INPUT}
-        />
-      </label>
-      {search.data && (
-        <ul className="flex flex-col gap-1">
-          {search.data.items.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-left text-sm"
-                onClick={() => onPick(item)}
-              >
-                {item.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <SearchCombobox
+        label="양조장 검색"
+        items={search.data?.items ?? []}
+        getKey={(item) => item.id}
+        renderItem={(item) => item.name}
+        selectedKey={brewery?.id ?? null}
+        onPick={onPick}
+        query={q}
+        onQueryChange={setQ}
+        inputClassName={INPUT}
+      />
       {brewery && (
         <>
           {FIELD_LABELS.map(([key, label]) => (

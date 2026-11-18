@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -42,6 +43,7 @@ type EditorProps = {
 };
 
 function Editor({ post, onSave }: EditorProps) {
+  const router = useRouter();
   const [drink, setDrink] = useState<DrinkChoice>({
     drinkId: post.drinkId,
     drinkName: post.drinkName,
@@ -86,28 +88,33 @@ function Editor({ post, onSave }: EditorProps) {
     const changed = (Object.keys(fields) as (keyof BreweryFields)[]).some(
       (key) => orNull(fields[key]) !== orNull(original[key]),
     );
-    onSave.mutate({
-      version: post.version,
-      drinkId: newName === "" ? drink.drinkId : null,
-      newDrinkName: newName === "" ? null : newName,
-      breweryId: hasDrink ? (picked?.id ?? null) : null,
-      breweryEdit:
-        hasDrink && base && changed
-          ? {
-              name: base.name,
-              address: orNull(fields.address),
-              phone: orNull(fields.phone),
-              homepage: orNull(fields.homepage),
-              instagramHandle: orNull(fields.instagramHandle),
-              otherSns: orNull(fields.otherSns),
-            }
-          : null,
-      rating,
-      memo,
-      captionHead,
-      captionTail,
-      photos: photos.map(({ id, fitMode }) => ({ id, fitMode })),
-    });
+    // 저장하면 새 버전으로 Editor가 다시 만들어지므로 mutate 콜백 대신 Promise로 이동한다.
+    onSave
+      .mutateAsync({
+        version: post.version,
+        drinkId: newName === "" ? drink.drinkId : null,
+        newDrinkName: newName === "" ? null : newName,
+        breweryId: hasDrink ? (picked?.id ?? null) : null,
+        breweryEdit:
+          hasDrink && base && changed
+            ? {
+                name: base.name,
+                address: orNull(fields.address),
+                phone: orNull(fields.phone),
+                homepage: orNull(fields.homepage),
+                instagramHandle: orNull(fields.instagramHandle),
+                otherSns: orNull(fields.otherSns),
+              }
+            : null,
+        rating,
+        memo,
+        captionHead,
+        captionTail,
+        photos: photos.map(({ id, fitMode }) => ({ id, fitMode })),
+      })
+      .then(() => router.push(`/posts/${post.id}`))
+      // 실패는 onSave.isError로 아래에 표시한다.
+      .catch(() => undefined);
   };
 
   return (
@@ -170,9 +177,6 @@ function Editor({ post, onSave }: EditorProps) {
       >
         저장
       </button>
-      {onSave.isSuccess && (
-        <p role="status">저장했습니다. 텔레그램으로 새 개요를 보내 드립니다.</p>
-      )}
       {onSave.isError && (
         <p role="alert" className="text-sm text-red-700">
           {onSave.error instanceof ApiError

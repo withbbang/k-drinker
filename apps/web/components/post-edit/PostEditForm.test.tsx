@@ -7,11 +7,14 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { ApiError } from "@/lib/api";
 import type { PostDetailResponse } from "@/types/api/post";
 
-const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
+const { apiFetchMock, pushMock } = vi.hoisted(() => ({
+  apiFetchMock: vi.fn(),
+  pushMock: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/posts/7/edit",
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: pushMock }),
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/api", async (importOriginal) => ({
@@ -80,7 +83,10 @@ function putBody() {
 }
 
 describe("PostEditForm", () => {
-  beforeEach(() => apiFetchMock.mockReset());
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+    pushMock.mockReset();
+  });
 
   it("fills the form from the post", async () => {
     setup(post());
@@ -112,11 +118,8 @@ describe("PostEditForm", () => {
     expect(body.newDrinkName).toBeNull();
     expect(body.breweryId).toBeNull();
     expect(body.breweryEdit).toBeNull();
-    expect(
-      await screen.findByText(
-        "저장했습니다. 텔레그램으로 새 개요를 보내 드립니다.",
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/posts/7"));
+    expect(screen.queryByText(/텔레그램으로 새 개요/)).toBeNull();
   });
 
   it("sends brewery edit only when a field changed", async () => {
@@ -231,7 +234,7 @@ describe("PostEditForm", () => {
     await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
     await userEvent.type(screen.getByLabelText("양조장 검색"), "배");
     await userEvent.click(
-      await screen.findByRole("button", { name: "배상면주가" }),
+      await screen.findByRole("option", { name: "배상면주가" }),
     );
     await userEvent.type(screen.getByLabelText("전화"), "9");
     await userEvent.clear(screen.getByLabelText("새 이름으로"));
@@ -246,9 +249,7 @@ describe("PostEditForm", () => {
     setupSearch(post());
     await userEvent.click(await screen.findByRole("button", { name: "저장" }));
     await waitFor(() => expect(putBodies()).toHaveLength(1));
-    await waitFor(() =>
-      expect(screen.getByText(/저장했습니다/)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/posts/7"));
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
     await waitFor(() => expect(putBodies()).toHaveLength(2));
     expect(putBodies().map((b) => b.version)).toEqual([4, 5]);
@@ -258,7 +259,7 @@ describe("PostEditForm", () => {
     setupSearch(post());
     await userEvent.type(await screen.findByLabelText("양조장 검색"), "배");
     await userEvent.click(
-      await screen.findByRole("button", { name: "배상면주가" }),
+      await screen.findByRole("option", { name: "배상면주가" }),
     );
     expect(screen.getByLabelText("주소")).toHaveValue("경기");
     expect(screen.getByLabelText("전화")).toHaveValue("031-1");
@@ -280,7 +281,7 @@ describe("PostEditForm", () => {
   it("sends drinkId of a searched drink without newDrinkName", async () => {
     setupSearch(post());
     await userEvent.type(await screen.findByLabelText("술 검색"), "청");
-    await userEvent.click(await screen.findByRole("button", { name: /청주/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => expect(putBodies()).toHaveLength(1));
@@ -291,7 +292,7 @@ describe("PostEditForm", () => {
   it("shows the picked drink's brewery and bases brewery edit on it", async () => {
     setupSearch(post());
     await userEvent.type(await screen.findByLabelText("술 검색"), "청");
-    await userEvent.click(await screen.findByRole("button", { name: /청주/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
 
     expect(
       await screen.findByText("선택한 양조장: 배상면주가"),
@@ -316,7 +317,7 @@ describe("PostEditForm", () => {
   it("shows no brewery after picking a drink without one", async () => {
     setupSearch(post());
     await userEvent.type(await screen.findByLabelText("술 검색"), "탁");
-    await userEvent.click(await screen.findByRole("button", { name: "탁주" }));
+    await userEvent.click(await screen.findByRole("option", { name: "탁주" }));
 
     expect(
       await screen.findByText("정해진 양조장이 없습니다."),

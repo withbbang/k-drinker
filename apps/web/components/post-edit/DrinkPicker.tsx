@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { SearchCombobox } from "@/components/post-edit/SearchCombobox";
 import { useDrinkSearch } from "@/hooks/use-drink-search";
 
 export type DrinkChoice = {
@@ -34,38 +35,26 @@ export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
             ? `선택한 술: ${value.drinkName}`
             : "정해진 술이 없습니다."}
       </p>
-      <label className="flex flex-col gap-1">
-        <span className="text-sm">술 검색</span>
-        <input
-          type="search"
-          value={q}
-          onChange={(event) => setQ(event.target.value)}
-          className={INPUT}
-        />
-      </label>
-      {search.data && (
-        <ul className="flex flex-col gap-1">
-          {search.data.map((drink) => (
-            <li key={drink.id}>
-              <button
-                type="button"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-left text-sm"
-                onClick={() =>
-                  onChange({
-                    drinkId: drink.id,
-                    drinkName: drink.name,
-                    breweryId: drink.breweryId,
-                    newDrinkName: "",
-                  })
-                }
-              >
-                {drink.name}
-                {drink.breweryName ? ` · ${drink.breweryName}` : ""}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <SearchCombobox
+        label="술 검색"
+        items={search.data ?? []}
+        getKey={(drink) => drink.id}
+        renderItem={(drink) =>
+          `${drink.name}${drink.breweryName ? ` · ${drink.breweryName}` : ""}`
+        }
+        selectedKey={value.newDrinkName.trim() === "" ? value.drinkId : null}
+        onPick={(drink) =>
+          onChange({
+            drinkId: drink.id,
+            drinkName: drink.name,
+            breweryId: drink.breweryId,
+            newDrinkName: "",
+          })
+        }
+        query={q}
+        onQueryChange={setQ}
+        inputClassName={INPUT}
+      />
       <label className="flex flex-col gap-1">
         <span className="text-sm">새 이름으로</span>
         <input
