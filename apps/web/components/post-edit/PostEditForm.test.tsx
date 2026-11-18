@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PostEditForm } from "@/components/post-edit/PostEditForm";
 import { QueryProvider } from "@/components/providers/QueryProvider";
@@ -86,6 +86,12 @@ describe("PostEditForm", () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     pushMock.mockReset();
+    // 사진 버튼 애니메이션 없이 onChange가 즉시 호출되게 한다
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("fills the form from the post", async () => {
