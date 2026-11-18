@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import {
   BreweryPicker,
@@ -11,10 +11,19 @@ import {
   DrinkPicker,
   type DrinkChoice,
 } from "@/components/post-edit/DrinkPicker";
+import {
+  fromSaved,
+  newItems,
+  toUpdatePhotos,
+  type PhotoItem,
+} from "@/components/post-edit/photo-items";
 import { PhotoOrderList } from "@/components/post-edit/PhotoOrderList";
+import { overflowMessage } from "@/components/ui/AddPhotoTile";
 import { RatingInput } from "@/components/ui/RatingInput";
+import { UndoRedoBar } from "@/components/ui/UndoRedoBar";
 import { useBrewery } from "@/hooks/use-breweries";
 import { usePost } from "@/hooks/use-post";
+import { useUndoable } from "@/hooks/use-undoable";
 import { useUpdatePost } from "@/hooks/use-update-post";
 import { ApiError } from "@/lib/api";
 import type { BreweryResponse } from "@/types/api/brewery";
@@ -36,6 +45,9 @@ function fieldsOf(brewery: BreweryResponse | null): BreweryFields {
 }
 
 const orNull = (value: string) => (value.trim() === "" ? null : value.trim());
+
+// 되돌리기 기록에 남기는 값. 글자 칸은 넣지 않는다.
+type EditState = { photos: PhotoItem[]; rating: number | null };
 
 type EditorProps = {
   post: PostDetailResponse;
@@ -66,13 +78,33 @@ function Editor({ post, onSave }: EditorProps) {
   });
   const baseId = base?.id ?? null;
   const fields = edits.breweryId === baseId ? edits.fields : fieldsOf(base);
-  const [rating, setRating] = useState(post.rating);
   const [memo, setMemo] = useState(post.memo ?? "");
   const [captionHead, setCaptionHead] = useState(post.captionHead ?? "");
   const [captionTail, setCaptionTail] = useState(post.captionTail ?? "");
-  const [photos, setPhotos] = useState(post.photos);
+  const { state, set, undo, redo, canUndo, canRedo } = useUndoable<EditState>({
+    photos: fromSaved(post.photos),
+    rating: post.rating,
+  });
+  const { photos, rating } = state;
+  // 새 사진 키 순번. 되돌려도 다시 쓰지 않아 키가 겹치지 않는다.
+  const seq = useRef(0);
+  const [notice, setNotice] = useState<string | null>(null);
   // 사진 애니메이션 중에는 변경이 아직 photos에 반영되지 않았으므로 저장을 막는다.
   const [photosBusy, setPhotosBusy] = useState(false);
+
+  const change = (next: (prev: EditState) => EditState) => {
+    setNotice(null);
+    set(next);
+  };
+
+  const addPhotos = (files: File[]) => {
+    const start = seq.current;
+    seq.current += files.length;
+    change((prev) => ({
+      ...prev,
+      photos: [...prev.photos, ...newItems(files, start)],
+    }));
+  };
 
   const hasDrink = drink.drinkId !== null || newName !== "";
 
@@ -91,29 +123,34 @@ function Editor({ post, onSave }: EditorProps) {
     const changed = (Object.keys(fields) as (keyof BreweryFields)[]).some(
       (key) => orNull(fields[key]) !== orNull(original[key]),
     );
+    const { photos: photoEdits, newPhotos } = toUpdatePhotos(photos);
     // 저장하면 새 버전으로 Editor가 다시 만들어지므로 mutate 콜백 대신 Promise로 이동한다.
+    // 실패하면 사진·기록을 그대로 두어 다시 저장하거나 되돌릴 수 있다.
     onSave
       .mutateAsync({
-        version: post.version,
-        drinkId: newName === "" ? drink.drinkId : null,
-        newDrinkName: newName === "" ? null : newName,
-        breweryId: hasDrink ? (picked?.id ?? null) : null,
-        breweryEdit:
-          hasDrink && base && changed
-            ? {
-                name: base.name,
-                address: orNull(fields.address),
-                phone: orNull(fields.phone),
-                homepage: orNull(fields.homepage),
-                instagramHandle: orNull(fields.instagramHandle),
-                otherSns: orNull(fields.otherSns),
-              }
-            : null,
-        rating,
-        memo,
-        captionHead,
-        captionTail,
-        photos: photos.map(({ id, fitMode }) => ({ id, fitMode })),
+        request: {
+          version: post.version,
+          drinkId: newName === "" ? drink.drinkId : null,
+          newDrinkName: newName === "" ? null : newName,
+          breweryId: hasDrink ? (picked?.id ?? null) : null,
+          breweryEdit:
+            hasDrink && base && changed
+              ? {
+                  name: base.name,
+                  address: orNull(fields.address),
+                  phone: orNull(fields.phone),
+                  homepage: orNull(fields.homepage),
+                  instagramHandle: orNull(fields.instagramHandle),
+                  otherSns: orNull(fields.otherSns),
+                }
+              : null,
+          rating,
+          memo,
+          captionHead,
+          captionTail,
+          photos: photoEdits,
+        },
+        newPhotos,
       })
       .then(() => router.push(`/posts/${post.id}`))
       // 실패는 onSave.isError로 아래에 표시한다.
@@ -130,7 +167,10 @@ function Editor({ post, onSave }: EditorProps) {
         onPick={setPicked}
         onFieldsChange={handleFieldsChange}
       />
-      <RatingInput value={rating} onChange={setRating} />
+      <RatingInput
+        value={rating}
+        onChange={(value) => change((prev) => ({ ...prev, rating: value }))}
+      />
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium">메모</span>
         <input
@@ -168,12 +208,32 @@ function Editor({ post, onSave }: EditorProps) {
       <p className="text-sm text-neutral-700">
         캡션 {post.captionLength.toLocaleString("ko-KR")}자 / 2,200자
       </p>
+      <UndoRedoBar
+        canUndo={canUndo}
+        canRedo={canRedo}
+        disabled={photosBusy || onSave.isPending}
+        onUndo={() => {
+          setNotice(null);
+          undo();
+        }}
+        onRedo={() => {
+          setNotice(null);
+          redo();
+        }}
+      />
       <PhotoOrderList
         photos={photos}
         version={post.version}
-        onChange={setPhotos}
+        onChange={(next) => change((prev) => ({ ...prev, photos: next }))}
         onBusyChange={setPhotosBusy}
+        onAdd={addPhotos}
+        onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
       />
+      {notice !== null && (
+        <p role="status" className="text-sm text-neutral-700">
+          {notice}
+        </p>
+      )}
       <button
         type="submit"
         disabled={onSave.isPending || photosBusy}

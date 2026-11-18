@@ -53,10 +53,9 @@ export type PostDetailResponse = {
   retryable: boolean;
 };
 
-export type PhotoEdit = {
-  id: number;
-  fitMode: FitMode;
-};
+// 저장된 사진은 id로, 새 사진은 newPhotos 파트 순서(newIndex)로 가리킨다.
+export type PhotoEdit =
+  { id: number; fitMode: FitMode } | { newIndex: number; fitMode: FitMode };
 
 export type PostUpdateRequest = {
   version: number;

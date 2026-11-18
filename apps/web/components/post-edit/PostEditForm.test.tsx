@@ -1,4 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,11 +83,36 @@ function setup(detail: PostDetailResponse) {
   );
 }
 
-function putBody() {
-  const call = apiFetchMock.mock.calls.find(
-    ([, init]) => init?.method === "PUT",
+function putCalls(): FormData[] {
+  return apiFetchMock.mock.calls
+    .filter(([, init]) => init?.method === "PUT")
+    .map(([, init]) => init.body as FormData);
+}
+
+// multipart의 request 파트(JSON)를 읽는다.
+async function requestOf(form: FormData) {
+  return JSON.parse(await (form.get("request") as Blob).text());
+}
+
+async function putBody() {
+  const [form] = putCalls();
+  if (!form) throw new Error("PUT 호출 없음");
+  return requestOf(form);
+}
+
+const photoFile = (name: string) =>
+  new File(["x"], name, { type: "image/jpeg" });
+
+async function addPhoto(file: File) {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+  await userEvent.upload(input, file);
+}
+
+async function confirmDelete(index: number) {
+  await userEvent.click(
+    (await screen.findAllByRole("button", { name: "삭제" }))[index],
   );
-  return JSON.parse(call![1].body as string);
+  await userEvent.click(screen.getByRole("button", { name: "빼기" }));
 }
 
 describe("PostEditForm", () => {
@@ -90,6 +121,8 @@ describe("PostEditForm", () => {
     pushMock.mockReset();
     // 사진 버튼 애니메이션 없이 onChange가 즉시 호출되게 한다
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    URL.createObjectURL = vi.fn((file: Blob) => `blob:${(file as File).name}`);
+    URL.revokeObjectURL = vi.fn();
   });
 
   afterEach(() => {
@@ -114,8 +147,8 @@ describe("PostEditForm", () => {
     await userEvent.type(screen.getByLabelText("캡션 머리"), "새 머리");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBody().version).toBe(4));
-    const body = putBody();
+    await waitFor(async () => expect((await putBody()).version).toBe(4));
+    const body = await putBody();
     expect(body.photos).toEqual([
       { id: 2, fitMode: "CROP" },
       { id: 1, fitMode: "CROP" },
@@ -134,9 +167,7 @@ describe("PostEditForm", () => {
     // 애니메이션을 켠다(모션 감소 아님)
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     setup(post());
-    await userEvent.click(
-      (await screen.findAllByRole("button", { name: "삭제" }))[0],
-    );
+    await confirmDelete(0);
 
     expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
     await waitFor(() =>
@@ -144,8 +175,8 @@ describe("PostEditForm", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() =>
-      expect(putBody().photos).toEqual([{ id: 2, fitMode: "CROP" }]),
+    await waitFor(async () =>
+      expect((await putBody()).photos).toEqual([{ id: 2, fitMode: "CROP" }]),
     );
   });
 
@@ -154,8 +185,10 @@ describe("PostEditForm", () => {
     await userEvent.type(await screen.findByLabelText("전화"), "02-123");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBody().breweryEdit).not.toBeNull());
-    expect(putBody().breweryEdit).toEqual({
+    await waitFor(async () =>
+      expect((await putBody()).breweryEdit).not.toBeNull(),
+    );
+    expect((await putBody()).breweryEdit).toEqual({
       name: "국순당",
       address: "서울",
       phone: "02-123",
@@ -197,8 +230,10 @@ describe("PostEditForm", () => {
     await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBody().newDrinkName).toBe("새 술"));
-    expect(putBody().drinkId).toBeNull();
+    await waitFor(async () =>
+      expect((await putBody()).newDrinkName).toBe("새 술"),
+    );
+    expect((await putBody()).drinkId).toBeNull();
   });
 
   it("disables brewery editing until a drink is chosen", async () => {
@@ -251,9 +286,7 @@ describe("PostEditForm", () => {
   }
 
   function putBodies() {
-    return apiFetchMock.mock.calls
-      .filter(([, init]) => init?.method === "PUT")
-      .map(([, init]) => JSON.parse(init.body as string));
+    return Promise.all(putCalls().map(requestOf));
   }
 
   it("does not send breweryId or breweryEdit after clearing the drink", async () => {
@@ -267,19 +300,19 @@ describe("PostEditForm", () => {
     await userEvent.clear(screen.getByLabelText("새 이름으로"));
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBodies()).toHaveLength(1));
-    expect(putBodies()[0].breweryId).toBeNull();
-    expect(putBodies()[0].breweryEdit).toBeNull();
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBodies())[0].breweryId).toBeNull();
+    expect((await putBodies())[0].breweryEdit).toBeNull();
   });
 
   it("uses the version from the previous save response", async () => {
     setupSearch(post());
     await userEvent.click(await screen.findByRole("button", { name: "저장" }));
-    await waitFor(() => expect(putBodies()).toHaveLength(1));
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/posts/7"));
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
-    await waitFor(() => expect(putBodies()).toHaveLength(2));
-    expect(putBodies().map((b) => b.version)).toEqual([4, 5]);
+    await waitFor(() => expect(putCalls()).toHaveLength(2));
+    expect((await putBodies()).map((b) => b.version)).toEqual([4, 5]);
   });
 
   it("bases brewery edit on the newly picked brewery", async () => {
@@ -293,9 +326,9 @@ describe("PostEditForm", () => {
     await userEvent.type(screen.getByLabelText("홈페이지"), "x.kr");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBodies()).toHaveLength(1));
-    expect(putBodies()[0].breweryId).toBe(6);
-    expect(putBodies()[0].breweryEdit).toEqual({
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBodies())[0].breweryId).toBe(6);
+    expect((await putBodies())[0].breweryEdit).toEqual({
       name: "배상면주가",
       address: "경기",
       phone: "031-1",
@@ -311,9 +344,9 @@ describe("PostEditForm", () => {
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBodies()).toHaveLength(1));
-    expect(putBodies()[0].drinkId).toBe(11);
-    expect(putBodies()[0].newDrinkName).toBeNull();
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBodies())[0].drinkId).toBe(11);
+    expect((await putBodies())[0].newDrinkName).toBeNull();
   });
 
   it("shows the picked drink's brewery and bases brewery edit on it", async () => {
@@ -328,10 +361,10 @@ describe("PostEditForm", () => {
     await userEvent.type(screen.getByLabelText("홈페이지"), "x.kr");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBodies()).toHaveLength(1));
-    expect(putBodies()[0].drinkId).toBe(11);
-    expect(putBodies()[0].breweryId).toBeNull();
-    expect(putBodies()[0].breweryEdit).toEqual({
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBodies())[0].drinkId).toBe(11);
+    expect((await putBodies())[0].breweryId).toBeNull();
+    expect((await putBodies())[0].breweryEdit).toEqual({
       name: "배상면주가",
       address: "경기",
       phone: "031-1",
@@ -352,9 +385,9 @@ describe("PostEditForm", () => {
     expect(screen.queryByLabelText("전화")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBodies()).toHaveLength(1));
-    expect(putBodies()[0].drinkId).toBe(12);
-    expect(putBodies()[0].breweryEdit).toBeNull();
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBodies())[0].drinkId).toBe(12);
+    expect((await putBodies())[0].breweryEdit).toBeNull();
   });
 
   it("keeps the current brewery for a new drink name", async () => {
@@ -365,10 +398,12 @@ describe("PostEditForm", () => {
     await userEvent.type(screen.getByLabelText("전화"), "02-9");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
-    await waitFor(() => expect(putBody().newDrinkName).toBe("새 술"));
-    expect(putBody().drinkId).toBeNull();
-    expect(putBody().breweryId).toBeNull();
-    expect(putBody().breweryEdit).toEqual({
+    await waitFor(async () =>
+      expect((await putBody()).newDrinkName).toBe("새 술"),
+    );
+    expect((await putBody()).drinkId).toBeNull();
+    expect((await putBody()).breweryId).toBeNull();
+    expect((await putBody()).breweryEdit).toEqual({
       name: "국순당",
       address: "서울",
       phone: "02-9",
@@ -376,6 +411,115 @@ describe("PostEditForm", () => {
       instagramHandle: null,
       otherSns: null,
     });
+  });
+
+  it("새_사진을_더해_저장하면_multipart로_보낸다", async () => {
+    // given
+    setup(post());
+    await screen.findAllByRole("button", { name: "삭제" });
+    const file = photoFile("new.jpg");
+    await addPhoto(file);
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    // then
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    const form = putCalls()[0];
+    expect(form).toBeInstanceOf(FormData);
+    const [, init] = apiFetchMock.mock.calls.find(
+      ([, i]) => i?.method === "PUT",
+    )!;
+    expect(init.headers).toBeUndefined();
+    expect((form.get("request") as Blob).type).toBe("application/json");
+    expect((await requestOf(form)).photos).toEqual([
+      { id: 1, fitMode: "CROP" },
+      { id: 2, fitMode: "CROP" },
+      { newIndex: 0, fitMode: "CROP" },
+    ]);
+    const files = form.getAll("newPhotos");
+    expect(files).toHaveLength(1);
+    expect((files[0] as File).name).toBe("new.jpg");
+  });
+
+  it("저장_실패해도_새_사진과_되돌리기가_남는다", async () => {
+    // given
+    setup(post());
+    apiFetchMock.mockImplementation(
+      async (_path: string, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          throw new ApiError(
+            "POST_VERSION_CONFLICT",
+            "다른 곳에서 먼저 바뀌었습니다.",
+          );
+        }
+        return post();
+      },
+    );
+    await screen.findAllByRole("button", { name: "삭제" });
+    await addPhoto(photoFile("new.jpg"));
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await screen.findByRole("alert");
+
+    // then
+    expect(screen.getByAltText("사진 3")).toHaveAttribute(
+      "src",
+      "blob:new.jpg",
+    );
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
+
+    // when — 다시 저장
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    // then
+    await waitFor(() => expect(putCalls()).toHaveLength(2));
+    const [first, second] = putCalls();
+    expect(second.get("newPhotos")).toBe(first.get("newPhotos"));
+  });
+
+  it("삭제_뒤_되돌리기면_다시_보인다", async () => {
+    // given
+    setup(post());
+    await confirmDelete(0);
+    expect(screen.getAllByAltText(/^사진 \d$/)).toHaveLength(1);
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    const srcs = screen
+      .getAllByAltText(/^사진 \d$/)
+      .map((img) => img.getAttribute("src"));
+    expect(srcs).toEqual(["/m/1.jpg?v=4", "/m/2.jpg?v=4"]);
+  });
+
+  it("애니메이션_중엔_되돌리기_비활성", async () => {
+    // given — 별점을 바꿔 되돌릴 기록을 만든 뒤 애니메이션을 켠다
+    setup(post());
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "별점" }),
+      "3.0",
+    );
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    vi.useFakeTimers();
+
+    try {
+      // when
+      fireEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
+      fireEvent.click(screen.getByRole("button", { name: "빼기" }));
+
+      // then
+      expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("limits the memo to 2000 characters", async () => {

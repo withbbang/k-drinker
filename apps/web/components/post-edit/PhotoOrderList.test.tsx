@@ -5,24 +5,28 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PhotoOrderList } from "@/components/post-edit/PhotoOrderList";
-import type { PostPhotoResponse } from "@/types/api/post";
+import { fromSaved, type PhotoItem } from "@/components/post-edit/photo-items";
 
-function make(count: number): PostPhotoResponse[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: i + 1,
-    position: i,
-    url: `/media/${i + 1}.jpg`,
-    fitMode: "CROP" as const,
-  }));
+function make(count: number): PhotoItem[] {
+  return fromSaved(
+    Array.from({ length: count }, (_, i) => ({
+      id: i + 1,
+      position: i,
+      url: `/media/${i + 1}.jpg`,
+      fitMode: "CROP" as const,
+    })),
+  );
 }
 
-function Harness({ initial }: { initial: PostPhotoResponse[] }) {
+function Harness({ initial }: { initial: PhotoItem[] }) {
   const [photos, setPhotos] = useState(initial);
   return (
     <>
       <PhotoOrderList photos={photos} version={3} onChange={setPhotos} />
       <output data-testid="order">
-        {photos.map((p) => `${p.id}:${p.fitMode}`).join(",")}
+        {photos
+          .map((p) => `${p.kind === "saved" ? p.id : p.key}:${p.fitMode}`)
+          .join(",")}
       </output>
     </>
   );
@@ -59,6 +63,7 @@ describe("PhotoOrderList", () => {
     mockReducedMotion(true);
     render(<Harness initial={make(2)} />);
     await userEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
+    await userEvent.click(screen.getByRole("button", { name: "빼기" }));
     expect(screen.getByTestId("order")).toHaveTextContent("2:CROP");
     expect(screen.getByRole("button", { name: "삭제" })).toBeDisabled();
   });
@@ -166,6 +171,7 @@ describe("PhotoOrderList", () => {
     mockReducedMotion(false);
     render(<Harness initial={make(2)} />);
     fireEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "빼기" }));
     expect(screen.getByTestId("order")).toHaveTextContent("1:CROP,2:CROP");
     act(() => {
       vi.advanceTimersByTime(250);
@@ -187,6 +193,74 @@ describe("PhotoOrderList", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "아래로" })[0]);
     expect(screen.getByTestId("order")).toHaveTextContent("2:CROP,1:CROP");
     expect(screen.getAllByRole("button", { name: "위로" })[1]).toBeEnabled();
+  });
+
+  it("삭제는_확인해야_한다", async () => {
+    // given
+    mockReducedMotion(true);
+    const onChange = vi.fn();
+    const photos = make(3);
+    render(<PhotoOrderList photos={photos} version={3} onChange={onChange} />);
+
+    // when — 취소하면
+    await userEvent.click(screen.getAllByRole("button", { name: "삭제" })[1]);
+    expect(screen.getByText("이 사진을 뺄까요?")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "취소" }));
+
+    // then
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByText("이 사진을 뺄까요?")).toBeNull();
+
+    // when — 빼기를 누르면
+    await userEvent.click(screen.getAllByRole("button", { name: "삭제" })[1]);
+    await userEvent.click(screen.getByRole("button", { name: "빼기" }));
+
+    // then
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith([photos[0], photos[2]]);
+  });
+
+  it("shows new photos from their files and appends added ones", async () => {
+    // given
+    URL.createObjectURL = vi.fn(() => "blob:new");
+    URL.revokeObjectURL = vi.fn();
+    const onAdd = vi.fn();
+    const added = new File(["x"], "a.jpg", { type: "image/jpeg" });
+    const photos: PhotoItem[] = [
+      ...make(1),
+      { key: "new-0", kind: "new", file: added, fitMode: "CROP" },
+    ];
+    render(
+      <PhotoOrderList
+        photos={photos}
+        version={3}
+        onChange={vi.fn()}
+        onAdd={onAdd}
+        onOverflow={vi.fn()}
+      />,
+    );
+    expect(screen.getByAltText("사진 2")).toHaveAttribute("src", "blob:new");
+
+    // when
+    const input =
+      document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await userEvent.upload(input, added);
+
+    // then
+    expect(onAdd).toHaveBeenCalledWith([added]);
+  });
+
+  it("hides the add tile at 10 photos", () => {
+    render(
+      <PhotoOrderList
+        photos={make(10)}
+        version={3}
+        onChange={vi.fn()}
+        onAdd={vi.fn()}
+        onOverflow={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "사진 추가" })).toBeNull();
   });
 
   it("busts the image cache with the version", () => {
