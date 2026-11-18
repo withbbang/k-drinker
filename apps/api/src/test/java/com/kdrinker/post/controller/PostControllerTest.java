@@ -1,6 +1,9 @@
 package com.kdrinker.post.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -30,6 +33,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import com.kdrinker.post.dto.PostUpdateRequest;
+import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
@@ -171,7 +177,7 @@ class PostControllerTest {
 	}
 
 	private static MockMultipartHttpServletRequestBuilder putMultipart(String url) {
-		return multipart(org.springframework.http.HttpMethod.PUT, url);
+		return multipart(HttpMethod.PUT, url);
 	}
 
 	@Test
@@ -195,7 +201,7 @@ class PostControllerTest {
 				{"version": 3, "captionHead": "훅", "captionTail": "",
 				 "photos": [{"newIndex": 0, "fitMode": "CROP"}, {"id": 1, "fitMode": "CROP"}]}
 				""";
-		when(postEditService.update(eq(1L), any(), org.mockito.ArgumentMatchers.argThat(list -> list.size() == 1)))
+		when(postEditService.update(eq(1L), any(), argThat(list -> list.size() == 1)))
 				.thenReturn(detailWithStatus("PENDING_REVIEW"));
 
 		// when / then
@@ -203,6 +209,10 @@ class PostControllerTest {
 				.file(new MockMultipartFile("newPhotos", "a.jpg", "image/jpeg", new byte[] { 1 })))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"));
+		ArgumentCaptor<PostUpdateRequest> captor = ArgumentCaptor.forClass(PostUpdateRequest.class);
+		verify(postEditService).update(eq(1L), captor.capture(), any());
+		assertThat(captor.getValue().version()).isEqualTo(3);
+		assertThat(captor.getValue().photos().get(0).newIndex()).isEqualTo(0);
 	}
 
 	@Test

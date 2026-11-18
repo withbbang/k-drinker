@@ -48,6 +48,8 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -767,7 +769,7 @@ class PostEditServiceTest {
 	private void assertInvalidAndNothingStaged(List<PhotoEdit> photos, int newCount, ErrorCode expected) {
 		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", photos);
 
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req, java.util.Collections.nCopies(newCount, NEW_PHOTO)));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, Collections.nCopies(newCount, NEW_PHOTO)));
 
 		assertThat(code).isEqualTo(expected);
 		verify(photoStager, never()).stage(any(), anyInt(), any(), any());
@@ -805,10 +807,39 @@ class PostEditServiceTest {
 
 	@Test
 	void 합쳐_11장이면_POST_PHOTO_COUNT() {
-		List<PhotoEdit> edits = new java.util.ArrayList<>(keepPhotos());
+		List<PhotoEdit> edits = new ArrayList<>(keepPhotos());
 		for (int i = 0; i < 9; i++) {
 			edits.add(new PhotoEdit(null, i, FitMode.CROP));
 		}
 		assertInvalidAndNothingStaged(edits, 9, ErrorCode.POST_PHOTO_COUNT);
+	}
+
+	@Test
+	void 전이_충돌로_롤백되면_옮긴_새_사진_파일과_스테이징을_지운다() {
+		// given: 새 사진 1장을 옮긴 뒤 전이가 충돌한다
+		PhotoStager.Staged staged = new PhotoStager.Staged("jpg", "n".repeat(43), FitMode.CROP, "tmp/s/0.jpg",
+				"tmp/s/0.rendered.jpg");
+		when(photoStager.newStagingId()).thenReturn("s");
+		when(photoStager.stage(eq("s"), eq(0), any(), eq(FitMode.CROP))).thenReturn(staged);
+		PostPhoto added = photo(200L, 0, FitMode.CROP);
+		when(photoStager.promote(any(), eq(0), eq(staged), any())).thenAnswer(inv -> {
+			List<String> written = inv.getArgument(3);
+			written.add("original/1/new.jpg");
+			written.add("rendered/new.jpg");
+			return added;
+		});
+		when(postRepository.transition(eq(POST_ID), any(), eq(PostStatus.PENDING_REVIEW), eq(VERSION), any()))
+				.thenReturn(0);
+		PostUpdateRequest req = request(null, null, "훅\n\n★4.0",
+				List.of(new PhotoEdit(null, 0, FitMode.CROP), new PhotoEdit(100L, null, FitMode.CROP)));
+
+		// when
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of(NEW_PHOTO)));
+
+		// then
+		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
+		verify(photoStorage).deleteQuietly("original/1/new.jpg");
+		verify(photoStorage).deleteQuietly("rendered/new.jpg");
+		verify(photoStager).deleteStaging("s");
 	}
 }
