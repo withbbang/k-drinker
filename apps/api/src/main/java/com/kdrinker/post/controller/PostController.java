@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -56,11 +57,14 @@ public class PostController {
 		return ApiResponse.success(postQueryService.detail(id));
 	}
 
-	/** 수정 화면 저장. 저장 뒤 다시 읽은 상세를 돌려준다. */
-	@PutMapping("/{id}")
+	/** 수정 화면 저장(multipart: request JSON + newPhotos 파일). 저장 뒤 다시 읽은 상세를 돌려준다. */
+	@PutMapping(path = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ApiResponse<PostDetailResponse> update(@PathVariable("id") Long id,
-			@Valid @RequestBody PostUpdateRequest request) {
-		return ApiResponse.success(postEditService.update(id, request));
+			@Valid @RequestPart("request") PostUpdateRequest request,
+			@RequestPart(name = "newPhotos", required = false) List<MultipartFile> newPhotos) {
+		List<MultipartFile> files = newPhotos == null ? List.of() : newPhotos;
+		List<PhotoInput> inputs = files.stream().map(PostController::toInput).toList();
+		return ApiResponse.success(postEditService.update(id, request, inputs));
 	}
 
 	/** 웹 [확인]. 웹 담당 검토 대기 게시물의 게시를 시작하고 갱신된 상세를 돌려준다. */

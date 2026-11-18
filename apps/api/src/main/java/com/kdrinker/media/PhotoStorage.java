@@ -27,14 +27,6 @@ public class PhotoStorage {
 
 	private static final Pattern STAGED_NAME = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
 
-	/** DB에 저장하는 원본 상대 경로: original/{postId}/{position}.{jpg|png} */
-	public static String originalPath(Long postId, int position, String format) {
-		if (!"jpg".equals(format) && !"png".equals(format)) {
-			throw new IllegalArgumentException("지원하지 않는 형식");
-		}
-		return "original/" + postId + "/" + position + "." + format;
-	}
-
 	/** DB에 저장하는 원본 상대 경로: original/{postId}/{name}.{jpg|png}. name 은 43자 토큰이라 같은 게시물 안에서도 겹치지 않는다. */
 	public static String originalPath(Long postId, String name, String format) {
 		if (name == null || !TOKEN_PATTERN.matcher(name).matches()) {
@@ -52,11 +44,6 @@ public class PhotoStorage {
 			throw new IllegalArgumentException("토큰 형식이 올바르지 않음");
 		}
 		return "rendered/" + token + ".jpg";
-	}
-
-	/** {MEDIA_DIR}/original/{postId}/{position}.{jpg|png} 에 원본을 쓰고 상대 경로를 돌려준다. */
-	public String saveOriginal(Long postId, int position, String format, byte[] bytes) {
-		return write(originalPath(postId, position, format), bytes);
 	}
 
 	/** {MEDIA_DIR}/rendered/{token}.jpg 에 렌더링 결과를 쓰고(덮어쓰기 가능) 상대 경로를 돌려준다. */

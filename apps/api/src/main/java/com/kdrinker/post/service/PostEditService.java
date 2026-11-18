@@ -32,6 +32,7 @@ import com.kdrinker.post.repository.PostRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,7 @@ public class PostEditService {
 	private final CaptionService captionService;
 	private final PhotoService photoService;
 	private final PhotoStorage photoStorage;
+	private final PhotoStager photoStager;
 	private final PostQueryService postQueryService;
 	private final ApplicationEventPublisher events;
 	private final Clock clock;
@@ -75,7 +77,7 @@ public class PostEditService {
 	public PostEditService(PostRepository postRepository, PostPhotoRepository postPhotoRepository,
 			DrinkRepository drinkRepository, BreweryRepository breweryRepository, BreweryService breweryService,
 			CaptionService captionService, PhotoService photoService, PhotoStorage photoStorage,
-			PostQueryService postQueryService, ApplicationEventPublisher events, Clock clock,
+			PhotoStager photoStager, PostQueryService postQueryService, ApplicationEventPublisher events, Clock clock,
 			PlatformTransactionManager transactionManager) {
 		this.postRepository = postRepository;
 		this.postPhotoRepository = postPhotoRepository;
@@ -85,6 +87,7 @@ public class PostEditService {
 		this.captionService = captionService;
 		this.photoService = photoService;
 		this.photoStorage = photoStorage;
+		this.photoStager = photoStager;
 		this.postQueryService = postQueryService;
 		this.events = events;
 		this.clock = clock;
@@ -96,26 +99,49 @@ public class PostEditService {
 	 *
 	 * @throws IllegalStateException 트랜잭션 안에서 부른 경우(호출 쪽 버그). Claude 호출이 트랜잭션 안에서 일어나게 된다.
 	 */
-	public PostDetailResponse update(Long id, PostUpdateRequest req) {
+	public PostDetailResponse update(Long id, PostUpdateRequest req, List<PhotoInput> newPhotos) {
 		if (TransactionSynchronizationManager.isActualTransactionActive()) {
 			throw new IllegalStateException("update는 트랜잭션 밖에서 불러야 합니다. postId=" + id);
 		}
-		Snapshot snapshot = tx.execute(status -> snapshot(id, req));
-		NewCaption caption = decideCaption(id, req, snapshot);
-		tx.executeWithoutResult(status -> {
-			save(id, req, snapshot, caption);
-			if (postRepository.transition(id, snapshot.status(), PostStatus.PENDING_REVIEW, snapshot.version(),
-					clock.instant()) == 0) {
-				status.setRollbackOnly();
-				throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
+		Snapshot snapshot = tx.execute(status -> snapshot(id, req, newPhotos.size()));
+		String stagingId = null;
+		List<String> written = new ArrayList<>();
+		try {
+			// 새 사진은 트랜잭션 밖에서 읽어 스테이징한다. 하나라도 실패하면 아무것도 저장하지 않는다.
+			Map<Integer, PhotoStager.Staged> staged = new HashMap<>();
+			if (!newPhotos.isEmpty()) {
+				stagingId = photoStager.newStagingId();
+				for (PhotoEdit edit : req.photos()) {
+					if (edit.newIndex() != null) {
+						staged.put(edit.newIndex(),
+								photoStager.stage(stagingId, edit.newIndex(), newPhotos.get(edit.newIndex()), edit.fitMode()));
+					}
+				}
 			}
-			events.publishEvent(new PostEditedEvent(id, snapshot.channel() == PostChannel.TELEGRAM));
-		});
+			NewCaption caption = decideCaption(id, req, snapshot);
+			tx.executeWithoutResult(status -> {
+				photoStager.registerRollbackCleanup(written);
+				save(id, req, snapshot, caption, staged, written);
+				if (postRepository.transition(id, snapshot.status(), PostStatus.PENDING_REVIEW, snapshot.version(),
+						clock.instant()) == 0) {
+					status.setRollbackOnly();
+					throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
+				}
+				events.publishEvent(new PostEditedEvent(id, snapshot.channel() == PostChannel.TELEGRAM));
+			});
+		} catch (RuntimeException e) {
+			written.forEach(photoStorage::deleteQuietly);
+			throw e;
+		} finally {
+			if (stagingId != null) {
+				photoStager.deleteStaging(stagingId);
+			}
+		}
 		return postQueryService.detail(id);
 	}
 
 	/** 1단계: 검증하고 캡션 결정에 필요한 값을 읽어 둔다. 아무것도 고치지 않는다. */
-	private Snapshot snapshot(Long id, PostUpdateRequest req) {
+	private Snapshot snapshot(Long id, PostUpdateRequest req, int newPhotoCount) {
 		Post post = postRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
 		if (!PostQueryService.editable(post)) {
 			throw new BusinessException(ErrorCode.POST_NOT_EDITABLE);
@@ -123,7 +149,7 @@ public class PostEditService {
 		if (post.getVersion() != req.version()) {
 			throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
 		}
-		checkPhotos(req.photos(), postPhotoRepository.findByPostIdOrderByPositionAsc(id));
+		checkPhotos(req.photos(), postPhotoRepository.findByPostIdOrderByPositionAsc(id), newPhotoCount);
 		PostIntakeService.validateMemoAndRating(req.memo(), req.rating());
 		if (req.drinkId() != null && req.newDrinkName() != null) {
 			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -187,17 +213,31 @@ public class PostEditService {
 				post.getCaption() == null || post.getCaption().isBlank());
 	}
 
-	/** 사진이 한 장 이상이고, 모두 이 게시물의 사진이며 겹치지 않아야 한다. */
-	private static void checkPhotos(List<PhotoEdit> edits, List<PostPhoto> existing) {
-		if (edits.isEmpty()) {
+	/**
+	 * 사진은 1~10장이고, 각 항목은 id(이 게시물의 사진, 겹침 없음)와 newIndex(새 파일 순번) 중 정확히 하나를 가진다.
+	 * 새 파일은 하나도 빠짐없이 정확히 한 번씩 가리켜야 한다. 파일을 읽기 전에 끝낸다.
+	 */
+	private static void checkPhotos(List<PhotoEdit> edits, List<PostPhoto> existing, int newPhotoCount) {
+		if (edits.isEmpty() || edits.size() > PostIntakeService.MAX_PHOTOS) {
 			throw new BusinessException(ErrorCode.POST_PHOTO_COUNT);
 		}
 		Set<Long> ids = existing.stream().map(PostPhoto::getId).collect(Collectors.toSet());
-		Set<Long> seen = new HashSet<>();
+		Set<Long> seenIds = new HashSet<>();
+		Set<Integer> seenNew = new HashSet<>();
 		for (PhotoEdit edit : edits) {
-			if (!ids.contains(edit.id()) || !seen.add(edit.id())) {
+			if ((edit.id() == null) == (edit.newIndex() == null)) {
 				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
 			}
+			if (edit.id() != null && (!ids.contains(edit.id()) || !seenIds.add(edit.id()))) {
+				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+			}
+			if (edit.newIndex() != null && (edit.newIndex() < 0 || edit.newIndex() >= newPhotoCount
+					|| !seenNew.add(edit.newIndex()))) {
+				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+			}
+		}
+		if (seenNew.size() != newPhotoCount) {
+			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
 		}
 	}
 
@@ -229,7 +269,8 @@ public class PostEditService {
 	}
 
 	/** 4단계: 전이 전에 고칠 필드를 모두 고친다. 예외가 나면 템플릿이 롤백하고 파일은 그대로다. */
-	private void save(Long id, PostUpdateRequest req, Snapshot snapshot, NewCaption caption) {
+	private void save(Long id, PostUpdateRequest req, Snapshot snapshot, NewCaption caption,
+			Map<Integer, PhotoStager.Staged> staged, List<String> written) {
 		Post post = postRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
 		if (post.getStatus() != snapshot.status() || post.getVersion() != snapshot.version()) {
 			throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
@@ -252,7 +293,7 @@ public class PostEditService {
 			throw new BusinessException(ErrorCode.POST_CAPTION_TOO_LONG);
 		}
 		post.replaceCaption(caption.caption(), caption.hashtags(), caption.edited());
-		applyPhotos(id, req.photos());
+		applyPhotos(post, req.photos(), staged, written);
 		post.clearFailure();
 		// 웹에서 저장한 순간부터 웹 담당이다. 텔레그램 개요 버튼은 커밋 뒤 리스너가 지운다.
 		post.moveToWeb();
@@ -271,12 +312,17 @@ public class PostEditService {
 		return post.getDrink();
 	}
 
-	/** 빠진 사진은 행을 지우고 커밋 뒤 파일을 지운다. 남은 사진은 순서를 다시 매기고, 맞춤 방식이 바뀐 것만 다시 렌더링한다. */
-	private void applyPhotos(Long postId, List<PhotoEdit> edits) {
+	/**
+	 * 빠진 사진은 행을 지우고 커밋 뒤 파일을 지운다. 새 사진은 스테이징 파일을 옮겨 행을 만든다(옮긴 경로는 written에 쌓는다).
+	 * 남은 사진은 순서를 다시 매기고, 맞춤 방식이 바뀐 것만 다시 렌더링한다. 새 사진은 이미 그 방식으로 렌더링돼 있다.
+	 */
+	private void applyPhotos(Post post, List<PhotoEdit> edits, Map<Integer, PhotoStager.Staged> staged,
+			List<String> written) {
+		Long postId = post.getId();
 		List<PostPhoto> existing = postPhotoRepository.findByPostIdOrderByPositionAsc(postId);
-		checkPhotos(edits, existing);
+		checkPhotos(edits, existing, staged.size());
 		Map<Long, PostPhoto> byId = existing.stream().collect(Collectors.toMap(PostPhoto::getId, Function.identity()));
-		Set<Long> kept = edits.stream().map(PhotoEdit::id).collect(Collectors.toSet());
+		Set<Long> kept = edits.stream().map(PhotoEdit::id).filter(Objects::nonNull).collect(Collectors.toSet());
 		List<String> doomed = new ArrayList<>();
 		for (PostPhoto photo : existing) {
 			if (!kept.contains(photo.getId())) {
@@ -288,6 +334,15 @@ public class PostEditService {
 		deleteAfterCommit(postId, doomed);
 		for (int i = 0; i < edits.size(); i++) {
 			PhotoEdit edit = edits.get(i);
+			if (edit.newIndex() != null) {
+				postPhotoRepository.save(photoStager.promote(post, i, staged.get(edit.newIndex()), written));
+			}
+		}
+		for (int i = 0; i < edits.size(); i++) {
+			PhotoEdit edit = edits.get(i);
+			if (edit.id() == null) {
+				continue;
+			}
 			PostPhoto photo = byId.get(edit.id());
 			photo.moveTo(i);
 			if (photo.getFitMode() != edit.fitMode()) {

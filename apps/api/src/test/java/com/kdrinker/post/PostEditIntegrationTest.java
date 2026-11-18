@@ -17,8 +17,11 @@ import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import com.kdrinker.post.service.PhotoInput;
 import com.kdrinker.post.service.PostEditService;
 import com.kdrinker.telegram.PostNotifier;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -28,6 +31,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -93,7 +98,7 @@ class PostEditIntegrationTest {
 		List<PostPhoto> photos = new ArrayList<>();
 		for (int i = 0; i < 3; i++) {
 			String token = String.valueOf((char) ('a' + i)).repeat(43);
-			String original = PhotoStorage.originalPath(postId, i, "jpg");
+			String original = PhotoStorage.originalPath(postId, token, "jpg");
 			String rendered = PhotoStorage.renderedPath(token);
 			write(original);
 			write(rendered);
@@ -122,10 +127,10 @@ class PostEditIntegrationTest {
 		PostPhoto middle = saved.photos().get(1);
 		PostPhoto last = saved.photos().get(2);
 		PostUpdateRequest req = request(saved.version(),
-				List.of(new PhotoEdit(last.getId(), FitMode.CROP), new PhotoEdit(first.getId(), FitMode.CROP)));
+				List.of(new PhotoEdit(last.getId(), null, FitMode.CROP), new PhotoEdit(first.getId(), null, FitMode.CROP)));
 
 		// when
-		postEditService.update(saved.postId(), req);
+		postEditService.update(saved.postId(), req, List.of());
 
 		// then
 		List<PostPhoto> after = postPhotoRepository.findByPostIdOrderByPositionAsc(saved.postId());
@@ -146,11 +151,11 @@ class PostEditIntegrationTest {
 		PostPhoto first = saved.photos().get(0);
 		PostPhoto middle = saved.photos().get(1);
 		Files.delete(MEDIA_DIR.resolve(first.getOriginalPath()));
-		PostUpdateRequest req = request(saved.version(), List.of(new PhotoEdit(first.getId(), FitMode.PAD),
-				new PhotoEdit(saved.photos().get(2).getId(), FitMode.CROP)));
+		PostUpdateRequest req = request(saved.version(), List.of(new PhotoEdit(first.getId(), null, FitMode.PAD),
+				new PhotoEdit(saved.photos().get(2).getId(), null, FitMode.CROP)));
 
 		// when
-		assertThatThrownBy(() -> postEditService.update(saved.postId(), req));
+		assertThatThrownBy(() -> postEditService.update(saved.postId(), req, List.of()));
 
 		// then
 		assertThat(MEDIA_DIR.resolve(middle.getRenderedPath())).exists();
@@ -164,10 +169,10 @@ class PostEditIntegrationTest {
 		// given
 		Saved saved = savePost();
 		jdbc.update("UPDATE post SET channel = 'TELEGRAM' WHERE id = ?", saved.postId());
-		List<PhotoEdit> keep = saved.photos().stream().map(p -> new PhotoEdit(p.getId(), FitMode.CROP)).toList();
+		List<PhotoEdit> keep = saved.photos().stream().map(p -> new PhotoEdit(p.getId(), null, FitMode.CROP)).toList();
 
 		// when
-		postEditService.update(saved.postId(), request(saved.version(), keep));
+		postEditService.update(saved.postId(), request(saved.version(), keep), List.of());
 
 		// then
 		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel()).isEqualTo(PostChannel.WEB);
@@ -182,14 +187,82 @@ class PostEditIntegrationTest {
 		jdbc.update("UPDATE post SET channel = 'TELEGRAM' WHERE id = ?", saved.postId());
 		PostPhoto first = saved.photos().get(0);
 		Files.delete(MEDIA_DIR.resolve(first.getOriginalPath()));
-		PostUpdateRequest req = request(saved.version(), List.of(new PhotoEdit(first.getId(), FitMode.PAD)));
+		PostUpdateRequest req = request(saved.version(), List.of(new PhotoEdit(first.getId(), null, FitMode.PAD)));
 
 		// when
-		assertThatThrownBy(() -> postEditService.update(saved.postId(), req));
+		assertThatThrownBy(() -> postEditService.update(saved.postId(), req, List.of()));
 
 		// then
 		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel())
 				.isEqualTo(PostChannel.TELEGRAM);
 		verify(postNotifier, never()).removeOverviewButtons(any());
+	}
+
+	private static PhotoInput jpeg() throws IOException {
+		BufferedImage image = new BufferedImage(40, 30, BufferedImage.TYPE_INT_RGB);
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ImageIO.write(image, "jpg", out);
+		return PhotoInput.of(out.toByteArray());
+	}
+
+	private static long countFiles(String dir) throws IOException {
+		Path path = MEDIA_DIR.resolve(dir);
+		if (!Files.exists(path)) {
+			return 0;
+		}
+		try (Stream<Path> files = Files.walk(path)) {
+			return files.filter(Files::isRegularFile).count();
+		}
+	}
+
+	@Test
+	void 새_사진을_앞에_넣고_순서를_바꾸면_기존_원본이_그대로다() throws IOException {
+		// given: A(0)·B(1)·C(2) 중 C를 빼고 새 사진을 맨 앞에 둔다
+		Saved saved = savePost();
+		PostPhoto a = saved.photos().get(0);
+		PostPhoto b = saved.photos().get(1);
+		PostUpdateRequest req = request(saved.version(), List.of(new PhotoEdit(null, 0, FitMode.CROP),
+				new PhotoEdit(b.getId(), null, FitMode.CROP), new PhotoEdit(a.getId(), null, FitMode.CROP)));
+		byte[] aBefore = Files.readAllBytes(MEDIA_DIR.resolve(a.getOriginalPath()));
+		byte[] bBefore = Files.readAllBytes(MEDIA_DIR.resolve(b.getOriginalPath()));
+
+		// when
+		postEditService.update(saved.postId(), req, List.of(jpeg()));
+
+		// then
+		List<PostPhoto> after = postPhotoRepository.findByPostIdOrderByPositionAsc(saved.postId());
+		assertThat(after).hasSize(3);
+		assertThat(after).extracting(PostPhoto::getPosition).containsExactly(0, 1, 2);
+		assertThat(after.get(1).getId()).isEqualTo(b.getId());
+		assertThat(after.get(2).getId()).isEqualTo(a.getId());
+		PostPhoto added = after.get(0);
+		assertThat(added.getOriginalPath()).isNotIn(a.getOriginalPath(), b.getOriginalPath());
+		assertThat(MEDIA_DIR.resolve(added.getOriginalPath())).exists();
+		assertThat(MEDIA_DIR.resolve(added.getRenderedPath())).exists();
+		assertThat(Files.readAllBytes(MEDIA_DIR.resolve(a.getOriginalPath()))).isEqualTo(aBefore);
+		assertThat(Files.readAllBytes(MEDIA_DIR.resolve(b.getOriginalPath()))).isEqualTo(bBefore);
+		assertThat(countFiles("tmp")).isZero();
+		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel()).isEqualTo(PostChannel.WEB);
+	}
+
+	@Test
+	void 저장이_롤백되면_새_사진_파일이_남지_않는다() throws IOException {
+		// given: 새 사진을 옮긴 뒤 남은 사진의 다시 렌더링이 실패한다(원본 없음)
+		Saved saved = savePost();
+		PostPhoto first = saved.photos().get(0);
+		Files.delete(MEDIA_DIR.resolve(first.getOriginalPath()));
+		long originalsBefore = countFiles("original/" + saved.postId());
+		long renderedBefore = countFiles("rendered");
+		PostUpdateRequest req = request(saved.version(),
+				List.of(new PhotoEdit(null, 0, FitMode.CROP), new PhotoEdit(first.getId(), null, FitMode.PAD)));
+
+		// when
+		assertThatThrownBy(() -> postEditService.update(saved.postId(), req, List.of(jpeg())));
+
+		// then
+		assertThat(postPhotoRepository.findByPostIdOrderByPositionAsc(saved.postId())).hasSize(3);
+		assertThat(countFiles("original/" + saved.postId())).isEqualTo(originalsBefore);
+		assertThat(countFiles("rendered")).isEqualTo(renderedBefore);
+		assertThat(countFiles("tmp")).isZero();
 	}
 }

@@ -75,12 +75,13 @@ class PostEditServiceTest {
 	private final CaptionService captionService = mock(CaptionService.class);
 	private final PhotoService photoService = mock(PhotoService.class);
 	private final PhotoStorage photoStorage = mock(PhotoStorage.class);
+	private final PhotoStager photoStager = mock(PhotoStager.class);
 	private final PostQueryService postQueryService = mock(PostQueryService.class);
 	private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 	private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
 	private final PostEditService service = new PostEditService(postRepository, postPhotoRepository,
 			drinkRepository, breweryRepository, new BreweryService(breweryRepository), captionService, photoService,
-			photoStorage, postQueryService, events, CLOCK, transactionManager);
+			photoStorage, photoStager, postQueryService, events, CLOCK, transactionManager);
 
 	private Brewery kooksoondang;
 	private Brewery hwayo;
@@ -166,7 +167,7 @@ class PostEditServiceTest {
 	}
 
 	private static List<PhotoEdit> keepPhotos() {
-		return List.of(new PhotoEdit(100L, FitMode.CROP), new PhotoEdit(101L, FitMode.CROP));
+		return List.of(new PhotoEdit(100L, null, FitMode.CROP), new PhotoEdit(101L, null, FitMode.CROP));
 	}
 
 	private static ErrorCode errorOf(Runnable action) {
@@ -184,7 +185,7 @@ class PostEditServiceTest {
 		PostUpdateRequest req = unchanged();
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		verify(postRepository).transition(eq(POST_ID), eq(PostStatus.PENDING_REVIEW), eq(PostStatus.PENDING_REVIEW),
@@ -199,7 +200,7 @@ class PostEditServiceTest {
 		ReflectionTestUtils.setField(post, "channel", PostChannel.TELEGRAM);
 
 		// when
-		service.update(POST_ID, unchanged());
+		service.update(POST_ID, unchanged(), List.of());
 
 		// then
 		assertThat(post.getChannel()).isEqualTo(PostChannel.WEB);
@@ -212,7 +213,7 @@ class PostEditServiceTest {
 		assertThat(post.getChannel()).isEqualTo(PostChannel.WEB);
 
 		// when
-		service.update(POST_ID, unchanged());
+		service.update(POST_ID, unchanged(), List.of());
 
 		// then
 		assertThat(post.getChannel()).isEqualTo(PostChannel.WEB);
@@ -227,7 +228,7 @@ class PostEditServiceTest {
 				.thenReturn(0);
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged()));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged(), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
@@ -242,7 +243,7 @@ class PostEditServiceTest {
 		when(postRepository.findById(POST_ID)).thenReturn(Optional.of(post));
 
 		// when
-		service.update(POST_ID, unchanged());
+		service.update(POST_ID, unchanged(), List.of());
 
 		// then
 		assertThat(post.getFailedStage()).isNull();
@@ -256,10 +257,10 @@ class PostEditServiceTest {
 		// given: 1번 사진을 빼서 저장하는데, [확인]이 먼저 버전을 올려 전이가 0건이다
 		when(postRepository.transition(eq(POST_ID), any(), eq(PostStatus.PENDING_REVIEW), eq(VERSION), any()))
 				.thenReturn(0);
-		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", List.of(new PhotoEdit(101L, FitMode.CROP)));
+		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", List.of(new PhotoEdit(101L, null, FitMode.CROP)));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
@@ -276,7 +277,7 @@ class PostEditServiceTest {
 		when(postRepository.findById(POST_ID)).thenReturn(Optional.of(post), Optional.of(newer));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged()));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged(), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
@@ -290,7 +291,7 @@ class PostEditServiceTest {
 				keepPhotos());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
@@ -302,7 +303,7 @@ class PostEditServiceTest {
 		when(postRepository.findById(POST_ID)).thenReturn(Optional.empty());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged()));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged(), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_NOT_FOUND);
@@ -316,7 +317,7 @@ class PostEditServiceTest {
 		when(postRepository.findById(POST_ID)).thenReturn(Optional.of(post));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged()));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged(), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_NOT_EDITABLE);
@@ -330,7 +331,7 @@ class PostEditServiceTest {
 		when(postRepository.findById(POST_ID)).thenReturn(Optional.of(post));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged()));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, unchanged(), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_NOT_EDITABLE);
@@ -342,7 +343,7 @@ class PostEditServiceTest {
 		PostUpdateRequest req = request(11L, null, "내가 고친 훅", keepPhotos());
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		verifyNoInteractions(captionService);
@@ -359,7 +360,7 @@ class PostEditServiceTest {
 		when(captionService.compose(any())).thenReturn(new ComposedCaption(regenerated, "#화요"));
 
 		// when
-		service.update(POST_ID, request(11L, null, "훅\n\n★4.0", keepPhotos()));
+		service.update(POST_ID, request(11L, null, "훅\n\n★4.0", keepPhotos()), List.of());
 
 		// then
 		ArgumentCaptor<CaptionInput> input = ArgumentCaptor.forClass(CaptionInput.class);
@@ -384,7 +385,7 @@ class PostEditServiceTest {
 		});
 
 		// when
-		service.update(POST_ID, request(null, edit, "훅\n\n★4.0", keepPhotos()));
+		service.update(POST_ID, request(null, edit, "훅\n\n★4.0", keepPhotos()), List.of());
 
 		// then
 		assertThat(kooksoondang.getAddress()).isEqualTo("서울 강남구");
@@ -398,7 +399,7 @@ class PostEditServiceTest {
 		when(captionService.compose(any())).thenThrow(new ClaudeUnavailableException("down"));
 
 		// when
-		service.update(POST_ID, request(11L, null, "훅\n\n★4.0", keepPhotos()));
+		service.update(POST_ID, request(11L, null, "훅\n\n★4.0", keepPhotos()), List.of());
 
 		// then
 		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅\n\n★4.0", "#막걸리").join(hwayo));
@@ -412,7 +413,7 @@ class PostEditServiceTest {
 		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", List.of());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_PHOTO_COUNT);
@@ -424,10 +425,10 @@ class PostEditServiceTest {
 	void 다른_게시물의_사진_id는_400이다() {
 		// given
 		PostUpdateRequest req = request(null, null, "훅\n\n★4.0",
-				List.of(new PhotoEdit(100L, FitMode.CROP), new PhotoEdit(999L, FitMode.CROP)));
+				List.of(new PhotoEdit(100L, null, FitMode.CROP), new PhotoEdit(999L, null, FitMode.CROP)));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -439,10 +440,10 @@ class PostEditServiceTest {
 	void 같은_사진_id를_두_번_보내면_400이다() {
 		// given
 		PostUpdateRequest req = request(null, null, "훅\n\n★4.0",
-				List.of(new PhotoEdit(100L, FitMode.CROP), new PhotoEdit(100L, FitMode.CROP)));
+				List.of(new PhotoEdit(100L, null, FitMode.CROP), new PhotoEdit(100L, null, FitMode.CROP)));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -451,10 +452,10 @@ class PostEditServiceTest {
 	@Test
 	void 빠진_사진은_커밋_뒤에_원본과_렌더링_파일을_지운다() {
 		// given
-		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", List.of(new PhotoEdit(101L, FitMode.CROP)));
+		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", List.of(new PhotoEdit(101L, null, FitMode.CROP)));
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		verify(postPhotoRepository).delete(photo1);
@@ -468,10 +469,10 @@ class PostEditServiceTest {
 		// given
 		photo2.changeFocus(0.1, 0.2, 0.3, 0.4);
 		PostUpdateRequest req = request(null, null, "훅\n\n★4.0",
-				List.of(new PhotoEdit(101L, FitMode.PAD), new PhotoEdit(100L, FitMode.CROP)));
+				List.of(new PhotoEdit(101L, null, FitMode.PAD), new PhotoEdit(100L, null, FitMode.CROP)));
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		verify(photoService, times(1)).rerender(any(), any(), any());
@@ -488,7 +489,7 @@ class PostEditServiceTest {
 		PostUpdateRequest req = request(null, null, head, keepPhotos());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_CAPTION_TOO_LONG);
@@ -503,7 +504,7 @@ class PostEditServiceTest {
 		PostUpdateRequest req = request(null, null, head, keepPhotos());
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		assertThat(CaptionAssembler.length(post.getCaption())).isEqualTo(2200);
@@ -517,7 +518,7 @@ class PostEditServiceTest {
 				keepPhotos());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -530,7 +531,7 @@ class PostEditServiceTest {
 				keepPhotos());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -542,7 +543,7 @@ class PostEditServiceTest {
 		PostUpdateRequest req = request(999L, null, "훅\n\n★4.0", keepPhotos());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -558,7 +559,7 @@ class PostEditServiceTest {
 				"메모", "훅\n\n★4.0", "#막걸리", keepPhotos());
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		assertThat(post.getDrink().getName()).isEqualTo("생막걸리");
@@ -574,7 +575,7 @@ class PostEditServiceTest {
 				"#막걸리", keepPhotos());
 
 		// when
-		service.update(POST_ID, req);
+		service.update(POST_ID, req, List.of());
 
 		// then
 		assertThat(post.getRating()).isNull();
@@ -588,7 +589,7 @@ class PostEditServiceTest {
 				"훅", "", keepPhotos());
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, req));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.POST_INVALID_RATING);
@@ -600,7 +601,7 @@ class PostEditServiceTest {
 		TransactionSynchronizationManager.setActualTransactionActive(true);
 		try {
 			// when / then
-			assertThatThrownBy(() -> service.update(POST_ID, unchanged())).isInstanceOf(IllegalStateException.class);
+			assertThatThrownBy(() -> service.update(POST_ID, unchanged(), List.of())).isInstanceOf(IllegalStateException.class);
 		} finally {
 			TransactionSynchronizationManager.setActualTransactionActive(false);
 		}
@@ -629,7 +630,7 @@ class PostEditServiceTest {
 		BreweryRequest edit = new BreweryRequest("국순당", null, "02-1", null, null, null);
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, drinkChange(21L, edit)));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, drinkChange(21L, edit), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -647,7 +648,7 @@ class PostEditServiceTest {
 		BreweryRequest edit = new BreweryRequest("화요", null, "02-1", null, null, null);
 
 		// when
-		service.update(POST_ID, drinkChange(21L, edit));
+		service.update(POST_ID, drinkChange(21L, edit), List.of());
 
 		// then
 		assertThat(hwayo.getPhone()).isEqualTo("02-1");
@@ -661,7 +662,7 @@ class PostEditServiceTest {
 		BreweryRequest edit = new BreweryRequest("국순당", null, "02-1", null, null, null);
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, drinkChange(21L, edit)));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, drinkChange(21L, edit), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -671,7 +672,7 @@ class PostEditServiceTest {
 	@Test
 	void 별점만_바꾸면_캡션_별점도_바뀐다() {
 		// when
-		service.update(POST_ID, ratingChange(new BigDecimal("4.5"), "훅\n\n★4.0"));
+		service.update(POST_ID, ratingChange(new BigDecimal("4.5"), "훅\n\n★4.0"), List.of());
 
 		// then
 		verifyNoInteractions(captionService);
@@ -682,7 +683,7 @@ class PostEditServiceTest {
 	@Test
 	void 별점을_비우면_캡션_별점_블록을_뺀다() {
 		// when
-		service.update(POST_ID, ratingChange(null, "훅\n\n★4.0"));
+		service.update(POST_ID, ratingChange(null, "훅\n\n★4.0"), List.of());
 
 		// then
 		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅", "#막걸리").join(kooksoondang));
@@ -691,7 +692,7 @@ class PostEditServiceTest {
 	@Test
 	void 캡션을_고치면서_별점을_바꾸면_고친_문장을_그대로_둔다() {
 		// when
-		service.update(POST_ID, ratingChange(new BigDecimal("4.5"), "내가 고친 훅\n\n★4.0"));
+		service.update(POST_ID, ratingChange(new BigDecimal("4.5"), "내가 고친 훅\n\n★4.0"), List.of());
 
 		// then
 		assertThat(post.getCaption()).isEqualTo(new CaptionParts("내가 고친 훅\n\n★4.0", "#막걸리").join(kooksoondang));
@@ -723,7 +724,7 @@ class PostEditServiceTest {
 		when(captionService.compose(any())).thenReturn(new ComposedCaption(composed, "#막걸리"));
 
 		// when
-		service.update(POST_ID, captionless(""));
+		service.update(POST_ID, captionless(""), List.of());
 
 		// then
 		verify(captionService).compose(any());
@@ -738,7 +739,7 @@ class PostEditServiceTest {
 		when(captionService.compose(any())).thenThrow(new ClaudeUnavailableException("down"));
 
 		// when
-		ErrorCode code = errorOf(() -> service.update(POST_ID, captionless("")));
+		ErrorCode code = errorOf(() -> service.update(POST_ID, captionless(""), List.of()));
 
 		// then
 		assertThat(code).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED);
@@ -753,11 +754,61 @@ class PostEditServiceTest {
 		post = uncaptionedFailedPost();
 
 		// when
-		service.update(POST_ID, captionless("내가 쓴 훅"));
+		service.update(POST_ID, captionless("내가 쓴 훅"), List.of());
 
 		// then
 		verifyNoInteractions(captionService);
 		assertThat(post.getCaption()).isEqualTo(new CaptionParts("내가 쓴 훅", "").join(kooksoondang));
 		assertThat(post.isCaptionEdited()).isTrue();
+	}
+
+	private static final PhotoInput NEW_PHOTO = PhotoInput.of(new byte[] { 1 });
+
+	private void assertInvalidAndNothingStaged(List<PhotoEdit> photos, int newCount, ErrorCode expected) {
+		PostUpdateRequest req = request(null, null, "훅\n\n★4.0", photos);
+
+		ErrorCode code = errorOf(() -> service.update(POST_ID, req, java.util.Collections.nCopies(newCount, NEW_PHOTO)));
+
+		assertThat(code).isEqualTo(expected);
+		verify(photoStager, never()).stage(any(), anyInt(), any(), any());
+	}
+
+	@Test
+	void newIndex_중복이면_검증_실패() {
+		assertInvalidAndNothingStaged(List.of(new PhotoEdit(null, 0, FitMode.CROP), new PhotoEdit(null, 0, FitMode.CROP)),
+				2, ErrorCode.COMMON_VALIDATION_FAILED);
+	}
+
+	@Test
+	void 참조하지_않은_새_파일이_있으면_검증_실패() {
+		assertInvalidAndNothingStaged(List.of(new PhotoEdit(100L, null, FitMode.CROP), new PhotoEdit(null, 0, FitMode.CROP)),
+				2, ErrorCode.COMMON_VALIDATION_FAILED);
+	}
+
+	@Test
+	void newIndex가_범위_밖이면_검증_실패() {
+		assertInvalidAndNothingStaged(List.of(new PhotoEdit(100L, null, FitMode.CROP), new PhotoEdit(null, 1, FitMode.CROP)),
+				1, ErrorCode.COMMON_VALIDATION_FAILED);
+	}
+
+	@Test
+	void id와_newIndex를_같이_주면_검증_실패() {
+		assertInvalidAndNothingStaged(List.of(new PhotoEdit(100L, 0, FitMode.CROP)), 1,
+				ErrorCode.COMMON_VALIDATION_FAILED);
+	}
+
+	@Test
+	void id도_newIndex도_없으면_검증_실패() {
+		assertInvalidAndNothingStaged(List.of(new PhotoEdit(null, null, FitMode.CROP)), 0,
+				ErrorCode.COMMON_VALIDATION_FAILED);
+	}
+
+	@Test
+	void 합쳐_11장이면_POST_PHOTO_COUNT() {
+		List<PhotoEdit> edits = new java.util.ArrayList<>(keepPhotos());
+		for (int i = 0; i < 9; i++) {
+			edits.add(new PhotoEdit(null, i, FitMode.CROP));
+		}
+		assertInvalidAndNothingStaged(edits, 9, ErrorCode.POST_PHOTO_COUNT);
 	}
 }

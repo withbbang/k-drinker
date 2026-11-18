@@ -4,7 +4,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -167,6 +166,14 @@ class PostControllerTest {
 				.andExpect(jsonPath("$.error.code").value("COMMON_NOT_FOUND"));
 	}
 
+	private static MockMultipartFile requestPart(String json) {
+		return new MockMultipartFile("request", "", MediaType.APPLICATION_JSON_VALUE, json.getBytes());
+	}
+
+	private static MockMultipartHttpServletRequestBuilder putMultipart(String url) {
+		return multipart(org.springframework.http.HttpMethod.PUT, url);
+	}
+
 	@Test
 	void version이_없으면_400이다() throws Exception {
 		// given
@@ -175,7 +182,43 @@ class PostControllerTest {
 				""";
 
 		// when / then
-		mockMvc.perform(put("/api/v1/posts/1").contentType(MediaType.APPLICATION_JSON).content(body))
+		mockMvc.perform(putMultipart("/api/v1/posts/1").file(requestPart(body)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+		verifyNoInteractions(postEditService);
+	}
+
+	@Test
+	void 수정_저장은_multipart로_받는다() throws Exception {
+		// given
+		String body = """
+				{"version": 3, "captionHead": "훅", "captionTail": "",
+				 "photos": [{"newIndex": 0, "fitMode": "CROP"}, {"id": 1, "fitMode": "CROP"}]}
+				""";
+		when(postEditService.update(eq(1L), any(), org.mockito.ArgumentMatchers.argThat(list -> list.size() == 1)))
+				.thenReturn(detailWithStatus("PENDING_REVIEW"));
+
+		// when / then
+		mockMvc.perform(putMultipart("/api/v1/posts/1").file(requestPart(body))
+				.file(new MockMultipartFile("newPhotos", "a.jpg", "image/jpeg", new byte[] { 1 })))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("PENDING_REVIEW"));
+	}
+
+	@Test
+	void request_파트가_없으면_400() throws Exception {
+		// when / then
+		mockMvc.perform(putMultipart("/api/v1/posts/1")
+				.file(new MockMultipartFile("newPhotos", "a.jpg", "image/jpeg", new byte[] { 1 })))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
+		verifyNoInteractions(postEditService);
+	}
+
+	@Test
+	void request_파트가_깨진_JSON이면_400() throws Exception {
+		// when / then
+		mockMvc.perform(putMultipart("/api/v1/posts/1").file(requestPart("{not json")))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("COMMON_VALIDATION_FAILED"));
 		verifyNoInteractions(postEditService);

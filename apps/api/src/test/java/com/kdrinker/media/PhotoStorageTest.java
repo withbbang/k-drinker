@@ -21,11 +21,12 @@ class PhotoStorageTest {
 		PhotoStorage storage = new PhotoStorage(dir.toString());
 
 		// when
-		String original = storage.saveOriginal(7L, 2, "png", new byte[] { 1, 2 });
+		String original = storage.promote(storage.saveStaged(TOKEN, "0.png", new byte[] { 1, 2 }),
+				PhotoStorage.originalPath(7L, TOKEN, "png"));
 		String rendered = storage.saveRendered(TOKEN, new byte[] { 3 });
 
 		// then
-		assertThat(original).isEqualTo("original/7/2.png");
+		assertThat(original).isEqualTo("original/7/" + TOKEN + ".png");
 		assertThat(rendered).isEqualTo("rendered/" + TOKEN + ".jpg");
 		assertThat(Files.readAllBytes(dir.resolve(original))).containsExactly(1, 2);
 		assertThat(storage.read(rendered)).containsExactly(3);
@@ -83,10 +84,10 @@ class PhotoStorageTest {
 		String staged = storage.saveStaged(TOKEN, "0.jpg", new byte[] { 4, 5 });
 
 		// when
-		String moved = storage.promote(staged, PhotoStorage.originalPath(3L, 0, "jpg"));
+		String moved = storage.promote(staged, PhotoStorage.originalPath(3L, TOKEN, "jpg"));
 
 		// then
-		assertThat(moved).isEqualTo("original/3/0.jpg");
+		assertThat(moved).isEqualTo("original/3/" + TOKEN + ".jpg");
 		assertThat(storage.read(moved)).containsExactly(4, 5);
 		assertThat(Files.exists(dir.resolve(staged))).isFalse();
 	}
@@ -152,7 +153,7 @@ class PhotoStorageTest {
 	void 게시물_원본_폴더를_통째로_지우고_없어도_오류가_없다() {
 		// given
 		PhotoStorage storage = new PhotoStorage(dir.toString());
-		storage.saveOriginal(9L, 0, "jpg", new byte[] { 1 });
+		storage.promote(storage.saveStaged(TOKEN, "0.jpg", new byte[] { 1 }), PhotoStorage.originalPath(9L, TOKEN, "jpg"));
 
 		// when
 		storage.deletePostOriginalDirQuietly(9L);

@@ -62,7 +62,8 @@ class MediaCleanupTest {
 		ReflectionTestUtils.setField(post, "status", status);
 		ReflectionTestUtils.setField(post, "updatedAt", updatedAt);
 		Long id = postRepository.saveAndFlush(post).getId();
-		String original = storage.saveOriginal(id, 0, "jpg", new byte[] { 1 });
+		String original = storage.promote(storage.saveStaged(TOKEN, "0.jpg", new byte[] { 1 }),
+				PhotoStorage.originalPath(id, TOKEN, "jpg"));
 		String rendered = storage.saveRendered(TOKEN, new byte[] { 2 });
 		PostPhoto photo = PostPhoto.of(post, 0, original, TOKEN, FitMode.CROP);
 		photo.attachRendered(rendered);
@@ -80,7 +81,7 @@ class MediaCleanupTest {
 
 		// then
 		assertThat(postPhotoRepository.findByPostIdOrderByPositionAsc(id)).isEmpty();
-		assertThat(Files.exists(dir.resolve("original/" + id + "/0.jpg"))).isFalse();
+		assertThat(Files.exists(dir.resolve("original/" + id + "/" + TOKEN + ".jpg"))).isFalse();
 		assertThat(Files.exists(dir.resolve("original/" + id))).isFalse();
 		assertThat(Files.exists(dir.resolve("rendered/" + TOKEN + ".jpg"))).isFalse();
 		assertThat(postRepository.findById(id)).isPresent();
@@ -96,7 +97,7 @@ class MediaCleanupTest {
 
 		// then
 		assertThat(postPhotoRepository.findByPostIdOrderByPositionAsc(id)).hasSize(1);
-		assertThat(Files.exists(dir.resolve("original/" + id + "/0.jpg"))).isTrue();
+		assertThat(Files.exists(dir.resolve("original/" + id + "/" + TOKEN + ".jpg"))).isTrue();
 		assertThat(Files.exists(dir.resolve("rendered/" + TOKEN + ".jpg"))).isTrue();
 	}
 
@@ -110,7 +111,7 @@ class MediaCleanupTest {
 
 		// then
 		assertThat(postPhotoRepository.findByPostIdOrderByPositionAsc(id)).hasSize(1);
-		assertThat(Files.exists(dir.resolve("original/" + id + "/0.jpg"))).isTrue();
+		assertThat(Files.exists(dir.resolve("original/" + id + "/" + TOKEN + ".jpg"))).isTrue();
 	}
 
 	@Test
