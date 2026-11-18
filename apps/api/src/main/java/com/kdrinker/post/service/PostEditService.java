@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -106,6 +107,9 @@ public class PostEditService {
 		Snapshot snapshot = tx.execute(status -> snapshot(id, req, newPhotos.size()));
 		String stagingId = null;
 		List<String> written = new ArrayList<>();
+		// 쓰기 본문이 끝났는지. 끝난 뒤의 예외(커밋 실패·커밋 뒤 콜백)는 옮긴 파일을 여기서 지우지 않는다.
+		// 커밋이 실패해 롤백되면 registerRollbackCleanup이 지우고, 커밋됐으면 파일은 새 사진 행이 쓴다.
+		AtomicBoolean bodyDone = new AtomicBoolean(false);
 		try {
 			// 새 사진은 트랜잭션 밖에서 읽어 스테이징한다. 하나라도 실패하면 아무것도 저장하지 않는다.
 			Map<Integer, PhotoStager.Staged> staged = new HashMap<>();
@@ -128,9 +132,12 @@ public class PostEditService {
 					throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
 				}
 				events.publishEvent(new PostEditedEvent(id, snapshot.channel() == PostChannel.TELEGRAM));
+				bodyDone.set(true);
 			});
 		} catch (RuntimeException e) {
-			written.forEach(photoStorage::deleteQuietly);
+			if (!bodyDone.get()) {
+				written.forEach(photoStorage::deleteQuietly);
+			}
 			throw e;
 		} finally {
 			if (stagingId != null) {

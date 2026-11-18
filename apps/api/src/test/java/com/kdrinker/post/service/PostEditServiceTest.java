@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -840,6 +841,34 @@ class PostEditServiceTest {
 		assertThat(code).isEqualTo(ErrorCode.POST_VERSION_CONFLICT);
 		verify(photoStorage).deleteQuietly("original/1/new.jpg");
 		verify(photoStorage).deleteQuietly("rendered/new.jpg");
+		verify(photoStager).deleteStaging("s");
+	}
+
+	@Test
+	void 커밋_뒤_콜백이_예외를_던져도_커밋된_새_사진_파일은_지우지_않는다() {
+		// given: 새 사진 1장을 넣고 사진 1을 빼는데, 커밋 뒤 빠진 파일을 지우는 콜백이 예외를 던진다
+		PhotoStager.Staged staged = new PhotoStager.Staged("jpg", "n".repeat(43), FitMode.CROP, "tmp/s/0.jpg",
+				"tmp/s/0.rendered.jpg");
+		when(photoStager.newStagingId()).thenReturn("s");
+		when(photoStager.stage(eq("s"), eq(0), any(), eq(FitMode.CROP))).thenReturn(staged);
+		PostPhoto added = photo(200L, 0, FitMode.CROP);
+		when(photoStager.promote(any(), eq(0), eq(staged), any())).thenAnswer(inv -> {
+			List<String> written = inv.getArgument(3);
+			written.add("original/1/new.jpg");
+			written.add("rendered/new.jpg");
+			return added;
+		});
+		doThrow(new IllegalStateException("after commit")).when(photoStorage).deleteQuietly("original/1/0.jpg");
+		PostUpdateRequest req = request(null, null, "훅\n\n★4.0",
+				List.of(new PhotoEdit(null, 0, FitMode.CROP), new PhotoEdit(101L, null, FitMode.CROP)));
+
+		// when
+		assertThatThrownBy(() -> service.update(POST_ID, req, List.of(NEW_PHOTO)))
+				.isInstanceOf(IllegalStateException.class);
+
+		// then
+		verify(photoStorage, never()).deleteQuietly("original/1/new.jpg");
+		verify(photoStorage, never()).deleteQuietly("rendered/new.jpg");
 		verify(photoStager).deleteStaging("s");
 	}
 }
