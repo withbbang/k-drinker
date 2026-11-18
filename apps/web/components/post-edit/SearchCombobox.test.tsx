@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -62,6 +62,55 @@ describe("SearchCombobox", () => {
 
     // when
     await userEvent.keyboard("{Enter}");
+
+    // then
+    expect(onPick).toHaveBeenCalledWith(MANY[0]);
+  });
+
+  it("ignores Enter reported with the IME keyCode 229", async () => {
+    // given
+    const onPick = vi.fn();
+    render(<Harness items={MANY} onPick={onPick} />);
+    const input = screen.getByRole("combobox", { name: "술" });
+    await userEvent.type(input, "술");
+
+    // when
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+
+    // then
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it("ignores the Enter that Safari sends right after composition ends", async () => {
+    // given
+    const onPick = vi.fn();
+    render(<Harness items={MANY} onPick={onPick} />);
+    const input = screen.getByRole("combobox", { name: "술" });
+    await userEvent.type(input, "술");
+
+    // when — 조합 확정 뒤 같은 틱에 isComposing=false Enter가 온다
+    fireEvent.compositionEnd(input);
+    const notPrevented = fireEvent.keyDown(input, {
+      key: "Enter",
+      keyCode: 13,
+    });
+
+    // then — 고르지 않고, 폼 제출도 막는다
+    expect(onPick).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(false);
+  });
+
+  it("picks on a later Enter after composition ends", async () => {
+    // given
+    const onPick = vi.fn();
+    render(<Harness items={MANY} onPick={onPick} />);
+    const input = screen.getByRole("combobox", { name: "술" });
+    await userEvent.type(input, "술");
+    fireEvent.compositionEnd(input);
+    await new Promise((r) => setTimeout(r, 0));
+
+    // when
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 13 });
 
     // then
     expect(onPick).toHaveBeenCalledWith(MANY[0]);

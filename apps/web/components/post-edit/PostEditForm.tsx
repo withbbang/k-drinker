@@ -71,6 +71,8 @@ function Editor({ post, onSave }: EditorProps) {
   const [captionHead, setCaptionHead] = useState(post.captionHead ?? "");
   const [captionTail, setCaptionTail] = useState(post.captionTail ?? "");
   const [photos, setPhotos] = useState(post.photos);
+  // 사진 애니메이션 중에는 변경이 아직 photos에 반영되지 않았으므로 저장을 막는다.
+  const [photosBusy, setPhotosBusy] = useState(false);
 
   const hasDrink = drink.drinkId !== null || newName !== "";
 
@@ -84,6 +86,7 @@ function Editor({ post, onSave }: EditorProps) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (photosBusy) return;
     const original = fieldsOf(base);
     const changed = (Object.keys(fields) as (keyof BreweryFields)[]).some(
       (key) => orNull(fields[key]) !== orNull(original[key]),
@@ -169,10 +172,11 @@ function Editor({ post, onSave }: EditorProps) {
         photos={photos}
         version={post.version}
         onChange={setPhotos}
+        onBusyChange={setPhotosBusy}
       />
       <button
         type="submit"
-        disabled={onSave.isPending}
+        disabled={onSave.isPending || photosBusy}
         className="rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
       >
         저장

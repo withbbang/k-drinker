@@ -59,6 +59,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
     permalink: null,
     channel: "WEB",
     publishCaption: "",
+    retryable: false,
     ...overrides,
   };
 }
@@ -127,6 +128,25 @@ describe("PostEditForm", () => {
     expect(body.breweryEdit).toBeNull();
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/posts/7"));
     expect(screen.queryByText(/텔레그램으로 새 개요/)).toBeNull();
+  });
+
+  it("disables save while a photo animation is pending, then saves the deletion", async () => {
+    // 애니메이션을 켠다(모션 감소 아님)
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    setup(post());
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: "삭제" }))[0],
+    );
+
+    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "저장" })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() =>
+      expect(putBody().photos).toEqual([{ id: 2, fitMode: "CROP" }]),
+    );
   });
 
   it("sends brewery edit only when a field changed", async () => {

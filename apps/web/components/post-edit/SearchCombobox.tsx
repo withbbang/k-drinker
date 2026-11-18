@@ -1,6 +1,12 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 
 type SearchComboboxProps<T> = {
   label: string;
@@ -30,6 +36,8 @@ export function SearchCombobox<T>({
   const id = useId();
   const listId = `${id}-list`;
   const [active, setActive] = useState(-1);
+  // Safari는 조합 확정(compositionend) 뒤 같은 틱에 isComposing=false인 Enter를 보낸다. 그 Enter를 거른다.
+  const justComposed = useRef(false);
   const open = query.trim() !== "" && items.length > 0;
 
   const pick = (item: T) => {
@@ -41,8 +49,9 @@ export function SearchCombobox<T>({
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       // IME 조합 중 Enter는 글자 확정이므로 건드리지 않는다. 폼 제출은 항상 막는다.
-      if (event.nativeEvent.isComposing) return;
+      if (event.nativeEvent.isComposing || event.keyCode === 229) return;
       event.preventDefault();
+      if (justComposed.current) return;
       // 결과가 줄어 가리키던 항목이 사라졌으면 고르지 않는다.
       const index = active >= 0 ? active : 0;
       if (open && index < items.length) pick(items[index]);
@@ -80,6 +89,12 @@ export function SearchCombobox<T>({
           onQueryChange(event.target.value);
         }}
         onKeyDown={handleKeyDown}
+        onCompositionEnd={() => {
+          justComposed.current = true;
+          setTimeout(() => {
+            justComposed.current = false;
+          }, 0);
+        }}
         className={inputClassName}
       />
       {open && (

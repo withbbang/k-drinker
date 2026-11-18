@@ -8,6 +8,8 @@ type PhotoOrderListProps = {
   photos: PostPhotoResponse[];
   version: number;
   onChange: (photos: PostPhotoResponse[]) => void;
+  // 애니메이션이 끝나야 onChange로 반영되므로, 그동안 부모가 저장을 막을 수 있게 알린다.
+  onBusyChange?: (busy: boolean) => void;
 };
 
 // 진행 중인 애니메이션 (한 번에 하나만)
@@ -40,6 +42,7 @@ export function PhotoOrderList({
   photos,
   version,
   onChange,
+  onBusyChange,
 }: PhotoOrderListProps) {
   const [anim, setAnim] = useState<Anim | null>(null);
   // 순서를 바꾼 렌더에서는 transform을 전환 없이 0으로 돌린다. 안 그러면 제자리로 한 번 더 미끄러진다.
@@ -112,6 +115,13 @@ export function PhotoOrderList({
   };
 
   const locked = anim !== null;
+
+  // 언마운트되면 대기 중 변경은 버려지므로(폼도 함께 새로 만들어진다) 잠금만 풀어 준다.
+  useEffect(() => {
+    if (!locked) return;
+    onBusyChange?.(true);
+    return () => onBusyChange?.(false);
+  }, [locked, onBusyChange]);
 
   // 이 사진이 지금 애니메이션에서 transform이 바뀌는 대상인지
   const animating = (i: number, id: number) =>
