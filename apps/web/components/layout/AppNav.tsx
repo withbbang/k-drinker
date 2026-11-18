@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useLogout } from "@/hooks/use-logout";
+
 const ITEMS = [
   { href: "/", label: "기록" },
   { href: "/breweries", label: "양조장" },
@@ -11,6 +13,7 @@ const ITEMS = [
 
 export function AppNav() {
   const pathname = usePathname();
+  const logout = useLogout();
 
   return (
     <nav
@@ -30,6 +33,14 @@ export function AppNav() {
           </Link>
         );
       })}
+      <button
+        type="button"
+        onClick={() => logout.mutate()}
+        disabled={logout.isPending}
+        className="ml-auto rounded-full px-4 py-2 text-sm text-neutral-700 disabled:opacity-50"
+      >
+        로그아웃
+      </button>
     </nav>
   );
 }
