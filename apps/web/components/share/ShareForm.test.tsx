@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,7 +8,8 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { ShareForm } from "@/components/share/ShareForm";
 import { ApiError } from "@/lib/api";
 
-const { apiFetchMock, readMock, clearMock } = vi.hoisted(() => ({
+const { apiFetchMock, readMock, clearMock, replaceMock } = vi.hoisted(() => ({
+  replaceMock: vi.fn(),
   apiFetchMock: vi.fn(),
   readMock: vi.fn(),
   clearMock: vi.fn(),
@@ -16,7 +17,7 @@ const { apiFetchMock, readMock, clearMock } = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/share",
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: replaceMock }),
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/api", async (importOriginal) => ({
@@ -44,6 +45,13 @@ function renderForm() {
   );
 }
 
+// [보내기] → 확인 모달의 [보내기]
+async function submit() {
+  await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+  const dialog = await screen.findByRole("dialog");
+  await userEvent.click(within(dialog).getByRole("button", { name: "보내기" }));
+}
+
 function postCalls() {
   return apiFetchMock.mock.calls.filter(([path]) => path === "/api/v1/posts");
 }
@@ -51,7 +59,7 @@ function postCalls() {
 describe("ShareForm", () => {
   beforeEach(() => {
     apiFetchMock.mockImplementation(async (path: string) =>
-      path === "/api/v1/posts" ? { id: 1, status: "RECEIVED" } : undefined,
+      path === "/api/v1/posts" ? { id: 12, status: "RECEIVED" } : undefined,
     );
     clearMock.mockResolvedValue(undefined);
     URL.createObjectURL = vi.fn(() => "blob:preview");
@@ -96,7 +104,7 @@ describe("ShareForm", () => {
     );
   });
 
-  it("still shows success when clearing shared photos fails", async () => {
+  it("still navigates when clearing shared photos fails", async () => {
     // given
     readMock.mockResolvedValue(photos(1));
     clearMock.mockRejectedValue(new Error("cache"));
@@ -104,14 +112,10 @@ describe("ShareForm", () => {
     await screen.findAllByRole("img");
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+    await submit();
 
     // then
-    expect(
-      await screen.findByText(
-        "접수했습니다. 분석이 끝나면 텔레그램으로 개요를 보내 드립니다.",
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/posts/12"));
   });
 
   it("sends photos memo rating and SHARE source", async () => {
@@ -126,7 +130,7 @@ describe("ShareForm", () => {
       screen.getByRole("combobox", { name: "별점" }),
       "4.5",
     );
-    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+    await submit();
 
     // then
     await waitFor(() => expect(postCalls()).toHaveLength(1));
@@ -146,7 +150,7 @@ describe("ShareForm", () => {
     await screen.findAllByRole("img");
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+    await submit();
 
     // then
     await waitFor(() => expect(postCalls()).toHaveLength(1));
@@ -161,14 +165,10 @@ describe("ShareForm", () => {
     await screen.findAllByRole("img");
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+    await submit();
 
     // then
-    expect(
-      await screen.findByText(
-        "접수했습니다. 분석이 끝나면 텔레그램으로 개요를 보내 드립니다.",
-      ),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/posts/12"));
     expect(clearMock).toHaveBeenCalledTimes(1);
   });
 
@@ -184,7 +184,7 @@ describe("ShareForm", () => {
     await screen.findAllByRole("img");
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+    await submit();
 
     // then
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -193,7 +193,66 @@ describe("ShareForm", () => {
     expect(clearMock).not.toHaveBeenCalled();
   });
 
-  it("blocks sending more than ten photos", async () => {
+  it("asks for confirmation before sending", async () => {
+    // given
+    readMock.mockResolvedValue(photos(3));
+    renderForm();
+    await screen.findAllByRole("img");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "별점" }),
+      "4.5",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "메모" }),
+      "가".repeat(45),
+    );
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+
+    // then
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("사진 3장");
+    expect(dialog).toHaveTextContent("4.5");
+    expect(dialog).toHaveTextContent("가".repeat(40) + "…");
+    expect(dialog).not.toHaveTextContent("가".repeat(41));
+    expect(postCalls()).toHaveLength(0);
+  });
+
+  it("shows 없음 for empty rating and memo", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+
+    // then
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getAllByText("없음")).toHaveLength(2);
+  });
+
+  it("sends nothing when going back from the modal", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // when
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "돌아가기" }),
+    );
+
+    // then
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(postCalls()).toHaveLength(0);
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks eleven photos until one is removed", async () => {
     // given
     readMock.mockResolvedValue(photos(11));
 
@@ -201,10 +260,51 @@ describe("ShareForm", () => {
     renderForm();
 
     // then
-    expect(
-      await screen.findByText("사진은 1장 이상 10장 이하로 올려 주세요."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "보내기" })).toBeDisabled();
+    const blocked = await screen.findByRole("button", {
+      name: "사진을 10장 이하로 줄여 주세요 (지금 11장)",
+    });
+    expect(blocked).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "메모" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "별점" })).toBeDisabled();
+    expect(screen.queryByText(/1장 이상 10장 이하/)).toBeNull();
+
+    // when
+    await userEvent.click(screen.getAllByRole("button", { name: /빼기/ })[0]);
+
+    // then
+    expect(screen.getByRole("button", { name: "보내기" })).toBeEnabled();
+    expect(screen.getByRole("textbox", { name: "메모" })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "별점" })).toBeEnabled();
+  });
+
+  it("disables remove on the last photo", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+
+    // when
+    renderForm();
+
+    // then
+    await screen.findAllByRole("img");
+    expect(screen.getByRole("button", { name: /빼기/ })).toBeDisabled();
+  });
+
+  it("does not send removed photos", async () => {
+    // given
+    readMock.mockResolvedValue(photos(3));
+    renderForm();
+    await screen.findAllByRole("img");
+
+    // when
+    await userEvent.click(screen.getAllByRole("button", { name: /빼기/ })[0]);
+    await submit();
+
+    // then
+    await waitFor(() => expect(postCalls()).toHaveLength(1));
+    const names = (postCalls()[0][1].body as FormData)
+      .getAll("photos")
+      .map((f) => (f as File).name);
+    expect(names).toEqual(["p1.jpg", "p2.jpg"]);
   });
 
   it("shows guidance when nothing was shared", async () => {
