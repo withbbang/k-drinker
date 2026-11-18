@@ -1,5 +1,6 @@
 package com.kdrinker.post.service;
 
+import com.kdrinker.analysis.AnalysisService;
 import com.kdrinker.brewery.dto.BreweryResponse;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.caption.BreweryBlock;
@@ -18,6 +19,7 @@ import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import com.kdrinker.publish.PublishService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -55,7 +57,12 @@ public class PostQueryService {
 				parts.head(), displayBlock(brewery), parts.tail(), post.isCaptionEdited(),
 				post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption()), photos,
 				post.getPermalink(), post.getChannel().name(),
-				post.getCaption() == null ? "" : CaptionAssembler.stripMarkers(post.getCaption()));
+				post.getCaption() == null ? "" : CaptionAssembler.stripMarkers(post.getCaption()), retryable(post));
+	}
+
+	/** 서버가 재시도를 받아 주는 실패인지. 실제 재시도({@link AnalysisService#startRetry}·{@link PublishService#retry})와 같은 규칙. */
+	public static boolean retryable(Post post) {
+		return AnalysisService.canRetry(post) || PublishService.canRetry(post);
 	}
 
 	/** 검토 대기이거나, 인스타그램 컨테이너가 아직 없는 실패일 때만 고칠 수 있다. */

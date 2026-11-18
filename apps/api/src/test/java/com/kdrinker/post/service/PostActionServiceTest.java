@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.kdrinker.analysis.AnalysisFailure;
 import com.kdrinker.analysis.AnalysisService;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -59,7 +61,7 @@ class PostActionServiceTest {
 		service = new PostActionService(postRepository, publishService, analysisService, executor, postQueryService,
 				CLOCK, mock(PlatformTransactionManager.class));
 		detail = new PostDetailResponse(ID, "PUBLISHING", 3, false, null, null, null, null, null, null, null, "", "",
-				"", false, 0, List.of(), null, "WEB", "");
+				"", false, 0, List.of(), null, "WEB", "", false);
 		when(postQueryService.detail(ID)).thenReturn(detail);
 	}
 
@@ -277,6 +279,23 @@ class PostActionServiceTest {
 		assertThat(result).isEqualTo(ConfirmResult.STALE);
 		assertThat(submitted).isEmpty();
 		verifyNoInteractions(analysisService);
+	}
+
+	@Test
+	void 분석_실행기가_재시도를_거부하면_분석_실패로_되돌리고_COMMON_INTERNAL_ERROR다() {
+		// given
+		post(PostSource.SHARE, PostStatus.FAILED, 2, PostStatus.ANALYZING);
+		when(analysisService.startRetry(ID, 2)).thenReturn(true);
+		Executor rejecting = task -> {
+			throw new RejectedExecutionException("가득 참");
+		};
+		PostActionService rejectingService = new PostActionService(postRepository, publishService, analysisService,
+				rejecting, postQueryService, CLOCK, mock(PlatformTransactionManager.class));
+
+		// when / then
+		assertCode(() -> rejectingService.retryFromWeb(ID, 2), ErrorCode.COMMON_INTERNAL_ERROR);
+		verify(analysisService).recordFailure(ID, AnalysisFailure.UNKNOWN);
+		verify(analysisService, never()).resume(anyLong());
 	}
 
 }

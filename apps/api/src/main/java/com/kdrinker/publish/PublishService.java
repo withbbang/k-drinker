@@ -75,9 +75,7 @@ public class PublishService implements CaptionLengthGuard {
 	public ConfirmResult retry(Long postId, int version) {
 		return tx.execute(status -> {
 			Post post = postRepository.findById(postId).orElse(null);
-			if (post == null || post.getStatus() != PostStatus.FAILED || post.getVersion() != version
-					|| post.getFailedStage() != PostStatus.PUBLISHING
-					|| PublishFailure.CAPTION_TOO_LONG.message().equals(post.getFailureReason())) {
+			if (post == null || post.getVersion() != version || !canRetry(post)) {
 				return ConfirmResult.STALE;
 			}
 			post.clearFailure();
@@ -89,6 +87,12 @@ public class PublishService implements CaptionLengthGuard {
 			afterCommit(() -> submit(postId));
 			return ConfirmResult.STARTED;
 		});
+	}
+
+	/** 게시 단계 실패 중 다시 시도할 수 있는 것인지. 캡션 초과는 고쳐야 하므로 재시도 대상이 아니다. */
+	public static boolean canRetry(Post post) {
+		return post.getStatus() == PostStatus.FAILED && post.getFailedStage() == PostStatus.PUBLISHING
+				&& !PublishFailure.CAPTION_TOO_LONG.message().equals(post.getFailureReason());
 	}
 
 	@Override

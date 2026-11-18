@@ -1,6 +1,7 @@
 package com.kdrinker.post.service;
 
 import com.kdrinker.analysis.AnalysisExecutorConfig;
+import com.kdrinker.analysis.AnalysisFailure;
 import com.kdrinker.analysis.AnalysisService;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
@@ -13,6 +14,8 @@ import com.kdrinker.publish.ConfirmResult;
 import com.kdrinker.publish.PublishService;
 import java.time.Clock;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -25,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 실행기에서 트랜잭션 밖으로 돌아야 한다. 바깥에 읽기 전용 트랜잭션이 있으면 그 안에 합류해 쓰기가 막힌다.
  * 상태 변경은 모두 버전 검사 조건부 전이로 하므로, 사전 확인과 전이 사이의 경합은 전이가 막는다.
  */
+@Slf4j
 @Service
 public class PostActionService {
 
@@ -73,7 +77,14 @@ public class PostActionService {
 			if (!analysisService.startRetry(postId, version)) {
 				return ConfirmResult.STALE;
 			}
-			analysisExecutor.execute(() -> analysisService.resume(postId));
+			try {
+				analysisExecutor.execute(() -> analysisService.resume(postId));
+			} catch (RejectedExecutionException e) {
+				// ANALYZING에 묶이지 않게 바로 분석 실패로 되돌린다. 다시 [재시도]할 수 있다.
+				log.warn("분석 실행기가 재시도를 거부했습니다. postId={}", postId, e);
+				analysisService.recordFailure(postId, AnalysisFailure.UNKNOWN);
+				throw new BusinessException(ErrorCode.COMMON_INTERNAL_ERROR);
+			}
 			return ConfirmResult.STARTED;
 		}
 		if (state.failedStage() == PostStatus.PUBLISHING) {

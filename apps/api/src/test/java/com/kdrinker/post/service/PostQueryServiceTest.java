@@ -15,6 +15,7 @@ import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import com.kdrinker.publish.PublishFailure;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -155,4 +156,49 @@ class PostQueryServiceTest {
 		// then
 		assertThat(detail.channel()).isEqualTo("TELEGRAM");
 	}
+
+	@Test
+	void 캡션_초과로_실패한_게시물은_재시도할_수_없다() {
+		// given
+		Post post = post(PostStatus.FAILED);
+		post.recordFailure(PostStatus.PUBLISHING, PublishFailure.CAPTION_TOO_LONG.message());
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+
+		// when / then
+		assertThat(service.detail(1L).retryable()).isFalse();
+	}
+
+	@Test
+	void 실패_단계가_없는_실패는_재시도할_수_없다() {
+		// given
+		Post post = post(PostStatus.FAILED);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+
+		// when / then
+		assertThat(service.detail(1L).retryable()).isFalse();
+	}
+
+	@Test
+	void 일반_게시_실패와_분석_실패는_재시도할_수_있다() {
+		// given
+		Post publishFailed = post(PostStatus.FAILED);
+		publishFailed.recordFailure(PostStatus.PUBLISHING, PublishFailure.RATE_LIMIT.message());
+		Post analysisFailed = post(PostStatus.FAILED);
+		analysisFailed.recordFailure(PostStatus.ANALYZING, "사진에서 술 이름을 읽지 못했습니다.");
+
+		// when / then
+		assertThat(PostQueryService.retryable(publishFailed)).isTrue();
+		assertThat(PostQueryService.retryable(analysisFailed)).isTrue();
+	}
+
+	@Test
+	void 실패가_아니면_재시도할_수_없다() {
+		// given
+		Post post = post(PostStatus.PENDING_REVIEW);
+		post.recordFailure(PostStatus.ANALYZING, "이전 실패");
+
+		// when / then
+		assertThat(PostQueryService.retryable(post)).isFalse();
+	}
+
 }

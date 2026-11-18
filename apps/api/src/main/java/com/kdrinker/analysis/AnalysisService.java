@@ -112,8 +112,7 @@ public class AnalysisService {
 	public boolean startRetry(Long postId, int version) {
 		return Boolean.TRUE.equals(tx.execute(status -> {
 			Post post = postRepository.findById(postId).orElse(null);
-			if (post == null || post.getStatus() != PostStatus.FAILED || post.getVersion() != version
-					|| post.getFailedStage() != PostStatus.ANALYZING) {
+			if (post == null || post.getVersion() != version || !canRetry(post)) {
 				return false;
 			}
 			post.clearFailure();
@@ -124,6 +123,11 @@ public class AnalysisService {
 			}
 			return true;
 		}));
+	}
+
+	/** 분석 단계에서 실패한 게시물인지(다시 분석할 수 있는지). */
+	public static boolean canRetry(Post post) {
+		return post.getStatus() == PostStatus.FAILED && post.getFailedStage() == PostStatus.ANALYZING;
 	}
 
 	/**
