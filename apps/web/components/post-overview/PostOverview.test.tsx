@@ -74,7 +74,7 @@ function setup(detail: PostDetailResponse) {
     if (init?.method === "POST") return { ...detail, status: "PUBLISHING" };
     return detail;
   });
-  render(
+  return render(
     <QueryProvider>
       <PostOverview id="7" />
     </QueryProvider>,
@@ -113,33 +113,108 @@ describe("PostOverview", () => {
   });
 
   it("shows the review with photos, caption and actions for a web post", async () => {
-    setup(post());
-    expect(await screen.findByText("막걸리")).toBeInTheDocument();
+    const { container } = setup(post());
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "막걸리" }),
+    ).toBeInTheDocument();
     const imgs = screen.getAllByRole("img");
     expect(imgs).toHaveLength(2);
-    expect(imgs[0]).toHaveAttribute("alt", "사진 1");
-    expect(imgs[1]).toHaveAttribute("alt", "사진 2");
+    expect(imgs[0]).toHaveAttribute("alt", "사진 1 / 2");
+    expect(imgs[1]).toHaveAttribute("alt", "사진 2 / 2");
     expect(imgs[0]).toHaveAttribute("src", "/m/1.jpg?v=4");
     expect(screen.getAllByText(/서울 강남구/).length).toBeGreaterThan(0);
     expect(screen.getByText(/4\.5/)).toBeInTheDocument();
     expect(screen.getByText(/머리 문장/)).toBeInTheDocument();
     expect(screen.getByText(/#막걸리/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "확인" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "취소" })).toBeEnabled();
-    expect(screen.getByRole("link", { name: "수정" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "게시하기" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "게시물 취소" })).toBeEnabled();
+    // 수정은 상단 바의 동작이다.
+    const header = container.querySelector("header");
+    expect(header).not.toBeNull();
+    expect(
+      within(header as HTMLElement).getByRole("link", { name: "수정" }),
+    ).toHaveAttribute("href", "/posts/7/edit");
+  });
+
+  it("상단_바에_술_이름과_목록으로_돌아가는_링크를_둔다", async () => {
+    setup(post());
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "막걸리" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "뒤로" })).toHaveAttribute(
       "href",
-      "/posts/7/edit",
+      "/",
     );
+  });
+
+  it("술_이름이_없으면_상단_바에_이름_미확인을_보인다", async () => {
+    setup(post({ drinkName: null }));
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "이름 미확인" }),
+    ).toBeInTheDocument();
+  });
+
+  it("게시_확인창은_게시하기와_돌아가기를_보인다", async () => {
+    setup(post());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시하기" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("button", { name: "게시하기" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "돌아가기" }),
+    ).toBeInTheDocument();
+  });
+
+  it("취소_확인창은_되돌릴_수_없다고_알린다", async () => {
+    setup(post());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시물 취소" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("취소하면 되돌릴 수 없어요."),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "게시물 취소" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "돌아가기" }),
+    ).toBeInTheDocument();
+  });
+
+  it("알_수_없는_상태는_코드를_보이지_않는다", async () => {
+    setup(post({ status: "WEIRD" }));
+    expect(await screen.findByText("상태를 알 수 없어요.")).toBeInTheDocument();
+    expect(screen.queryByText(/WEIRD/)).not.toBeInTheDocument();
+  });
+
+  it("불러오는_중에는_뼈대를_보인다", () => {
+    apiFetchMock.mockImplementation(() => new Promise(() => {}));
+    render(
+      <QueryProvider>
+        <PostOverview id="7" />
+      </QueryProvider>,
+    );
+    expect(
+      screen.getByRole("status", { name: "불러오는 중" }),
+    ).toBeInTheDocument();
   });
 
   it("posts confirm with the version after the user agrees", async () => {
     setup(post());
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시하기" }),
+    );
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText("인스타그램에 게시할까요?"),
     ).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole("button", { name: "확인" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "게시하기" }),
+    );
 
     await waitFor(() => expect(postCalls()).toHaveLength(1));
     const [path, init] = postCalls()[0];
@@ -156,7 +231,9 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryClientProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시하기" }),
+    );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
     current = post({ version: 5 });
@@ -177,7 +254,9 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryClientProvider>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시하기" }),
+    );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
 
     current = post({ status: "PUBLISHING", version: 5 });
@@ -189,9 +268,13 @@ describe("PostOverview", () => {
 
   it("does not post when the user declines the confirm dialog", async () => {
     setup(post());
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시하기" }),
+    );
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("button", { name: "취소" }));
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "돌아가기" }),
+    );
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(postCalls()).toHaveLength(0);
@@ -199,7 +282,9 @@ describe("PostOverview", () => {
 
   it("게시_확인_모달_배경_클릭이면_요청_없음", async () => {
     setup(post());
-    await userEvent.click(await screen.findByRole("button", { name: "확인" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "게시하기" }),
+    );
     fireEvent.click(await screen.findByRole("dialog"));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -219,12 +304,12 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await act("확인", "확인");
+    await act("게시하기", "게시하기");
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "확인" })).toBeDisabled(),
+      expect(screen.getByRole("button", { name: "게시하기" })).toBeDisabled(),
     );
-    expect(screen.getByRole("button", { name: "취소" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "게시물 취소" })).toBeDisabled();
     release(post({ status: "PUBLISHING" }));
   });
 
@@ -243,7 +328,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await act("확인", "확인");
+    await act("게시하기", "게시하기");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "이미 상태가 바뀌었습니다.",
@@ -268,7 +353,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await act("확인", "확인");
+    await act("게시하기", "게시하기");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "캡션이 너무 깁니다.",
@@ -287,10 +372,10 @@ describe("PostOverview", () => {
       await screen.findByText("텔레그램에서 진행 중인 게시물입니다."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "확인" }),
+      screen.queryByRole("button", { name: "게시하기" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "취소" }),
+      screen.queryByRole("button", { name: "게시물 취소" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "수정" })).toBeInTheDocument();
   });
@@ -361,12 +446,12 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await act("취소", "게시물 취소");
+    await act("게시물 취소", "게시물 취소");
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "취소하지 못했습니다.",
     );
 
-    await act("확인", "확인");
+    await act("게시하기", "게시하기");
 
     await waitFor(() =>
       expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
@@ -400,7 +485,7 @@ describe("PostOverview", () => {
         <PostOverview id="7" />
       </QueryProvider>,
     );
-    await act("확인", "확인");
+    await act("게시하기", "게시하기");
     await userEvent.click(
       await screen.findByRole("button", { name: "다시 시도" }),
     );
@@ -440,7 +525,7 @@ describe("PostOverview", () => {
 
   it("omits brewery contact fields that are missing", async () => {
     setup(post());
-    await screen.findByText("막걸리");
+    await screen.findByRole("heading", { level: 2, name: "막걸리" });
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();
   });
 
@@ -475,8 +560,9 @@ describe("PostOverview", () => {
 
   it("shows a progress indicator while analyzing and publishing", async () => {
     setup(post({ status: "ANALYZING" }));
-    const status = await screen.findByRole("status");
-    expect(status.querySelector(".animate-pulse")).not.toBeNull();
+    const message = await screen.findByText("분석 중입니다");
+    const status = message.closest('[role="status"]');
+    expect(status?.querySelector('[class*="animate-pulse"]')).not.toBeNull();
   });
 
   it("shows a canceled message", async () => {

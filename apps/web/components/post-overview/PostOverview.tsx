@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import Link from "next/link";
 
+import { PhotoCarousel } from "@/components/post-overview/PhotoCarousel";
+import { buttonClass } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { TopBar } from "@/components/ui/TopBar";
 import { usePost } from "@/hooks/use-post";
 import { usePostAction } from "@/hooks/use-post-action";
 import { ApiError } from "@/lib/api";
@@ -12,10 +16,8 @@ import type { PostDetailResponse } from "@/types/api/post";
 
 const FALLBACK_ERROR =
   "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
-const BUTTON =
-  "rounded-md px-4 py-2.5 text-center font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40";
-const PRIMARY = `${BUTTON} bg-neutral-900 text-white hover:bg-neutral-800`;
-const SECONDARY = `${BUTTON} border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100`;
+const TITLE = "후기";
+const BACK_HREF = "/";
 
 /** 실패 단계(`failedStage`, 실패 직전 상태) → 표시 문구. */
 const FAILED_STAGE: Record<string, string> = {
@@ -25,14 +27,19 @@ const FAILED_STAGE: Record<string, string> = {
 
 function Progress({ message }: { message: string }) {
   return (
-    <p role="status" className="flex items-center gap-2">
+    <p role="status" className="flex items-center gap-2 text-text">
       <span
         aria-hidden="true"
-        className="inline-block size-2.5 animate-pulse rounded-full bg-neutral-500"
+        className="inline-block size-2.5 rounded-full bg-accent motion-safe:animate-pulse"
       />
       {message}
     </p>
   );
+}
+
+// 사진 아래 글과 상태 문구는 좌우 여백 안에 둔다. 사진만 화면 가장자리까지 간다.
+function Section({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-3 px-4">{children}</div>;
 }
 
 function BreweryInfo({
@@ -46,7 +53,7 @@ function BreweryInfo({
     brewery.instagramHandle ? `@${brewery.instagramHandle}` : null,
   ].filter((v): v is string => !!v);
   return (
-    <div className="text-sm text-neutral-700">
+    <div className="text-sm text-muted">
       <p>
         {brewery.name}
         {brewery.address ? ` · ${brewery.address}` : ""}
@@ -62,25 +69,31 @@ function BreweryInfo({
 
 function Review({ post }: { post: PostDetailResponse }) {
   return (
-    <div className="flex flex-col gap-4">
-      <ul className="flex flex-col gap-2">
-        {post.photos.map((photo, i) => (
-          <li key={photo.id}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- 원본 미디어 URL */}
-            <img
-              src={`${photo.url}?v=${post.version}`}
-              alt={`사진 ${i + 1}`}
-              className="w-full rounded-md"
-            />
-          </li>
-        ))}
-      </ul>
-      <p className="text-lg font-semibold">{post.drinkName ?? "이름 미확인"}</p>
-      {post.brewery && <BreweryInfo brewery={post.brewery} />}
-      <p className="text-sm text-neutral-700">
-        {post.rating !== null ? `★ ${post.rating.toFixed(1)}` : "별점 없음"}
-      </p>
-      <p className="whitespace-pre-wrap text-sm">{post.publishCaption}</p>
+    <>
+      <PhotoCarousel photos={post.photos} version={post.version} />
+      <Section>
+        <div className="flex flex-col gap-1">
+          <h2 className="font-serif text-2xl text-text">
+            {post.drinkName ?? "이름 미확인"}
+          </h2>
+          <p className="text-sm text-accent">
+            {post.rating !== null ? `★ ${post.rating.toFixed(1)}` : "별점 없음"}
+          </p>
+        </div>
+        {post.brewery && <BreweryInfo brewery={post.brewery} />}
+        <p className="whitespace-pre-wrap text-sm text-text">
+          {post.publishCaption}
+        </p>
+      </Section>
+    </>
+  );
+}
+
+// 주 동작 하나를 화면 아래에 고정한다.
+function ActionBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="sticky bottom-0 border-t border-line bg-bg px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      {children}
     </div>
   );
 }
@@ -124,14 +137,18 @@ function Overview({ post }: { post: PostDetailResponse }) {
     pendingAction?.kind === "confirm"
       ? {
           title: "인스타그램에 게시할까요?",
-          confirmLabel: "확인",
-          cancelLabel: "취소",
+          confirmLabel: "게시하기",
+          cancelLabel: "돌아가기",
+          body: null,
         }
       : pendingAction?.kind === "cancel"
         ? {
             title: "이 게시물을 취소할까요?",
             confirmLabel: "게시물 취소",
             cancelLabel: "돌아가기",
+            body: (
+              <p className="text-sm text-muted">취소하면 되돌릴 수 없어요.</p>
+            ),
           }
         : null;
 
@@ -144,100 +161,103 @@ function Overview({ post }: { post: PostDetailResponse }) {
   }
 
   const edit = post.editable && (
-    <Link href={`/posts/${post.id}/edit`} className={SECONDARY}>
+    <Link href={`/posts/${post.id}/edit`} className={buttonClass("text")}>
       수정
     </Link>
   );
+  const telegramNotice = (
+    <Section>
+      <p className="text-text">텔레그램에서 진행 중인 게시물입니다.</p>
+    </Section>
+  );
 
-  let content;
+  let content: ReactNode;
+  let action: ReactNode = null;
   switch (post.status) {
     case "RECEIVED":
     case "ANALYZING":
-      content = <Progress message="분석 중입니다" />;
+      content = (
+        <Section>
+          <Progress message="분석 중입니다" />
+        </Section>
+      );
       break;
     case "PUBLISHING":
-      content = <Progress message="게시 중입니다" />;
+      content = (
+        <Section>
+          <Progress message="게시 중입니다" />
+        </Section>
+      );
       break;
     case "PUBLISHED":
       content = (
         <>
-          <p className="font-semibold">게시했습니다</p>
+          <Section>
+            <p className="font-semibold text-text">게시했습니다</p>
+          </Section>
           <Review post={post} />
-          {post.permalink && (
-            <a
-              href={post.permalink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={PRIMARY}
-            >
-              인스타그램에서 보기
-            </a>
-          )}
         </>
       );
+      if (post.permalink) {
+        action = (
+          <a
+            href={post.permalink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonClass("primary", "w-full")}
+          >
+            인스타그램에서 보기
+          </a>
+        );
+      }
       break;
     case "CANCELED":
-      content = <p>취소한 게시물입니다</p>;
+      content = (
+        <Section>
+          <p className="text-text">취소한 게시물입니다</p>
+        </Section>
+      );
       break;
     case "FAILED":
       content = (
         <>
-          {post.failedStage && FAILED_STAGE[post.failedStage] && (
-            <p className="font-semibold text-red-700">
-              {FAILED_STAGE[post.failedStage]}
-            </p>
-          )}
-          <p className="text-sm text-red-700">{post.failureReason}</p>
-          {web ? (
-            <div className="flex flex-col gap-2">
-              {post.retryable ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => run(retry, post.version)}
-                  className={PRIMARY}
-                >
-                  다시 시도
-                </button>
-              ) : (
-                <p className="text-sm">
-                  {post.editable
-                    ? "[수정]에서 고친 뒤 다시 게시해 주세요."
-                    : "다시 시도할 수 없는 게시물입니다."}
-                </p>
-              )}
-              {edit}
-            </div>
-          ) : (
-            <>
-              <p>텔레그램에서 진행 중인 게시물입니다.</p>
-              {edit}
-            </>
-          )}
+          <Section>
+            {post.failedStage && FAILED_STAGE[post.failedStage] && (
+              <p className="font-semibold text-danger">
+                {FAILED_STAGE[post.failedStage]}
+              </p>
+            )}
+            <p className="text-sm text-danger">{post.failureReason}</p>
+            {web && !post.retryable && (
+              <p className="text-sm text-muted">
+                {post.editable
+                  ? "[수정]에서 고친 뒤 다시 게시해 주세요."
+                  : "다시 시도할 수 없는 게시물입니다."}
+              </p>
+            )}
+          </Section>
+          {!web && telegramNotice}
         </>
       );
+      if (web && post.retryable) {
+        action = (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(retry, post.version)}
+            className={buttonClass("primary", "w-full")}
+          >
+            다시 시도
+          </button>
+        );
+      }
       break;
     case "PENDING_REVIEW":
       content = (
         <>
           <Review post={post} />
           {web ? (
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  setPendingAction({
-                    kind: "confirm",
-                    version: post.version,
-                    status: post.status,
-                  })
-                }
-                className={PRIMARY}
-              >
-                확인
-              </button>
-              {edit}
+            <Section>
               <button
                 type="button"
                 disabled={busy}
@@ -248,27 +268,61 @@ function Overview({ post }: { post: PostDetailResponse }) {
                     status: post.status,
                   })
                 }
-                className={SECONDARY}
+                className={buttonClass("text", "self-start text-danger")}
               >
-                취소
+                게시물 취소
               </button>
-            </div>
+            </Section>
           ) : (
-            <>
-              <p>텔레그램에서 진행 중인 게시물입니다.</p>
-              {edit}
-            </>
+            telegramNotice
           )}
         </>
       );
+      if (web) {
+        action = (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              setPendingAction({
+                kind: "confirm",
+                version: post.version,
+                status: post.status,
+              })
+            }
+            className={buttonClass("primary", "w-full")}
+          >
+            게시하기
+          </button>
+        );
+      }
       break;
     default:
-      content = <p>상태: {post.status}</p>;
+      content = (
+        <Section>
+          <p className="text-text">상태를 알 수 없어요.</p>
+        </Section>
+      );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {content}
+    <>
+      <TopBar
+        title={post.drinkName ?? "이름 미확인"}
+        backHref={BACK_HREF}
+        actions={edit || undefined}
+      />
+      <div className="flex flex-1 flex-col gap-5 pt-4 pb-6">
+        {content}
+        {error && (
+          <Section>
+            <p role="alert" className="text-sm text-danger">
+              {error instanceof ApiError ? error.message : FALLBACK_ERROR}
+            </p>
+          </Section>
+        )}
+      </div>
+      {action && <ActionBar>{action}</ActionBar>}
       {pendingAction && dialog && (
         <ConfirmDialog
           title={dialog.title}
@@ -282,13 +336,22 @@ function Overview({ post }: { post: PostDetailResponse }) {
             );
           }}
           onClose={() => setPendingAction(null)}
-        />
+        >
+          {dialog.body}
+        </ConfirmDialog>
       )}
-      {error && (
-        <p role="alert" className="text-sm text-red-700">
-          {error instanceof ApiError ? error.message : FALLBACK_ERROR}
-        </p>
-      )}
+    </>
+  );
+}
+
+function Loading() {
+  return (
+    <div role="status" aria-label="불러오는 중" className="flex flex-col gap-4">
+      <Skeleton className="aspect-[4/5] w-full" />
+      <div className="flex flex-col gap-2 px-4">
+        <Skeleton className="h-7 w-1/2" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
     </div>
   );
 }
@@ -298,11 +361,25 @@ export function PostOverview({ id }: { id: string }) {
 
   if (post.isError && !post.data) {
     return (
-      <p role="alert" className="text-sm text-red-700">
-        {post.error instanceof ApiError ? post.error.message : FALLBACK_ERROR}
-      </p>
+      <>
+        <TopBar title={TITLE} backHref={BACK_HREF} />
+        <div className="px-4 pt-4">
+          <p role="alert" className="text-sm text-danger">
+            {post.error instanceof ApiError
+              ? post.error.message
+              : FALLBACK_ERROR}
+          </p>
+        </div>
+      </>
     );
   }
-  if (!post.data) return null;
+  if (!post.data) {
+    return (
+      <>
+        <TopBar title={TITLE} backHref={BACK_HREF} />
+        <Loading />
+      </>
+    );
+  }
   return <Overview post={post.data} />;
 }

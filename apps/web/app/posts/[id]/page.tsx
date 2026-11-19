@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-import { AppNav } from "@/components/layout/AppNav";
 import { PostOverview } from "@/components/post-overview/PostOverview";
 
 async function OverviewContent({
@@ -19,11 +18,8 @@ export default function PostOverviewPage({
 }) {
   return (
     <>
-      <Suspense fallback={null}>
-        <AppNav />
-      </Suspense>
-      <main className="mx-auto flex w-full max-w-sm flex-col gap-6 px-4 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight">후기</h1>
+      {/* 상단 바(술 이름·수정)는 PostOverview가 데이터를 받아 그린다. */}
+      <main className="mx-auto flex w-full max-w-sm flex-col">
         <Suspense fallback={null}>
           <OverviewContent params={params} />
         </Suspense>
