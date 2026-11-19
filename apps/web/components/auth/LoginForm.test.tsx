@@ -32,9 +32,8 @@ function renderForm() {
 async function loginWith(next: string | null) {
   searchParamsRef.current = new URLSearchParams(next === null ? "" : { next });
   fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-  const { input, submit } = renderForm();
+  const { input } = renderForm();
   await userEvent.type(input, "123456");
-  await userEvent.click(submit);
 }
 
 describe("LoginForm", () => {
@@ -98,11 +97,10 @@ describe("LoginForm", () => {
         { status: 400 },
       ),
     );
-    const { input, submit } = renderForm();
+    const { input } = renderForm();
 
     // when
     await userEvent.type(input, "000000");
-    await userEvent.click(submit);
 
     // then
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -113,6 +111,7 @@ describe("LoginForm", () => {
 
   it("keeps six digits when a code with a space is pasted", async () => {
     // given
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     const { input, submit } = renderForm();
 
     // when
@@ -126,6 +125,7 @@ describe("LoginForm", () => {
 
   it("drops digits past the sixth", async () => {
     // given
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     const { input } = renderForm();
 
     // when
@@ -138,6 +138,7 @@ describe("LoginForm", () => {
 
   it("disables submit until six digits are entered", async () => {
     // given
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     const { input, submit } = renderForm();
 
     // when, then
@@ -154,5 +155,59 @@ describe("LoginForm", () => {
     const { input } = renderForm();
     expect(input).not.toHaveClass("bg-white");
     expect(input).toHaveClass("bg-surface", "text-text");
+  });
+
+  it("6자리를_채우면_바로_요청한다", async () => {
+    // given
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    const { input } = renderForm();
+
+    // when
+    await userEvent.type(input, "123456");
+
+    // then
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/sessions",
+      expect.objectContaining({ body: JSON.stringify({ code: "123456" }) }),
+    );
+  });
+
+  it("자동_요청_뒤_Enter를_눌러도_한_번만_보낸다", async () => {
+    // given
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    const { input } = renderForm();
+
+    // when
+    await userEvent.type(input, "123456{Enter}");
+
+    // then
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("실패한_뒤_지우고_다시_채우면_다시_요청한다", async () => {
+    // given
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          error: { code: "AUTH_INVALID_CODE", message: "틀렸어요." },
+        }),
+        { status: 400 },
+      ),
+    );
+    const { input } = renderForm();
+    await userEvent.type(input, "123456");
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    // when
+    await userEvent.type(input, "{Backspace}7");
+
+    // then
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/v1/sessions",
+      expect.objectContaining({ body: JSON.stringify({ code: "123457" }) }),
+    );
   });
 });

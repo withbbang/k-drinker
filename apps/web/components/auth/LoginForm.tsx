@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { useMutation } from "@tanstack/react-query";
 
+import { buttonClass } from "@/components/ui/button";
 import { ApiError, apiFetch } from "@/lib/api";
 import { safeNext } from "@/lib/safe-next";
 import type { SessionCreateRequest } from "@/types/api/auth";
@@ -32,6 +33,7 @@ export function LoginForm() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (login.isPending) return;
     login.mutate({ code });
   };
 
@@ -44,16 +46,28 @@ export function LoginForm() {
           inputMode="numeric"
           autoComplete="one-time-code"
           value={code}
-          onChange={(event) =>
-            setCode(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
-          }
+          onChange={(event) => {
+            const value = event.target.value
+              .replace(/\D/g, "")
+              .slice(0, CODE_LENGTH);
+            if (value === code) return;
+            if (login.isPending) {
+              setCode(value);
+              return;
+            }
+            login.reset();
+            setCode(value);
+            if (value.length === CODE_LENGTH && code.length !== CODE_LENGTH) {
+              login.mutate({ code: value });
+            }
+          }}
           className="rounded-field border border-line bg-surface px-3 py-2.5 text-text placeholder:text-muted text-center text-2xl font-semibold tracking-[0.5em] tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         />
       </label>
       <button
         type="submit"
         disabled={code.length !== CODE_LENGTH || login.isPending}
-        className="rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+        className={buttonClass("primary", "w-full")}
       >
         로그인
       </button>
