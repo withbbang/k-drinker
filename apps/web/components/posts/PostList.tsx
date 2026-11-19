@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { Pager } from "@/components/ui/Pager";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { usePosts } from "@/hooks/use-posts";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -91,18 +91,10 @@ export function PostList() {
 
   if (posts.isPending) {
     return (
-      <div
-        role="status"
-        aria-label="불러오는 중"
-        className="flex flex-col gap-2"
-      >
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton
-            key={i}
-            className="h-[calc(3.5rem*5/4+1.5rem+2px)] w-full"
-          />
-        ))}
-      </div>
+      <SkeletonList
+        count={4}
+        itemClassName="h-[calc(3.5rem*5/4+1.5rem+2px)] w-full"
+      />
     );
   }
   if (posts.isError) {

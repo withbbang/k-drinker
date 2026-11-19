@@ -44,7 +44,7 @@ import type { PostDetailResponse } from "@/types/api/post";
 
 const MAX_MEMO_LENGTH = 2000;
 const MAX_PHOTOS = 10;
-const FALLBACK_ERROR = "저장에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+const FALLBACK_ERROR = "저장에 실패했어요. 잠시 후 다시 시도해 주세요.";
 const TITLE = "수정";
 
 // 되돌리기 기록에 남기는 값. 양조장 시트에서 고친 양조장 정보는 서버에 바로 저장하므로 넣지 않는다.
@@ -423,7 +423,7 @@ export function PostEditForm({ id }: { id: string }) {
     return (
       <Shell id={id}>
         <p>상태: {post.data.status}</p>
-        <p>지금은 수정할 수 없는 게시물입니다.</p>
+        <p>지금은 수정할 수 없는 게시물이에요.</p>
       </Shell>
     );
   }

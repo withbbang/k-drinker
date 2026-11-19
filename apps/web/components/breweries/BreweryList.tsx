@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { Pager } from "@/components/ui/Pager";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { buttonClass } from "@/components/ui/button";
 import { useBreweries } from "@/hooks/use-breweries";
 import { ApiError } from "@/lib/api";
@@ -39,15 +39,7 @@ export function BreweryList() {
         </button>
       </form>
       {breweries.isPending && (
-        <div
-          role="status"
-          aria-label="불러오는 중"
-          className="flex flex-col gap-2"
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full" />
-          ))}
-        </div>
+        <SkeletonList count={4} itemClassName="h-16 w-full" />
       )}
       {breweries.isError && (
         <p role="alert" className="text-sm text-danger">

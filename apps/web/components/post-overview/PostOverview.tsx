@@ -159,11 +159,6 @@ function Overview({ post }: { post: PostDetailResponse }) {
     action.mutate(version);
   }
 
-  const edit = post.editable && (
-    <Link href={`/posts/${post.id}/edit`} className={buttonClass("text")}>
-      수정
-    </Link>
-  );
   const telegramNotice = (
     <Section>
       <p className="text-text">텔레그램에서 진행 중인 게시물이에요.</p>
@@ -306,11 +301,6 @@ function Overview({ post }: { post: PostDetailResponse }) {
 
   return (
     <>
-      <TopBar
-        title={post.drinkName ?? "이름 미확인"}
-        backHref={BACK_HREF}
-        actions={edit || undefined}
-      />
       <div className="flex flex-1 flex-col gap-5 pt-4 pb-6">
         {content}
         {error && (
@@ -357,28 +347,40 @@ function Loading() {
 
 export function PostOverview({ id }: { id: string }) {
   const post = usePost(id, { poll: true });
+  const data = post.data;
 
-  if (post.isError && !post.data) {
-    return (
-      <>
-        <TopBar title={TITLE} backHref={BACK_HREF} />
-        <div className="px-4 pt-4">
-          <p role="alert" className="text-sm text-danger">
-            {post.error instanceof ApiError
-              ? post.error.message
-              : FALLBACK_ERROR}
-          </p>
-        </div>
-      </>
+  let body: ReactNode;
+  if (data) {
+    body = <Overview post={data} />;
+  } else if (post.isError) {
+    body = (
+      <div className="px-4 pt-4">
+        <p role="alert" className="text-sm text-danger">
+          {post.error instanceof ApiError ? post.error.message : FALLBACK_ERROR}
+        </p>
+      </div>
     );
+  } else {
+    body = <Loading />;
   }
-  if (!post.data) {
-    return (
-      <>
-        <TopBar title={TITLE} backHref={BACK_HREF} />
-        <Loading />
-      </>
-    );
-  }
-  return <Overview post={post.data} />;
+
+  return (
+    <>
+      <TopBar
+        title={data ? (data.drinkName ?? "이름 미확인") : TITLE}
+        backHref={BACK_HREF}
+        actions={
+          data?.editable ? (
+            <Link
+              href={`/posts/${data.id}/edit`}
+              className={buttonClass("text")}
+            >
+              수정
+            </Link>
+          ) : undefined
+        }
+      />
+      {body}
+    </>
+  );
 }

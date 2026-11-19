@@ -347,7 +347,7 @@ describe("PostEditForm", () => {
   it("shows a read-only notice when not editable", async () => {
     setup(post({ editable: false, status: "PUBLISHED" }));
     expect(
-      await screen.findByText("지금은 수정할 수 없는 게시물입니다."),
+      await screen.findByText("지금은 수정할 수 없는 게시물이에요."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "저장" })).toBeNull();
   });
@@ -536,7 +536,7 @@ describe("PostEditForm", () => {
     await userEvent.click(await screen.findByRole("option", { name: "탁주" }));
 
     expect(
-      await screen.findByText("정해진 양조장이 없습니다."),
+      await screen.findByText("정해진 양조장이 없어요."),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "양조장 정보 고치기" }),

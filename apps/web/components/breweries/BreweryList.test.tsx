@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BreweryList } from "@/components/breweries/BreweryList";
 import { QueryProvider } from "@/components/providers/QueryProvider";
-import BreweriesPage from "@/app/breweries/page";
+import BreweriesPage from "@/app/(tabs)/breweries/page";
 import type { BreweryResponse } from "@/types/api/brewery";
 import type { PageResponse } from "@/types/api/common";
 

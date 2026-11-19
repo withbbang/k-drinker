@@ -1,7 +1,7 @@
 import type { ApiFieldError, ApiResponse } from "@/types/api/common";
 
 const UNREACHABLE_MESSAGE =
-  "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+  "서버와 연결할 수 없어요. 잠시 후 다시 시도해 주세요.";
 
 export class ApiError extends Error {
   readonly code: string;

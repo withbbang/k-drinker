@@ -31,7 +31,7 @@ export function BreweryPicker({
       <legend className="text-sm font-medium">양조장</legend>
       {disabled && <p className="text-sm text-muted">술을 먼저 정해 주세요</p>}
       {!brewery && (
-        <p className="text-sm text-muted">정해진 양조장이 없습니다.</p>
+        <p className="text-sm text-muted">정해진 양조장이 없어요.</p>
       )}
       <SearchCombobox
         label="양조장 검색"

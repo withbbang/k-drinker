@@ -30,9 +30,9 @@ import { readSharedPhotos } from "@/lib/shared-photos";
 const MAX_PHOTOS = 10;
 const MAX_MEMO_LENGTH = 2000;
 const MEMO_PREVIEW_LENGTH = 40;
-const FALLBACK_ERROR = "전송에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+const FALLBACK_ERROR = "전송에 실패했어요. 잠시 후 다시 시도해 주세요.";
 const SESSION_ERROR =
-  "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  "로그인 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
 type SharedPhoto = { id: number; file: File };
 const TITLE = "새 기록";
@@ -134,7 +134,7 @@ export function ShareForm() {
     return (
       <Shell>
         <p>
-          공유된 사진이 없습니다. 갤러리에서 사진을 골라 k-drinker로 공유해
+          공유된 사진이 없어요. 갤러리에서 사진을 골라 k-drinker로 공유해
           주세요.
         </p>
       </Shell>

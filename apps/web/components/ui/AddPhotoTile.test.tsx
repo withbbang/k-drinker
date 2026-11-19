@@ -52,7 +52,7 @@ describe("AddPhotoTile", () => {
 
   it("overflowMessage 문구", () => {
     expect(overflowMessage(2)).toBe(
-      "사진은 10장까지 넣을 수 있어 2장은 넣지 않았습니다.",
+      "사진은 10장까지 넣을 수 있어 2장은 넣지 않았어요.",
     );
   });
 });

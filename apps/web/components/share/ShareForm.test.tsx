@@ -242,7 +242,7 @@ describe("ShareForm", () => {
     readMock.mockResolvedValue(photos(1));
     apiFetchMock.mockImplementation(async (path: string) => {
       if (path === "/api/v1/posts") {
-        throw new ApiError("POST_PHOTO_COUNT", "저장에 실패했습니다.");
+        throw new ApiError("POST_PHOTO_COUNT", "저장에 실패했어요.");
       }
     });
     renderForm();
@@ -253,7 +253,7 @@ describe("ShareForm", () => {
 
     // then
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "저장에 실패했습니다.",
+      "저장에 실패했어요.",
     );
     expect(clearMock).not.toHaveBeenCalled();
   });
@@ -513,7 +513,7 @@ describe("ShareForm", () => {
     // then
     expect(screen.getAllByRole("img")).toHaveLength(10);
     expect(
-      noticeWith("사진은 10장까지 넣을 수 있어 2장은 넣지 않았습니다."),
+      noticeWith("사진은 10장까지 넣을 수 있어 2장은 넣지 않았어요."),
     ).not.toBeNull();
     expect(screen.queryByRole("button", { name: "사진 추가" })).toBeNull();
 
@@ -521,7 +521,7 @@ describe("ShareForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
 
     // then
-    expect(noticeWith("넣지 않았습니다")).toBeNull();
+    expect(noticeWith("넣지 않았어요")).toBeNull();
   });
 
   it("sends added photos in order after the shared ones", async () => {
@@ -554,7 +554,7 @@ describe("ShareForm", () => {
     // then
     expect(
       await screen.findByText(
-        "공유된 사진이 없습니다. 갤러리에서 사진을 골라 k-drinker로 공유해 주세요.",
+        "공유된 사진이 없어요. 갤러리에서 사진을 골라 k-drinker로 공유해 주세요.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "보내기" })).toBeNull();
@@ -568,9 +568,7 @@ describe("ShareForm", () => {
     renderForm();
 
     // then
-    expect(
-      await screen.findByText(/공유된 사진이 없습니다/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/공유된 사진이 없어요/)).toBeInTheDocument();
   });
 
   it("shows a retry message when the session check fails", async () => {
@@ -585,7 +583,7 @@ describe("ShareForm", () => {
 
     // then
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "로그인 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.",
     );
     expect(
       screen.getByRole("button", { name: "다시 시도" }),

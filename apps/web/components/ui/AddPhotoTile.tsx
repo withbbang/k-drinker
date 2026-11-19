@@ -5,7 +5,7 @@ import { useRef } from "react";
 const ACCEPTED_TYPES = ["image/jpeg", "image/png"];
 
 export function overflowMessage(skipped: number): string {
-  return `사진은 10장까지 넣을 수 있어 ${skipped}장은 넣지 않았습니다.`;
+  return `사진은 10장까지 넣을 수 있어 ${skipped}장은 넣지 않았어요.`;
 }
 
 // 사진 추가 [+] 타일. 남은 자리(remaining)만큼만 받고 넘치면 알린다.

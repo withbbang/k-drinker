@@ -64,13 +64,14 @@ describe("AppNav", () => {
     ).not.toBeInTheDocument();
   });
 
-  it.each(["app/page.tsx", "app/breweries/page.tsx", "app/settings/page.tsx"])(
-    "%s reserves room for the tab bar",
-    (file) => {
-      const source = readFileSync(join(process.cwd(), file), "utf8");
+  it("tab screens share one layout that reserves room for the tab bar", () => {
+    const source = readFileSync(
+      join(process.cwd(), "app/(tabs)/layout.tsx"),
+      "utf8",
+    );
 
-      expect(source).toMatch(/import \{[^}]*TAB_SAFE_PADDING[^}]*\}/);
-      expect(source).toMatch(/\$\{TAB_SAFE_PADDING\}/);
-    },
-  );
+    expect(source).toMatch(/import \{[^}]*TAB_SAFE_PADDING[^}]*\}/);
+    expect(source).toMatch(/\$\{TAB_SAFE_PADDING\}/);
+    expect(source).toMatch(/<AppNav \/>/);
+  });
 });

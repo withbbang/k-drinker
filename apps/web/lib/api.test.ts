@@ -82,7 +82,7 @@ describe("apiFetch", () => {
     await expect(result).rejects.toBeInstanceOf(ApiError);
     await expect(result).rejects.toMatchObject({
       code: "COMMON_INTERNAL_ERROR",
-      message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      message: "서버와 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
     });
   });
 
@@ -100,7 +100,7 @@ describe("apiFetch", () => {
     await expect(result).rejects.toMatchObject({
       name: "ApiError",
       code: "COMMON_INTERNAL_ERROR",
-      message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      message: "서버와 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
     });
   });
 
@@ -129,7 +129,7 @@ describe("apiFetch", () => {
     await expect(result).rejects.toMatchObject({
       name: "ApiError",
       code: "COMMON_INTERNAL_ERROR",
-      message: "서버와 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+      message: "서버와 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
     });
   });
 });

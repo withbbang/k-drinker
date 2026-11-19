@@ -22,7 +22,7 @@ export function moveByKey<T>(
 // 화면 낭독기 안내. dnd-kit 기본값은 영어라 한국어로 바꾼다.
 export const SCREEN_READER_INSTRUCTIONS = {
   draggable:
-    "스페이스나 엔터로 들고, 화살표로 옮긴 뒤 다시 눌러 놓으세요. 취소는 Esc입니다.",
+    "스페이스나 엔터로 들고, 화살표로 옮긴 뒤 다시 눌러 놓으세요. 취소는 Esc예요.",
 };
 
 type DragIds = {

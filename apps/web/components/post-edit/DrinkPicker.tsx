@@ -43,7 +43,7 @@ export function DrinkPicker({
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-medium">술</legend>
       {newName === "" && value.drinkId === null && (
-        <p className="text-sm text-muted">정해진 술이 없습니다.</p>
+        <p className="text-sm text-muted">정해진 술이 없어요.</p>
       )}
       <SearchCombobox
         label="술 검색"
