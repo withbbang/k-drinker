@@ -201,4 +201,44 @@ describe("SearchCombobox", () => {
 
     expect(screen.queryByRole("listbox")).toBeNull();
   });
+
+  it("shows the chip again when a label appears after the x and a focus exit", async () => {
+    function Wrapper() {
+      const [label, setLabel] = useState<string | null>("서울장수");
+      return (
+        <>
+          <Harness
+            items={MANY}
+            onPick={vi.fn()}
+            selectedLabel={label}
+            onClear={() => setLabel(null)}
+          />
+          <button type="button" onClick={() => setLabel("새 이름")}>
+            바깥
+          </button>
+        </>
+      );
+    }
+    render(<Wrapper />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "서울장수 지우기" }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "바깥" }));
+
+    expect(screen.getByRole("button", { name: "새 이름" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("returns to the chip on Escape when editing with an empty query", async () => {
+    render(<Harness items={MANY} onPick={vi.fn()} selectedLabel="서울장수" />);
+    await userEvent.click(screen.getByRole("button", { name: "서울장수" }));
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "서울장수" }),
+    ).toBeInTheDocument();
+  });
 });

@@ -99,6 +99,10 @@ export function SearchCombobox<T>({
       setDismissed(true);
       onQueryChange("");
       setActive(-1);
+    } else if (event.key === "Escape" && selectedLabel !== null) {
+      // 검색어가 없으면 편집을 마치고 칩으로 돌아간다.
+      event.preventDefault();
+      setEditing(false);
     }
   };
 
@@ -108,10 +112,8 @@ export function SearchCombobox<T>({
       className="relative flex flex-col gap-1"
       onBlur={(event) => {
         if (wrapperRef.current?.contains(event.relatedTarget)) return;
-        if (selectedLabel !== null) {
-          setEditing(false);
-          onQueryChange("");
-        }
+        setEditing(false);
+        if (selectedLabel !== null) onQueryChange("");
         setActive(-1);
         onBlurField?.();
       }}
