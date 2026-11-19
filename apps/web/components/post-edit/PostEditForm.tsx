@@ -174,11 +174,17 @@ function Editor({ post, onSave }: EditorProps) {
       </label>
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">미리보기</span>
-        <pre
-          className={`whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-sm ${preview.isFetching ? "opacity-50" : ""}`}
-        >
-          {preview.data?.caption ?? post.publishCaption}
-        </pre>
+        {preview.isError ? (
+          <p role="alert" className="text-sm text-red-700">
+            미리보기를 불러오지 못했어요
+          </p>
+        ) : (
+          <pre
+            className={`whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-sm ${preview.isFetching ? "opacity-50" : ""}`}
+          >
+            {preview.data?.caption ?? post.publishCaption}
+          </pre>
+        )}
         <p
           role={overLimit ? "alert" : undefined}
           className={`text-sm ${overLimit ? "text-red-700" : "text-neutral-700"}`}

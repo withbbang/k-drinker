@@ -56,4 +56,15 @@ describe("useCaptionPreview", () => {
     expect(path).toBe("/api/v1/posts/7/caption-preview");
     expect(JSON.parse(init.body).captionHead).toBe("abc");
   });
+
+  it("요청이_실패하면_다시_시도하지_않고_isError를_알린다", async () => {
+    apiFetchMock.mockReset();
+    apiFetchMock.mockRejectedValue(new Error("400"));
+    const { result } = renderHook(() => useCaptionPreview("7", base), {
+      wrapper,
+    });
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(result.current.isError).toBe(true);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
 });

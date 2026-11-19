@@ -22,7 +22,7 @@ export function useCaptionPreview(id: string, input: CaptionPreviewRequest) {
     return () => clearTimeout(timer);
   }, [serialized]);
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError } = useQuery({
     queryKey: ["posts", id, "caption-preview", debounced],
     queryFn: ({ signal }) =>
       apiFetch<CaptionPreviewResponse>(`/api/v1/posts/${id}/caption-preview`, {
@@ -32,10 +32,13 @@ export function useCaptionPreview(id: string, input: CaptionPreviewRequest) {
         signal,
       }),
     placeholderData: keepPreviousData,
+    // 잘못된 입력(4xx)은 다시 보내도 같다. 실패는 화면에 알리고 다음 입력 때 다시 요청한다.
+    retry: false,
   });
   // 입력이 아직 반영 전이면 흐리게 보이도록 대기 중인 것도 가져오는 중으로 본다.
   return {
     data,
+    isError,
     isFetching: isFetching || serialized !== JSON.stringify(debounced),
   };
 }

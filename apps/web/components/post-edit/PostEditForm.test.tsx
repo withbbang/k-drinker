@@ -269,6 +269,28 @@ describe("PostEditForm", () => {
     );
   });
 
+  it("shows a preview error instead of the stored caption when the preview fails", async () => {
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === "/api/v1/posts/7/caption-preview") {
+        throw new ApiError("POST_NOT_EDITABLE", "bad request");
+      }
+      return post({ publishCaption: "저장된 캡션" });
+    });
+    render(
+      <QueryProvider>
+        <PostEditForm id="7" />
+      </QueryProvider>,
+    );
+    expect(
+      await screen.findByText("미리보기를 불러오지 못했어요"),
+    ).toHaveAttribute("role", "alert");
+    expect(screen.queryByText("저장된 캡션")).not.toBeInTheDocument();
+    const previewCalls = apiFetchMock.mock.calls.filter(
+      ([path]) => path === "/api/v1/posts/7/caption-preview",
+    );
+    expect(previewCalls).toHaveLength(1);
+  });
+
   it("shows a read-only notice when not editable", async () => {
     setup(post({ editable: false, status: "PUBLISHED" }));
     expect(
