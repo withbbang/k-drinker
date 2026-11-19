@@ -11,7 +11,7 @@ paths:
 - 디렉토리: `app/`(라우트) · `components/ui/`(범용) · `components/<feature>/`(도메인) · `hooks/` · `lib/` · `types/api/`.
 - 파일명: 컴포넌트 `PascalCase.tsx`, 훅 `use-xxx.ts`, 그 외 `kebab-case.ts`.
 - 타입: `any` 금지. API 응답 타입은 `types/api/`에 두고 백엔드 DTO 이름(`XxxResponse`)과 일치시킨다.
-- 스타일: Tailwind만. 인라인 `style={}` 금지. 공통 변형은 `cva` 또는 유틸 함수로.
+- 스타일: Tailwind만. 인라인 `style={}` 금지 (예외: dnd-kit이 계산하는 transform·transition, 이유 주석 필수). 공통 변형은 `cva` 또는 유틸 함수로.
 - import 순서: react → next → 외부 패키지 → `@/` 절대경로 → 상대경로. 절대경로는 `@/`만 사용.
 - 접근성: 버튼은 `<button>`, 링크는 `<Link>`. `div onClick` 금지.
 - `react-hooks/set-state-in-effect` lint가 effect 안 setState를 막는다 → 상태를 effect로 동기화하지 말고 렌더에서 파생해 쓴다.
