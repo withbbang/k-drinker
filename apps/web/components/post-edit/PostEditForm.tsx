@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { BreweryPicker } from "@/components/post-edit/BreweryPicker";
+import { CaptionEditor } from "@/components/post-edit/CaptionEditor";
 import {
   DrinkPicker,
   type DrinkChoice,
@@ -14,13 +15,20 @@ import {
   toUpdatePhotos,
   type PhotoItem,
 } from "@/components/post-edit/photo-items";
-import { PhotoOrderList } from "@/components/post-edit/PhotoOrderList";
+import { PhotoViewerSheet } from "@/components/post-edit/PhotoViewerSheet";
 import { overflowMessage } from "@/components/ui/AddPhotoTile";
+import { AutoTextarea } from "@/components/ui/AutoTextarea";
+import { BlobImage } from "@/components/ui/BlobImage";
+import { buttonClass } from "@/components/ui/button";
+import { PhotoStrip } from "@/components/ui/PhotoStrip";
 import { RatingInput } from "@/components/ui/RatingInput";
+import { Toast } from "@/components/ui/Toast";
+import { TopBar } from "@/components/ui/TopBar";
 import { UndoRedoBar } from "@/components/ui/UndoRedoBar";
 import { useBrewery } from "@/hooks/use-breweries";
 import { useCaptionPreview } from "@/hooks/use-caption-preview";
 import { usePost } from "@/hooks/use-post";
+import { useToast } from "@/hooks/use-toast";
 import { useUndoable } from "@/hooks/use-undoable";
 import { useUpdatePost } from "@/hooks/use-update-post";
 import { ApiError } from "@/lib/api";
@@ -28,29 +36,65 @@ import type { BreweryResponse } from "@/types/api/brewery";
 import type { PostDetailResponse } from "@/types/api/post";
 
 const MAX_MEMO_LENGTH = 2000;
-const MAX_CAPTION_LENGTH = 2200;
+const MAX_PHOTOS = 10;
 const FALLBACK_ERROR = "저장에 실패했습니다. 잠시 후 다시 시도해 주세요.";
-const TEXTAREA =
-  "rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+const TITLE = "수정";
 
-// 되돌리기 기록에 남기는 값. 글자 칸은 넣지 않는다.
-type EditState = { photos: PhotoItem[]; rating: number | null };
+// 되돌리기 기록에 남기는 값. 양조장 시트에서 고친 양조장 정보는 서버에 바로 저장하므로 넣지 않는다.
+type EditState = {
+  photos: PhotoItem[];
+  rating: number | null;
+  drink: DrinkChoice;
+  // 고른 양조장. 없으면 술의 현재 양조장을 그대로 둔다.
+  picked: BreweryResponse | null;
+  memo: string;
+  captionHead: string;
+  captionTail: string;
+};
+
+// 글자 칸의 되돌리기 묶음 키
+type TextField = "memo" | "captionHead" | "captionTail" | "newDrinkName";
 
 type EditorProps = {
   post: PostDetailResponse;
   onSave: ReturnType<typeof useUpdatePost>;
 };
 
+function photoImage(
+  photo: PhotoItem,
+  alt: string,
+  version: number,
+  className: string,
+) {
+  return photo.kind === "saved" ? (
+    // eslint-disable-next-line @next/next/no-img-element -- 원본 미디어 URL
+    <img src={`${photo.url}?v=${version}`} alt={alt} className={className} />
+  ) : (
+    <BlobImage file={photo.file} alt={alt} className={className} />
+  );
+}
+
 function Editor({ post, onSave }: EditorProps) {
   const router = useRouter();
-  const [drink, setDrink] = useState<DrinkChoice>({
-    drinkId: post.drinkId,
-    drinkName: post.drinkName,
-    breweryId: post.brewery?.id ?? null,
-    newDrinkName: "",
-  });
-  // 고른 양조장. 고르지 않으면 술의 현재 양조장을 그대로 둔다.
-  const [picked, setPicked] = useState<BreweryResponse | null>(null);
+  const formId = useId();
+  const { state, set, setTyping, endTyping, undo, redo, canUndo, canRedo } =
+    useUndoable<EditState>({
+      photos: fromSaved(post.photos),
+      rating: post.rating,
+      drink: {
+        drinkId: post.drinkId,
+        drinkName: post.drinkName,
+        breweryId: post.brewery?.id ?? null,
+        newDrinkName: "",
+      },
+      picked: null,
+      memo: post.memo ?? "",
+      captionHead: post.captionHead ?? "",
+      captionTail: post.captionTail ?? "",
+    });
+  const { photos, rating, drink, picked, memo, captionHead, captionTail } =
+    state;
+  const { toast, show, dismiss } = useToast();
   const newName = drink.newDrinkName.trim();
   // 다른 술을 고르면 그 술의 양조장을 현재 양조장으로 보여 준다.
   // 새 이름이면 API가 게시물의 현재 양조장을 새 술에 붙이므로 그 양조장을 그대로 보여 준다.
@@ -60,23 +104,35 @@ function Editor({ post, onSave }: EditorProps) {
   // 고른 양조장은 시트에서 고친 값이 보이도록 최신 조회 결과를 쓴다.
   const pickedFresh = useBrewery(picked?.id ?? null);
   const base = (picked && (pickedFresh.data ?? picked)) ?? current;
-  const [memo, setMemo] = useState(post.memo ?? "");
-  const [captionHead, setCaptionHead] = useState(post.captionHead ?? "");
-  const [captionTail, setCaptionTail] = useState(post.captionTail ?? "");
-  const { state, set, undo, redo, canUndo, canRedo } = useUndoable<EditState>({
-    photos: fromSaved(post.photos),
-    rating: post.rating,
-  });
-  const { photos, rating } = state;
   // 새 사진 키 순번. 되돌려도 다시 쓰지 않아 키가 겹치지 않는다.
   const seq = useRef(0);
   const [notice, setNotice] = useState<string | null>(null);
-  // 사진 애니메이션 중에는 변경이 아직 photos에 반영되지 않았으므로 저장을 막는다.
+  // 사진을 끄는 동안은 순서가 아직 photos에 반영되지 않았으므로 저장·되돌리기를 막는다.
   const [photosBusy, setPhotosBusy] = useState(false);
+  // 크게 보기 시트를 연 사진
+  const [viewingKey, setViewingKey] = useState<string | null>(null);
+  const locked = photosBusy || onSave.isPending;
 
-  const change = (next: (prev: EditState) => EditState) => {
+  // 어떤 변경이든 지난 알림과 "사진을 뺐어요" 토스트는 닫는다.
+  const clearMessages = () => {
     setNotice(null);
+    dismiss();
+  };
+  const change = (next: (prev: EditState) => EditState) => {
+    clearMessages();
     set(next);
+  };
+  const typeText = (key: TextField, next: (prev: EditState) => EditState) => {
+    clearMessages();
+    setTyping(key, next);
+  };
+  const handleUndo = () => {
+    clearMessages();
+    undo();
+  };
+  const handleRedo = () => {
+    clearMessages();
+    redo();
   };
 
   const addPhotos = (files: File[]) => {
@@ -86,6 +142,40 @@ function Editor({ post, onSave }: EditorProps) {
       ...prev,
       photos: [...prev.photos, ...newItems(files, start)],
     }));
+  };
+
+  const removePhoto = (key: string) => {
+    change((prev) => ({
+      ...prev,
+      photos: prev.photos.filter((p) => p.key !== key),
+    }));
+    show("사진을 뺐어요", { label: "실행 취소", onAction: handleUndo });
+  };
+
+  const togglePad = (key: string) =>
+    change((prev) => ({
+      ...prev,
+      photos: prev.photos.map((p) =>
+        p.key === key
+          ? { ...p, fitMode: p.fitMode === "PAD" ? "CROP" : "PAD" }
+          : p,
+      ),
+    }));
+
+  const handleDrinkChange = (next: DrinkChoice) => {
+    // 새 이름 칸에 글자만 친 경우는 글자 입력으로 묶는다.
+    const typingName =
+      next.drinkId === drink.drinkId &&
+      next.drinkName === drink.drinkName &&
+      next.breweryId === drink.breweryId;
+    const apply = (prev: EditState): EditState => ({
+      ...prev,
+      drink: next,
+      // 다른 술을 고르면 고른 양조장을 비워 그 술의 양조장을 쓴다.
+      picked: next.drinkId !== prev.drink.drinkId ? null : prev.picked,
+    });
+    if (typingName) typeText("newDrinkName", apply);
+    else change(apply);
   };
 
   const hasDrink = drink.drinkId !== null || newName !== "";
@@ -99,19 +189,18 @@ function Editor({ post, onSave }: EditorProps) {
     captionTail,
   });
   const previewLength = preview.data?.length ?? post.captionLength;
-  const overLimit = previewLength > MAX_CAPTION_LENGTH;
   const drinkNameFixed =
     !post.captionTemplated &&
     (newName !== "" || drink.drinkId !== post.drinkId);
+  const drinkTitle =
+    newName !== "" ? newName : drink.drinkId !== null ? drink.drinkName : null;
 
-  const handleDrinkChange = (next: DrinkChoice) => {
-    if (next.drinkId !== drink.drinkId) setPicked(null);
-    setDrink(next);
-  };
+  const viewingIndex = photos.findIndex((p) => p.key === viewingKey);
+  const viewing = viewingIndex === -1 ? null : photos[viewingIndex];
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (photosBusy) return;
+    if (locked) return;
     const { photos: photoEdits, newPhotos } = toUpdatePhotos(photos);
     // 저장하면 새 버전으로 Editor가 다시 만들어지므로 mutate 콜백 대신 Promise로 이동한다.
     // 실패하면 사진·기록을 그대로 두어 다시 저장하거나 되돌릴 수 있다.
@@ -136,110 +225,154 @@ function Editor({ post, onSave }: EditorProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <DrinkPicker value={drink} onChange={handleDrinkChange} />
-      <BreweryPicker disabled={!hasDrink} brewery={base} onPick={setPicked} />
-      <RatingInput
-        value={rating}
-        onChange={(value) => change((prev) => ({ ...prev, rating: value }))}
-        disabled={onSave.isPending}
+    <>
+      <TopBar
+        title={TITLE}
+        backHref={`/posts/${post.id}`}
+        actions={
+          <>
+            <UndoRedoBar
+              canUndo={canUndo}
+              canRedo={canRedo}
+              disabled={locked}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+            />
+            <button
+              type="submit"
+              form={formId}
+              disabled={locked}
+              className={buttonClass("primary", "ml-1 px-4")}
+            >
+              저장
+            </button>
+          </>
+        }
       />
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-medium">메모</span>
-        <input
-          type="text"
-          value={memo}
-          maxLength={MAX_MEMO_LENGTH}
-          onChange={(event) => setMemo(event.target.value)}
-          className={TEXTAREA}
+      <form
+        id={formId}
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-6 px-4 pb-24 pt-5"
+      >
+        <h2 className="font-serif text-2xl leading-snug text-text">
+          {drinkTitle ?? "이름 없는 술"}
+        </h2>
+        <PhotoStrip
+          items={photos}
+          getKey={(photo) => photo.key}
+          renderImage={(photo, className) =>
+            photoImage(
+              photo,
+              `사진 ${photos.indexOf(photo) + 1}`,
+              post.version,
+              className,
+            )
+          }
+          isPadded={(photo) => photo.fitMode === "PAD"}
+          // 저장 중 바꾼 사진은 보낸 요청에 들어가지 않으므로 잠근다.
+          disabled={onSave.isPending}
+          max={MAX_PHOTOS}
+          onReorder={(next) => change((prev) => ({ ...prev, photos: next }))}
+          onRemove={removePhoto}
+          onOpen={setViewingKey}
+          onBusyChange={setPhotosBusy}
+          onAdd={addPhotos}
+          onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
         />
-      </label>
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-medium">캡션 머리</span>
-        <textarea
-          rows={5}
-          value={captionHead}
-          onChange={(event) => setCaptionHead(event.target.value)}
-          className={TEXTAREA}
+        <DrinkPicker
+          value={drink}
+          onChange={handleDrinkChange}
+          onNewNameBlur={endTyping}
         />
-      </label>
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-medium">캡션 꼬리</span>
-        <textarea
-          rows={3}
-          value={captionTail}
-          onChange={(event) => setCaptionTail(event.target.value)}
-          className={TEXTAREA}
+        <BreweryPicker
+          disabled={!hasDrink}
+          brewery={base}
+          onPick={(next) => change((prev) => ({ ...prev, picked: next }))}
         />
-      </label>
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">미리보기</span>
-        {preview.isError ? (
-          <p role="alert" className="text-sm text-red-700">
-            미리보기를 불러오지 못했어요
-          </p>
-        ) : (
-          <pre
-            className={`whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-sm ${preview.isFetching ? "opacity-50" : ""}`}
-          >
-            {preview.data?.caption ?? post.publishCaption}
-          </pre>
-        )}
-        <p
-          role={overLimit ? "alert" : undefined}
-          className={`text-sm ${overLimit ? "text-red-700" : "text-neutral-700"}`}
-        >
-          {previewLength.toLocaleString("ko-KR")}자 / 2,200자
-        </p>
+        <RatingInput
+          value={rating}
+          onChange={(value) => change((prev) => ({ ...prev, rating: value }))}
+          disabled={onSave.isPending}
+        />
+        <label className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-text">메모</span>
+          <AutoTextarea
+            value={memo}
+            maxLength={MAX_MEMO_LENGTH}
+            onChange={(event) => {
+              const value = event.target.value;
+              typeText("memo", (prev) => ({ ...prev, memo: value }));
+            }}
+            onBlur={endTyping}
+          />
+        </label>
+        <CaptionEditor
+          head={captionHead}
+          tail={captionTail}
+          onHeadChange={(value) =>
+            typeText("captionHead", (prev) => ({ ...prev, captionHead: value }))
+          }
+          onTailChange={(value) =>
+            typeText("captionTail", (prev) => ({ ...prev, captionTail: value }))
+          }
+          onFieldBlur={endTyping}
+          templated={post.captionTemplated}
+          preview={{
+            caption: preview.data?.caption ?? post.publishCaption,
+            length: previewLength,
+            fetching: preview.isFetching,
+            error: preview.isError,
+          }}
+        />
         {drinkNameFixed && (
-          <p className="text-sm text-neutral-700">
+          <p className="text-sm text-muted">
             이 글은 이름표가 없어 술 이름이 자동으로 바뀌지 않아요
           </p>
         )}
-      </div>
-      <UndoRedoBar
-        canUndo={canUndo}
-        canRedo={canRedo}
-        disabled={photosBusy || onSave.isPending}
-        onUndo={() => {
-          setNotice(null);
-          undo();
-        }}
-        onRedo={() => {
-          setNotice(null);
-          redo();
-        }}
-      />
-      <PhotoOrderList
-        photos={photos}
-        version={post.version}
-        // 저장 중 바꾼 사진은 보낸 요청에 들어가지 않으므로 잠근다.
-        disabled={onSave.isPending}
-        onChange={(next) => change((prev) => ({ ...prev, photos: next }))}
-        onBusyChange={setPhotosBusy}
-        onAdd={addPhotos}
-        onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
-      />
-      {notice !== null && (
-        <p role="status" className="text-sm text-neutral-700">
-          {notice}
-        </p>
+        {notice !== null && (
+          <p role="status" className="text-sm text-muted">
+            {notice}
+          </p>
+        )}
+        {onSave.isError && (
+          <p role="alert" className="text-sm text-danger">
+            {onSave.error instanceof ApiError
+              ? onSave.error.message
+              : FALLBACK_ERROR}
+          </p>
+        )}
+      </form>
+      {viewing && (
+        <PhotoViewerSheet
+          title={`${viewingIndex + 1}번째 사진`}
+          image={photoImage(
+            viewing,
+            `${viewingIndex + 1}번째 사진 크게 보기`,
+            post.version,
+            `aspect-[4/5] w-full max-w-xs rounded-thumb border border-line ${
+              viewing.fitMode === "PAD"
+                ? "object-contain bg-bg"
+                : "object-cover"
+            }`,
+          )}
+          padded={viewing.fitMode === "PAD"}
+          onTogglePad={() => togglePad(viewing.key)}
+          onClose={() => setViewingKey(null)}
+          disabled={onSave.isPending}
+        />
       )}
-      <button
-        type="submit"
-        disabled={onSave.isPending || photosBusy}
-        className="rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
-      >
-        저장
-      </button>
-      {onSave.isError && (
-        <p role="alert" className="text-sm text-red-700">
-          {onSave.error instanceof ApiError
-            ? onSave.error.message
-            : FALLBACK_ERROR}
-        </p>
-      )}
-    </form>
+      <Toast toast={toast} onDismiss={dismiss} />
+    </>
+  );
+}
+
+// 편집기를 띄우기 전 상태(오류·읽기 전용)에도 같은 상단 바를 둔다.
+function Shell({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <>
+      <TopBar title={TITLE} backHref={`/posts/${id}`} />
+      <div className="flex flex-col gap-2 px-4 pt-5 text-text">{children}</div>
+    </>
   );
 }
 
@@ -249,19 +382,21 @@ export function PostEditForm({ id }: { id: string }) {
 
   if (post.isError) {
     return (
-      <p role="alert" className="text-sm text-red-700">
-        {post.error instanceof ApiError ? post.error.message : FALLBACK_ERROR}
-      </p>
+      <Shell id={id}>
+        <p role="alert" className="text-sm text-danger">
+          {post.error instanceof ApiError ? post.error.message : FALLBACK_ERROR}
+        </p>
+      </Shell>
     );
   }
-  if (!post.data) return null;
+  if (!post.data) return <Shell id={id}>{null}</Shell>;
 
   if (!post.data.editable) {
     return (
-      <div className="flex flex-col gap-2">
+      <Shell id={id}>
         <p>상태: {post.data.status}</p>
         <p>지금은 수정할 수 없는 게시물입니다.</p>
-      </div>
+      </Shell>
     );
   }
 

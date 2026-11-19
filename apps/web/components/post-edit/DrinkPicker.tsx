@@ -16,6 +16,8 @@ export type DrinkChoice = {
 type DrinkPickerProps = {
   value: DrinkChoice;
   onChange: (value: DrinkChoice) => void;
+  // 새 이름 칸에서 포커스가 나갔을 때(되돌리기 묶음을 끊는 데 쓴다).
+  onNewNameBlur?: () => void;
 };
 
 const NONE: DrinkChoice = {
@@ -28,7 +30,11 @@ const NONE: DrinkChoice = {
 const INPUT =
   "min-h-11 rounded-field border border-line bg-surface px-3 text-text focus-visible:outline-2 focus-visible:outline-accent";
 
-export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
+export function DrinkPicker({
+  value,
+  onChange,
+  onNewNameBlur,
+}: DrinkPickerProps) {
   const [q, setQ] = useState("");
   const search = useDrinkSearch(q);
   const newName = value.newDrinkName.trim();
@@ -74,6 +80,7 @@ export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
           onChange={(event) =>
             onChange({ ...value, newDrinkName: event.target.value })
           }
+          onBlur={onNewNameBlur}
           className={INPUT}
         />
       </label>

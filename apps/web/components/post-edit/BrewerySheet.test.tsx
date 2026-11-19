@@ -50,10 +50,9 @@ describe("BrewerySheet", () => {
   it("opens as a dialog with the notice and focuses the first input", () => {
     setup();
 
-    expect(screen.getByRole("dialog", { name: "양조장 정보" })).toHaveAttribute(
-      "aria-modal",
-      "true",
-    );
+    expect(
+      screen.getByRole("dialog", { name: "양조장 정보 고치기" }),
+    ).toHaveAttribute("aria-modal", "true");
     expect(
       screen.getByText("이 양조장을 쓰는 다른 게시물에도 반영돼요"),
     ).toBeInTheDocument();

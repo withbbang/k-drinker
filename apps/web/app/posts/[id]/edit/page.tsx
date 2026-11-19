@@ -18,8 +18,8 @@ export default function PostEditPage({
       <Suspense fallback={null}>
         <AppNav />
       </Suspense>
-      <main className="mx-auto flex w-full max-w-sm flex-col gap-6 px-4 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight">후기 수정</h1>
+      {/* 제목·저장은 PostEditForm의 상단 바가 맡는다. */}
+      <main className="mx-auto flex w-full max-w-sm flex-col">
         <Suspense fallback={null}>
           <EditContent params={params} />
         </Suspense>

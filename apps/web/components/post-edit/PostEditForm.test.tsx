@@ -1,5 +1,4 @@
 import {
-  act,
   fireEvent,
   render,
   screen,
@@ -115,11 +114,28 @@ async function addPhoto(file: File) {
   await userEvent.upload(input, file);
 }
 
-async function confirmDelete(index: number) {
-  await userEvent.click(
-    (await screen.findAllByRole("button", { name: "삭제" }))[index],
+function saveButton() {
+  return within(document.querySelector("header")!).getByRole("button", {
+    name: "저장",
+  });
+}
+
+async function findSaveButton() {
+  await screen.findByLabelText("메모");
+  return saveButton();
+}
+
+// dnd-kit의 읽기용 live region도 role=status라 토스트 문구로 찾는다.
+function removedToast() {
+  return (
+    screen
+      .queryAllByRole("status")
+      .find((el) => el.textContent?.includes("사진을 뺐어요")) ?? null
   );
-  await userEvent.click(screen.getByRole("button", { name: "빼기" }));
+}
+
+async function openPreviewTab() {
+  await userEvent.click(await screen.findByRole("tab", { name: "미리보기" }));
 }
 
 describe("PostEditForm", () => {
@@ -139,13 +155,19 @@ describe("PostEditForm", () => {
   it("fills the form from the post", async () => {
     setup(post());
     expect(await screen.findByLabelText("메모")).toHaveValue("좋음");
-    expect(screen.getByLabelText("캡션 머리")).toHaveValue("머리 문장");
-    expect(screen.getByLabelText("캡션 꼬리")).toHaveValue("#막걸리");
+    expect(screen.getByLabelText("인스타그램 글 앞부분")).toHaveValue(
+      "머리 문장",
+    );
+    expect(screen.getByLabelText("인스타그램 글 뒷부분")).toHaveValue(
+      "#막걸리",
+    );
     expect(screen.getByRole("button", { name: "막걸리" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "막걸리" })).toBeInTheDocument();
   });
 
   it("shows the server preview text and length", async () => {
     setup(post());
+    await openPreviewTab();
     expect(await screen.findByText("채운 캡션")).toBeInTheDocument();
     expect(screen.getByText("123자 / 2,200자")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -154,8 +176,9 @@ describe("PostEditForm", () => {
   it("warns when the preview is over 2,200 characters", async () => {
     setup(post(), { caption: "길다", length: 2300, templated: true });
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "2,300자 / 2,200자",
+      "2,200자를 넘었어요",
     );
+    expect(screen.getByText("2,300자 / 2,200자")).toBeInTheDocument();
   });
 
   const NOTICE = "이 글은 이름표가 없어 술 이름이 자동으로 바뀌지 않아요";
@@ -168,6 +191,7 @@ describe("PostEditForm", () => {
 
   it("shows no notice before the drink changes", async () => {
     setup(post({ captionTemplated: false }));
+    await openPreviewTab();
     await screen.findByText("채운 캡션");
     expect(screen.queryByText(NOTICE)).toBeNull();
   });
@@ -178,20 +202,18 @@ describe("PostEditForm", () => {
     expect(screen.queryByText(NOTICE)).toBeNull();
   });
 
-  it("sends version and photo order on save", async () => {
+  it("sends version, photos and caption on save", async () => {
     setup(post());
-    await userEvent.click(
-      (await screen.findAllByRole("button", { name: "아래로" }))[0],
-    );
-    await userEvent.clear(screen.getByLabelText("캡션 머리"));
-    await userEvent.type(screen.getByLabelText("캡션 머리"), "새 머리");
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    const head = await screen.findByLabelText("인스타그램 글 앞부분");
+    await userEvent.clear(head);
+    await userEvent.type(head, "새 머리");
+    await userEvent.click(saveButton());
 
     await waitFor(async () => expect((await putBody()).version).toBe(4));
     const body = await putBody();
     expect(body.photos).toEqual([
-      { id: 2, fitMode: "CROP" },
       { id: 1, fitMode: "CROP" },
+      { id: 2, fitMode: "CROP" },
     ]);
     expect(body.captionHead).toBe("새 머리");
     expect(body.captionTail).toBe("#막걸리");
@@ -201,6 +223,24 @@ describe("PostEditForm", () => {
     expect(body).not.toHaveProperty("breweryEdit");
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/posts/7"));
     expect(screen.queryByText(/텔레그램으로 새 개요/)).toBeNull();
+  });
+
+  it("상단_저장_버튼으로_저장한다", async () => {
+    // given
+    setup(post());
+    const save = await findSaveButton();
+
+    // when
+    await userEvent.click(save);
+
+    // then
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect(screen.getAllByRole("button", { name: "저장" })).toEqual([save]);
+    expect(
+      within(document.querySelector("form")!).queryByRole("button", {
+        name: "저장",
+      }),
+    ).toBeNull();
   });
 
   it("locks photo controls and rating while saving", async () => {
@@ -216,38 +256,50 @@ describe("PostEditForm", () => {
         <PostEditForm id="7" />
       </QueryProvider>,
     );
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "별점" }),
+      "3.0",
+    );
 
     // when
-    await userEvent.click(await screen.findByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     // then
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "저장" })).toBeDisabled(),
-    );
-    for (const name of ["위로", "아래로", "삭제", "여백 넣기"]) {
-      for (const button of screen.getAllByRole("button", { name })) {
-        expect(button).toBeDisabled();
-      }
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    for (const name of ["1번째 사진 빼기", "2번째 사진 빼기"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
     }
     expect(screen.getByRole("button", { name: "사진 추가" })).toBeDisabled();
     expect(screen.getByLabelText("별점")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
   });
 
-  it("disables save while a photo animation is pending, then saves the deletion", async () => {
-    // 애니메이션을 켠다(모션 감소 아님)
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+  it("사진을_끄는_동안_저장과_되돌리기를_막는다", async () => {
+    // given — 별점을 바꿔 되돌릴 기록을 만든다
     setup(post());
-    await confirmDelete(0);
-
-    expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "저장" })).toBeEnabled(),
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "별점" }),
+      "3.0",
     );
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    const thumb = screen.getByRole("button", { name: "1번째 사진, 대표" });
 
-    await waitFor(async () =>
-      expect((await putBody()).photos).toEqual([{ id: 2, fitMode: "CROP" }]),
-    );
+    // when — 키보드로 끌기 시작
+    thumb.focus();
+    fireEvent.keyDown(thumb, { code: "Space", key: " " });
+
+    // then
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
+
+    // when — 끌기 취소
+    fireEvent.keyDown(document.activeElement ?? thumb, {
+      code: "Escape",
+      key: "Escape",
+    });
+
+    // then
+    await waitFor(() => expect(saveButton()).toBeEnabled());
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
   });
 
   it("shows the conflict message", async () => {
@@ -263,7 +315,7 @@ describe("PostEditForm", () => {
         return post();
       },
     );
-    await userEvent.click(await screen.findByRole("button", { name: "저장" }));
+    await userEvent.click(await findSaveButton());
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "다른 곳에서 먼저 바뀌었습니다.",
     );
@@ -281,6 +333,7 @@ describe("PostEditForm", () => {
         <PostEditForm id="7" />
       </QueryProvider>,
     );
+    await openPreviewTab();
     expect(
       await screen.findByText("미리보기를 불러오지 못했어요"),
     ).toHaveAttribute("role", "alert");
@@ -302,7 +355,7 @@ describe("PostEditForm", () => {
   it("sends newDrinkName instead of drinkId for a new drink", async () => {
     setup(post());
     await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     await waitFor(async () =>
       expect((await putBody()).newDrinkName).toBe("새 술"),
@@ -376,7 +429,7 @@ describe("PostEditForm", () => {
       await screen.findByRole("option", { name: "배상면주가" }),
     );
     await userEvent.clear(screen.getByLabelText("새 이름으로"));
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     expect((await putBodies())[0].breweryId).toBeNull();
@@ -384,10 +437,10 @@ describe("PostEditForm", () => {
 
   it("uses the version from the previous save response", async () => {
     setupSearch(post());
-    await userEvent.click(await screen.findByRole("button", { name: "저장" }));
+    await userEvent.click(await findSaveButton());
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/posts/7"));
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
     await waitFor(() => expect(putCalls()).toHaveLength(2));
     expect((await putBodies()).map((b) => b.version)).toEqual([4, 5]);
   });
@@ -399,7 +452,7 @@ describe("PostEditForm", () => {
     );
     await userEvent.type(screen.getByLabelText("술 검색"), "청");
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     expect((await putBodies())[0].drinkId).toBe(11);
@@ -428,7 +481,7 @@ describe("PostEditForm", () => {
       screen.getByRole("button", { name: "배상면주가" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("메모")).toHaveValue("새 메모");
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     const body = (await putBodies())[0];
     expect(body.drinkId).toBe(11);
@@ -466,7 +519,7 @@ describe("PostEditForm", () => {
     expect(
       screen.getByRole("button", { name: "배상면주가" }),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     const body = (await putBodies())[0];
     expect(body.version).toBe(5);
@@ -488,7 +541,7 @@ describe("PostEditForm", () => {
     expect(
       screen.queryByRole("button", { name: "양조장 정보 고치기" }),
     ).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     expect((await putBodies())[0].drinkId).toBe(12);
@@ -497,12 +550,12 @@ describe("PostEditForm", () => {
   it("새_사진을_더해_저장하면_multipart로_보낸다", async () => {
     // given
     setup(post());
-    await screen.findAllByRole("button", { name: "삭제" });
+    await screen.findByRole("button", { name: "2번째 사진 빼기" });
     const file = photoFile("new.jpg");
     await addPhoto(file);
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     // then
     await waitFor(() => expect(putCalls()).toHaveLength(1));
@@ -537,11 +590,11 @@ describe("PostEditForm", () => {
         return post();
       },
     );
-    await screen.findAllByRole("button", { name: "삭제" });
+    await screen.findByRole("button", { name: "2번째 사진 빼기" });
     await addPhoto(photoFile("new.jpg"));
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
     await screen.findByRole("alert");
 
     // then
@@ -552,7 +605,7 @@ describe("PostEditForm", () => {
     expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
 
     // when — 다시 저장
-    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await userEvent.click(saveButton());
 
     // then
     await waitFor(() => expect(putCalls()).toHaveLength(2));
@@ -560,47 +613,131 @@ describe("PostEditForm", () => {
     expect(second.get("newPhotos")).toBe(first.get("newPhotos"));
   });
 
-  it("삭제_뒤_되돌리기면_다시_보인다", async () => {
+  it("사진을_빼면_토스트가_뜨고_실행_취소로_돌아온다", async () => {
     // given
     setup(post());
-    await confirmDelete(0);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "2번째 사진 빼기" }),
+    );
     expect(screen.getAllByAltText(/^사진 \d$/)).toHaveLength(1);
+    expect(removedToast()).not.toBeNull();
 
     // when
-    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+    await userEvent.click(screen.getByRole("button", { name: "실행 취소" }));
 
     // then
     const srcs = screen
       .getAllByAltText(/^사진 \d$/)
       .map((img) => img.getAttribute("src"));
     expect(srcs).toEqual(["/m/1.jpg?v=4", "/m/2.jpg?v=4"]);
+    expect(removedToast()).toBeNull();
   });
 
-  it("애니메이션_중엔_되돌리기_비활성", async () => {
-    // given — 별점을 바꿔 되돌릴 기록을 만든 뒤 애니메이션을 켠다
+  it("사진을_뺀_뒤_다른_것을_바꾸면_토스트가_닫힌다", async () => {
+    // given
     setup(post());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "2번째 사진 빼기" }),
+    );
+    expect(removedToast()).not.toBeNull();
+
+    // when
     await userEvent.selectOptions(
-      await screen.findByRole("combobox", { name: "별점" }),
+      screen.getByRole("combobox", { name: "별점" }),
       "3.0",
     );
-    expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
-    vi.useFakeTimers();
 
-    try {
-      // when
-      fireEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
-      fireEvent.click(screen.getByRole("button", { name: "빼기" }));
+    // then
+    expect(removedToast()).toBeNull();
+  });
 
-      // then
-      expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
-      act(() => {
-        vi.advanceTimersByTime(250);
-      });
-      expect(screen.getByRole("button", { name: "되돌리기" })).toBeEnabled();
-    } finally {
-      vi.useRealTimers();
-    }
+  it("한글_입력은_되돌리기_한_번에_돌아간다", async () => {
+    // given
+    setup(post());
+    const memo = await screen.findByLabelText("메모");
+
+    // when
+    await userEvent.type(memo, "안녕하세요");
+    expect(memo).toHaveValue("좋음안녕하세요");
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    expect(memo).toHaveValue("좋음");
+  });
+
+  it("메모의_줄바꿈이_그대로_저장된다", async () => {
+    // given
+    setup(post());
+    const memo = await screen.findByLabelText("메모");
+    await userEvent.clear(memo);
+
+    // when
+    await userEvent.type(memo, "첫 줄{Enter}둘째 줄");
+    await userEvent.click(saveButton());
+
+    // then
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBody()).memo).toBe("첫 줄\n둘째 줄");
+  });
+
+  it("술_선택도_되돌린다", async () => {
+    // given
+    setupSearch(post());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "막걸리" }),
+    );
+    await userEvent.type(screen.getByLabelText("술 검색"), "청");
+    await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
+    expect(screen.getByRole("button", { name: "청주" })).toBeInTheDocument();
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    expect(screen.getByRole("button", { name: "막걸리" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "청주" })).toBeNull();
+  });
+
+  it("양조장_칩_x만_누르고_저장하면_술의_기본_양조장", async () => {
+    // given — 다른 양조장을 고른다
+    setupSearch(post());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "국순당" }),
+    );
+    await userEvent.type(screen.getByLabelText("양조장 검색"), "배");
+    await userEvent.click(
+      await screen.findByRole("option", { name: "배상면주가" }),
+    );
+
+    // when — ×만 누르고 고르지 않은 채 저장
+    await userEvent.click(
+      await screen.findByRole("button", { name: "배상면주가 지우기" }),
+    );
+    await userEvent.click(saveButton());
+
+    // then — picked=null일 때처럼 breweryId를 보내지 않는다
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBodies())[0].breweryId).toBeNull();
+  });
+
+  it("썸네일을_눌러_여백을_넣는다", async () => {
+    // given
+    setup(post());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "1번째 사진, 대표" }),
+    );
+
+    // when
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "여백 넣기",
+      }),
+    );
+    await userEvent.click(saveButton());
+
+    // then
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect((await putBody()).photos[0]).toEqual({ id: 1, fitMode: "PAD" });
   });
 
   it("limits the memo to 2000 characters", async () => {

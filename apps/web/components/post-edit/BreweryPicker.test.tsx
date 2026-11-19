@@ -158,7 +158,7 @@ describe("BreweryPicker", () => {
     );
 
     expect(
-      screen.getByRole("dialog", { name: "양조장 정보" }),
+      screen.getByRole("dialog", { name: "양조장 정보 고치기" }),
     ).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
