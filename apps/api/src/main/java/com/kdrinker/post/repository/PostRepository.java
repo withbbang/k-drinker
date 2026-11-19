@@ -45,6 +45,16 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 	@Query("select p.id from Post p where p.status = :status and p.updatedAt < :before order by p.id")
 	List<Long> findIdsByStatusUpdatedBefore(@Param("status") PostStatus status, @Param("before") Instant before);
 
+	/** 양조장 수정이 캡션에 반영돼야 하는 게시물 id. 캡션이 있고 검토 대기이거나, 컨테이너 없이 실패한 것. */
+	@Query("""
+			select p.id from Post p
+			 where p.drink.brewery.id = :breweryId and p.caption is not null
+			   and (p.status = com.kdrinker.post.entity.PostStatus.PENDING_REVIEW
+			        or (p.status = com.kdrinker.post.entity.PostStatus.FAILED and p.igContainerId is null))
+			 order by p.id
+			""")
+	List<Long> findEditableIdsByBreweryId(@Param("breweryId") Long breweryId);
+
 	@EntityGraph(attributePaths = { "drink", "drink.brewery" })
 	Page<Post> findAllByOrderByIdDesc(Pageable pageable);
 

@@ -8,6 +8,9 @@ import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
+import com.kdrinker.brewery.entity.Brewery;
+import com.kdrinker.brewery.entity.BrewerySource;
+import com.kdrinker.drink.entity.Drink;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -167,5 +170,40 @@ class PostRepositoryTest {
 		assertThat(reloaded.getTasteNotes()).hasSize(1000);
 		assertThat(reloaded.getPairing()).hasSize(1000);
 		assertThat(reloaded.getHashtags()).hasSize(500);
+	}
+
+	private Post savePost(Drink drink, PostStatus status, String caption, String containerId) {
+		Post post = Post.receive(PostSource.TELEGRAM, "메모", null, CLOCK);
+		post.assignDrink(drink);
+		if (caption != null) {
+			post.writeCaption(caption, "#태그", null, null);
+		}
+		if (containerId != null) {
+			post.recordContainer(containerId);
+		}
+		ReflectionTestUtils.setField(post, "status", status);
+		return postRepository.saveAndFlush(post);
+	}
+
+	@Test
+	void findEditableIdsByBreweryId_returnsOnlyEditableWithCaption() {
+		// given
+		Brewery brewery = em.merge(Brewery.of("화요", "화요", BrewerySource.PUBLIC_DATA));
+		Brewery other = em.merge(Brewery.of("다른", "다른", BrewerySource.PUBLIC_DATA));
+		Drink drink = em.merge(Drink.of("화요25", "화요25", brewery));
+		Drink otherDrink = em.merge(Drink.of("다른술", "다른술", other));
+		Long pending = savePost(drink, PostStatus.PENDING_REVIEW, "캡션", null).getId();
+		Long failedNoContainer = savePost(drink, PostStatus.FAILED, "캡션", null).getId();
+		savePost(drink, PostStatus.FAILED, "캡션", "container-1");
+		savePost(drink, PostStatus.PUBLISHED, "캡션", null);
+		savePost(drink, PostStatus.PENDING_REVIEW, null, null);
+		savePost(otherDrink, PostStatus.PENDING_REVIEW, "캡션", null);
+		em.clear();
+
+		// when
+		List<Long> ids = postRepository.findEditableIdsByBreweryId(brewery.getId());
+
+		// then
+		assertThat(ids).containsExactly(pending, failedNoContainer);
 	}
 }

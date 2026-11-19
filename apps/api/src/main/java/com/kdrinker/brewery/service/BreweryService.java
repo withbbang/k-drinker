@@ -4,6 +4,7 @@ import com.kdrinker.brewery.dto.BreweryRequest;
 import com.kdrinker.brewery.dto.BreweryResponse;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.entity.BrewerySource;
+import com.kdrinker.brewery.event.BreweryUpdatedEvent;
 import com.kdrinker.brewery.repository.BreweryRepository;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
@@ -11,6 +12,7 @@ import com.kdrinker.common.InstagramHandles;
 import com.kdrinker.common.Names;
 import com.kdrinker.common.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BreweryService {
 
 	private final BreweryRepository breweryRepository;
+	private final ApplicationEventPublisher events;
 
 	@Transactional(readOnly = true)
 	public PageResponse<BreweryResponse> search(String q, int page, int size) {
@@ -47,6 +50,7 @@ public class BreweryService {
 	public BreweryResponse update(Long id, BreweryRequest request) {
 		Brewery brewery = find(id);
 		applyEdit(brewery, request);
+		events.publishEvent(new BreweryUpdatedEvent(id));
 		return BreweryResponse.from(brewery);
 	}
 

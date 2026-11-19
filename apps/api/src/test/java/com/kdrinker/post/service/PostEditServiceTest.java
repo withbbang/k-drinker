@@ -83,7 +83,7 @@ class PostEditServiceTest {
 	private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 	private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
 	private final PostEditService service = new PostEditService(postRepository, postPhotoRepository,
-			drinkRepository, breweryRepository, new BreweryService(breweryRepository), captionService, photoService,
+			drinkRepository, breweryRepository, new BreweryService(breweryRepository, org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class)), captionService, photoService,
 			photoStorage, photoStager, postQueryService, events, CLOCK, transactionManager);
 
 	private Brewery kooksoondang;

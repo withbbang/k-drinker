@@ -3,12 +3,16 @@ package com.kdrinker.brewery.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kdrinker.brewery.dto.BreweryRequest;
 import com.kdrinker.brewery.dto.BreweryResponse;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.entity.BrewerySource;
+import com.kdrinker.brewery.event.BreweryUpdatedEvent;
 import com.kdrinker.brewery.repository.BreweryRepository;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
@@ -16,6 +20,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,8 +29,11 @@ class BreweryServiceTest {
 	@Mock
 	private BreweryRepository breweryRepository;
 
+	@Mock
+	private ApplicationEventPublisher events;
+
 	private BreweryService service() {
-		return new BreweryService(breweryRepository);
+		return new BreweryService(breweryRepository, events);
 	}
 
 	private static BreweryRequest request(String name, String handle) {
@@ -93,6 +101,32 @@ class BreweryServiceTest {
 		assertThat(response.name()).isEqualTo("새 양조장");
 		assertThat(response.instagramHandle()).isEqualTo("new_brew");
 		assertThat(response.source()).isEqualTo("MANUAL");
+	}
+
+	@Test
+	void update_publishesBreweryUpdatedEvent() {
+		// given
+		Brewery brewery = Brewery.of("화요", "화요", BrewerySource.PUBLIC_DATA);
+		when(breweryRepository.findById(1L)).thenReturn(Optional.of(brewery));
+
+		// when
+		service().update(1L, request("화요", null));
+
+		// then
+		verify(events).publishEvent(new BreweryUpdatedEvent(1L));
+		verifyNoMoreInteractions(events);
+	}
+
+	@Test
+	void create_publishesNothing() {
+		// given
+		when(breweryRepository.save(any(Brewery.class))).thenAnswer(i -> i.getArgument(0));
+
+		// when
+		service().create(request("새 양조장", null));
+
+		// then
+		verifyNoInteractions(events);
 	}
 
 }
