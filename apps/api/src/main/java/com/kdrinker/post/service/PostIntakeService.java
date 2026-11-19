@@ -69,26 +69,20 @@ public class PostIntakeService {
 	@Transactional
 	public Post receiveInputs(PostSource source, String memo, BigDecimal rating, List<PhotoInput> photos) {
 		validate(photos.size(), memo, rating);
-		String stagingId = photoStager.newStagingId();
-		List<PhotoStager.Staged> staged = new ArrayList<>();
-		List<String> written = new ArrayList<>();
-		try {
+		try (PhotoBatch batch = new PhotoBatch(photoStager, photoStorage)) {
+			List<PhotoStager.Staged> staged = new ArrayList<>();
 			for (int i = 0; i < photos.size(); i++) {
-				staged.add(photoStager.stage(stagingId, i, photos.get(i), FitMode.CROP));
+				staged.add(batch.stage(i, photos.get(i), FitMode.CROP));
 			}
 
 			Post post = postRepository.save(Post.receive(source, memo, rating, clock));
-			photoStager.registerRollbackCleanup(written);
+			batch.registerRollbackCleanup();
 			for (int i = 0; i < staged.size(); i++) {
-				postPhotoRepository.save(photoStager.promote(post, i, staged.get(i), written));
+				postPhotoRepository.save(batch.promote(post, i, staged.get(i)));
 			}
 			events.publishEvent(new PostReceivedEvent(post.getId()));
+			batch.keepPromoted();
 			return post;
-		} catch (RuntimeException e) {
-			written.forEach(photoStorage::deleteQuietly);
-			throw e;
-		} finally {
-			photoStager.deleteStaging(stagingId);
 		}
 	}
 

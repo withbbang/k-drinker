@@ -42,7 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -107,27 +106,20 @@ public class PostEditService {
 			throw new IllegalStateException("update는 트랜잭션 밖에서 불러야 합니다. postId=" + id);
 		}
 		Snapshot snapshot = tx.execute(status -> snapshot(id, req, newPhotos.size()));
-		String stagingId = null;
-		List<String> written = new ArrayList<>();
-		// 쓰기 본문이 끝났는지. 끝난 뒤의 예외(커밋 실패·커밋 뒤 콜백)는 옮긴 파일을 여기서 지우지 않는다.
-		// 커밋이 실패해 롤백되면 registerRollbackCleanup이 지우고, 커밋됐으면 파일은 새 사진 행이 쓴다.
-		AtomicBoolean bodyDone = new AtomicBoolean(false);
-		try {
+		// 쓰기 본문이 끝난 뒤의 예외(커밋 실패·커밋 뒤 콜백)는 옮긴 파일을 지우지 않는다(PhotoBatch 참고).
+		try (PhotoBatch batch = new PhotoBatch(photoStager, photoStorage)) {
 			// 새 사진은 트랜잭션 밖에서 읽어 스테이징한다. 하나라도 실패하면 아무것도 저장하지 않는다.
 			Map<Integer, PhotoStager.Staged> staged = new HashMap<>();
-			if (!newPhotos.isEmpty()) {
-				stagingId = photoStager.newStagingId();
-				for (PhotoEdit edit : req.photos()) {
-					if (edit.newIndex() != null) {
-						staged.put(edit.newIndex(),
-								photoStager.stage(stagingId, edit.newIndex(), newPhotos.get(edit.newIndex()), edit.fitMode()));
-					}
+			for (PhotoEdit edit : req.photos()) {
+				if (edit.newIndex() != null) {
+					staged.put(edit.newIndex(),
+							batch.stage(edit.newIndex(), newPhotos.get(edit.newIndex()), edit.fitMode()));
 				}
 			}
 			NewCaption caption = decideCaption(id, req, snapshot);
 			tx.executeWithoutResult(status -> {
-				photoStager.registerRollbackCleanup(written);
-				Long breweryChangedDrinkId = save(id, req, snapshot, caption, staged, written);
+				batch.registerRollbackCleanup();
+				Long breweryChangedDrinkId = save(id, req, snapshot, caption, staged, batch);
 				if (postRepository.transition(id, snapshot.status(), PostStatus.PENDING_REVIEW, snapshot.version(),
 						clock.instant()) == 0) {
 					status.setRollbackOnly();
@@ -140,17 +132,8 @@ public class PostEditService {
 				if (snapshot.channel() == PostChannel.TELEGRAM) {
 					events.publishEvent(new PostHandedOverEvent(id));
 				}
-				bodyDone.set(true);
+				batch.keepPromoted();
 			});
-		} catch (RuntimeException e) {
-			if (!bodyDone.get()) {
-				written.forEach(photoStorage::deleteQuietly);
-			}
-			throw e;
-		} finally {
-			if (stagingId != null) {
-				photoStager.deleteStaging(stagingId);
-			}
 		}
 		return postQueryService.detail(id);
 	}
@@ -312,7 +295,7 @@ public class PostEditService {
 	 * @return 이번 저장으로 양조장이 바뀐 술의 id. 바뀌지 않았으면 null.
 	 */
 	private Long save(Long id, PostUpdateRequest req, Snapshot snapshot, NewCaption caption,
-			Map<Integer, PhotoStager.Staged> staged, List<String> written) {
+			Map<Integer, PhotoStager.Staged> staged, PhotoBatch batch) {
 		Post post = postRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
 		if (post.getStatus() != snapshot.status() || post.getVersion() != snapshot.version()) {
 			throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
@@ -333,7 +316,7 @@ public class PostEditService {
 			throw new BusinessException(ErrorCode.POST_CAPTION_TOO_LONG);
 		}
 		post.replaceCaption(caption.caption(), caption.hashtags(), caption.edited());
-		applyPhotos(post, req.photos(), staged, written);
+		applyPhotos(post, req.photos(), staged, batch);
 		post.clearFailure();
 		// 웹에서 저장한 순간부터 웹 담당이다. 텔레그램 개요 버튼은 커밋 뒤 리스너가 지운다.
 		post.moveToWeb();
@@ -354,11 +337,11 @@ public class PostEditService {
 	}
 
 	/**
-	 * 빠진 사진은 행을 지우고 커밋 뒤 파일을 지운다. 새 사진은 스테이징 파일을 옮겨 행을 만든다(옮긴 경로는 written에 쌓는다).
+	 * 빠진 사진은 행을 지우고 커밋 뒤 파일을 지운다. 새 사진은 스테이징 파일을 옮겨 행을 만든다(옮긴 경로는 batch가 기억한다).
 	 * 남은 사진은 순서를 다시 매기고, 맞춤 방식이 바뀐 것만 다시 렌더링한다. 새 사진은 이미 그 방식으로 렌더링돼 있다.
 	 */
 	private void applyPhotos(Post post, List<PhotoEdit> edits, Map<Integer, PhotoStager.Staged> staged,
-			List<String> written) {
+			PhotoBatch batch) {
 		Long postId = post.getId();
 		List<PostPhoto> existing = postPhotoRepository.findByPostIdOrderByPositionAsc(postId);
 		checkPhotos(edits, existing, staged.size());
@@ -376,7 +359,7 @@ public class PostEditService {
 		for (int i = 0; i < edits.size(); i++) {
 			PhotoEdit edit = edits.get(i);
 			if (edit.newIndex() != null) {
-				postPhotoRepository.save(photoStager.promote(post, i, staged.get(edit.newIndex()), written));
+				postPhotoRepository.save(batch.promote(post, i, staged.get(edit.newIndex())));
 			}
 		}
 		for (int i = 0; i < edits.size(); i++) {
