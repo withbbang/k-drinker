@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BreweryPicker } from "@/components/post-edit/BreweryPicker";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { ApiError } from "@/lib/api";
 import type { BreweryResponse } from "@/types/api/brewery";
 
 const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
@@ -138,6 +139,32 @@ describe("BreweryPicker", () => {
 
     // then
     expect(screen.queryByText(/에 대한 양조장이 없어요/)).toBeNull();
+  });
+
+  it("shows the server error when the search fails", async () => {
+    // given: 500은 자동 재시도(3번)를 다 거친 뒤 실패로 끝난다.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    setup();
+    apiFetchMock.mockRejectedValue(
+      new ApiError(
+        "COMMON_INTERNAL_ERROR",
+        "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      ),
+    );
+
+    try {
+      // when
+      await userEvent.type(search(), "국");
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      // then
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      );
+      expect(screen.queryByText(/에 대한 양조장이 없어요/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("clears the query and closes the list after a click", async () => {

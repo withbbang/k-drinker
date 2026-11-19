@@ -5,6 +5,7 @@ import { useState } from "react";
 import { BrewerySheet } from "@/components/post-edit/BrewerySheet";
 import { SearchCombobox } from "@/components/post-edit/SearchCombobox";
 import { useBrewerySearch } from "@/hooks/use-brewery-search";
+import { ApiError } from "@/lib/api";
 import type { BreweryResponse } from "@/types/api/brewery";
 
 type BreweryPickerProps = {
@@ -44,6 +45,13 @@ export function BreweryPicker({
         onQueryChange={setQ}
         selectedLabel={brewery?.name ?? null}
         onClear={clearable ? () => onPick(null) : undefined}
+        errorText={
+          search.isError
+            ? search.error instanceof ApiError
+              ? search.error.message
+              : "양조장을 검색하지 못했어요."
+            : undefined
+        }
         emptyText={
           search.isSuccess ? `‘${q.trim()}’에 대한 양조장이 없어요.` : undefined
         }
