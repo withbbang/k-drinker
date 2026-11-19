@@ -32,14 +32,14 @@ public final class BreweryBlock {
 		}
 	}
 
-	private static String homepage(String h) {
+	static String homepage(String h) {
 		if (h == null) {
 			return null;
 		}
 		return h.strip().replaceFirst("(?i)^https?://", "").replaceFirst("/+$", "");
 	}
 
-	private static String handle(String h) {
+	static String handle(String h) {
 		return h == null ? null : h.strip().replaceFirst("^@+", "");
 	}
 }
