@@ -1,7 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { BreweryPicker } from "@/components/post-edit/BreweryPicker";
 import { CaptionEditor } from "@/components/post-edit/CaptionEditor";
@@ -112,6 +119,11 @@ function Editor({ post, onSave }: EditorProps) {
   // 크게 보기 시트를 연 사진
   const [viewingKey, setViewingKey] = useState<string | null>(null);
   const locked = photosBusy || onSave.isPending;
+  // 토스트의 실행 취소는 뜰 때의 콜백을 들고 있으므로 지금 잠겼는지는 ref로 본다.
+  const lockedRef = useRef(locked);
+  useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
 
   // 어떤 변경이든 지난 알림과 "사진을 뺐어요" 토스트는 닫는다.
   const clearMessages = () => {
@@ -126,11 +138,14 @@ function Editor({ post, onSave }: EditorProps) {
     clearMessages();
     setTyping(key, next);
   };
+  // 저장 중엔 보낸 요청과 화면이 어긋나고, 끄는 중엔 onReorder가 옛 배열로 덮어쓰므로 막는다.
   const handleUndo = () => {
+    if (lockedRef.current || locked) return;
     clearMessages();
     undo();
   };
   const handleRedo = () => {
+    if (lockedRef.current || locked) return;
     clearMessages();
     redo();
   };
@@ -201,6 +216,8 @@ function Editor({ post, onSave }: EditorProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (locked) return;
+    // 저장을 시작하면 "사진을 뺐어요" 토스트의 실행 취소는 더 쓸 수 없다.
+    dismiss();
     const { photos: photoEdits, newPhotos } = toUpdatePhotos(photos);
     // 저장하면 새 버전으로 Editor가 다시 만들어지므로 mutate 콜백 대신 Promise로 이동한다.
     // 실패하면 사진·기록을 그대로 두어 다시 저장하거나 되돌릴 수 있다.
@@ -275,7 +292,10 @@ function Editor({ post, onSave }: EditorProps) {
           onReorder={(next) => change((prev) => ({ ...prev, photos: next }))}
           onRemove={removePhoto}
           onOpen={setViewingKey}
-          onBusyChange={setPhotosBusy}
+          onBusyChange={(busy) => {
+            if (busy) dismiss();
+            setPhotosBusy(busy);
+          }}
           onAdd={addPhotos}
           onOverflow={(skipped) => setNotice(overflowMessage(skipped))}
         />

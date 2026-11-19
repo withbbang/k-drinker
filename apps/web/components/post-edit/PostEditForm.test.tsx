@@ -633,6 +633,34 @@ describe("PostEditForm", () => {
     expect(removedToast()).toBeNull();
   });
 
+  it("저장_중엔_토스트의_실행_취소가_사진을_되돌리지_않는다", async () => {
+    // given — 저장 요청이 끝나지 않는다
+    const detail = post();
+    apiFetchMock.mockImplementation((path: string, init?: RequestInit) =>
+      init?.method === "PUT"
+        ? new Promise(() => undefined)
+        : Promise.resolve(path === "/api/v1/posts/7" ? detail : undefined),
+    );
+    render(
+      <QueryProvider>
+        <PostEditForm id="7" />
+      </QueryProvider>,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "2번째 사진 빼기" }),
+    );
+    const undoInToast = screen.getByRole("button", { name: "실행 취소" });
+
+    // when — 사진을 뺀 채 저장을 시작하고 실행 취소를 누른다
+    await userEvent.click(saveButton());
+    await waitFor(() => expect(saveButton()).toBeDisabled());
+    if (undoInToast.isConnected) await userEvent.click(undoInToast);
+
+    // then — 보낸 요청과 화면이 같다
+    expect(removedToast()).toBeNull();
+    expect(screen.getAllByAltText(/^사진 \d$/)).toHaveLength(1);
+  });
+
   it("사진을_뺀_뒤_다른_것을_바꾸면_토스트가_닫힌다", async () => {
     // given
     setup(post());
