@@ -60,13 +60,10 @@ export function BreweryList() {
         <>
           {breweries.data.items.length === 0 ? (
             <div className="flex flex-col items-start gap-1 py-6">
-              <p className="font-serif text-lg text-text">
+              <p className="text-lg text-text">
                 {q ? `‘${q}’에 맞는 양조장이 없어요.` : "아직 양조장이 없어요."}
               </p>
-              <Link
-                href="/breweries/new"
-                className={buttonClass("text", "px-0")}
-              >
+              <Link href="/breweries/new" className={buttonClass("text")}>
                 새 양조장 추가
               </Link>
             </div>

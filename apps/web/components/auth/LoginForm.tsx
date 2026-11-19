@@ -12,7 +12,7 @@ import { safeNext } from "@/lib/safe-next";
 import type { SessionCreateRequest } from "@/types/api/auth";
 
 const CODE_LENGTH = 6;
-const FALLBACK_ERROR = "로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+const FALLBACK_ERROR = "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.";
 
 function createSession(request: SessionCreateRequest): Promise<void> {
   return apiFetch<void>("/api/v1/sessions", {

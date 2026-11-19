@@ -102,13 +102,13 @@ describe("PostOverview", () => {
 
   it("shows an analyzing message without buttons", async () => {
     setup(post({ status: "ANALYZING" }));
-    expect(await screen.findByText("분석 중입니다")).toBeInTheDocument();
+    expect(await screen.findByText("분석 중이에요")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("shows a publishing message without buttons", async () => {
     setup(post({ status: "PUBLISHING" }));
-    expect(await screen.findByText("게시 중입니다")).toBeInTheDocument();
+    expect(await screen.findByText("게시 중이에요")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -262,7 +262,7 @@ describe("PostOverview", () => {
     current = post({ status: "PUBLISHING", version: 5 });
     await client.invalidateQueries({ queryKey: ["posts", "7"] });
 
-    expect(await screen.findByText("게시 중입니다")).toBeInTheDocument();
+    expect(await screen.findByText("게시 중이에요")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -369,7 +369,7 @@ describe("PostOverview", () => {
   it("shows a telegram notice without confirm and cancel", async () => {
     setup(post({ channel: "TELEGRAM" }));
     expect(
-      await screen.findByText("텔레그램에서 진행 중인 게시물입니다."),
+      await screen.findByText("텔레그램에서 진행 중인 게시물이에요."),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "게시하기" }),
@@ -382,7 +382,7 @@ describe("PostOverview", () => {
 
   it("hides edit for a telegram post that is not editable", async () => {
     setup(post({ channel: "TELEGRAM", editable: false }));
-    await screen.findByText("텔레그램에서 진행 중인 게시물입니다.");
+    await screen.findByText("텔레그램에서 진행 중인 게시물이에요.");
     expect(
       screen.queryByRole("link", { name: "수정" }),
     ).not.toBeInTheDocument();
@@ -490,7 +490,7 @@ describe("PostOverview", () => {
       await screen.findByRole("button", { name: "다시 시도" }),
     );
 
-    expect(await screen.findByText("게시 중입니다")).toBeInTheDocument();
+    expect(await screen.findByText("게시 중이에요")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -533,7 +533,7 @@ describe("PostOverview", () => {
     setup(
       post({ status: "PUBLISHED", permalink: "https://instagram.com/p/abc" }),
     );
-    expect(await screen.findByText("게시했습니다")).toBeInTheDocument();
+    expect(await screen.findByText("게시했어요")).toBeInTheDocument();
   });
 
   it("shows the analysis failure stage", async () => {
@@ -560,13 +560,13 @@ describe("PostOverview", () => {
 
   it("shows a progress indicator while analyzing and publishing", async () => {
     setup(post({ status: "ANALYZING" }));
-    const message = await screen.findByText("분석 중입니다");
+    const message = await screen.findByText("분석 중이에요");
     const status = message.closest('[role="status"]');
     expect(status?.querySelector('[class*="animate-pulse"]')).not.toBeNull();
   });
 
   it("shows a canceled message", async () => {
     setup(post({ status: "CANCELED" }));
-    expect(await screen.findByText("취소한 게시물입니다")).toBeInTheDocument();
+    expect(await screen.findByText("취소한 게시물이에요")).toBeInTheDocument();
   });
 });

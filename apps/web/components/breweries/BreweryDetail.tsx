@@ -1,6 +1,7 @@
 "use client";
 
 import { BreweryForm } from "@/components/breweries/BreweryForm";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { TopBar } from "@/components/ui/TopBar";
 import { useBrewery } from "@/hooks/use-breweries";
 import { ApiError } from "@/lib/api";
@@ -12,7 +13,15 @@ export function BreweryDetail({ id }: { id: string }) {
     return (
       <>
         <TopBar title="양조장" backHref="/breweries" />
-        <p className="px-4 pt-4 text-sm text-muted">불러오는 중…</p>
+        <div
+          role="status"
+          aria-label="불러오는 중"
+          className="flex flex-col gap-4 px-4 pt-4"
+        >
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
       </>
     );
   }

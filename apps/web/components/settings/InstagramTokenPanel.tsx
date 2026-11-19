@@ -20,7 +20,7 @@ export function InstagramTokenPanel() {
         <p role="alert" className="text-sm text-danger">
           {token.error instanceof ApiError
             ? token.error.message
-            : "토큰 상태를 불러오지 못했습니다."}
+            : "토큰 상태를 불러오지 못했어요."}
         </p>
       )}
       {token.data && (
@@ -48,7 +48,7 @@ export function InstagramTokenPanel() {
         <p role="alert" className="text-sm text-danger">
           {reload.error instanceof ApiError
             ? reload.error.message
-            : "토큰을 다시 불러오지 못했습니다."}
+            : "토큰을 다시 불러오지 못했어요."}
         </p>
       )}
     </section>

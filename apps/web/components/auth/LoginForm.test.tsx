@@ -112,7 +112,7 @@ describe("LoginForm", () => {
   it("keeps six digits when a code with a space is pasted", async () => {
     // given
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    const { input, submit } = renderForm();
+    const { input } = renderForm();
 
     // when
     await userEvent.click(input);
@@ -120,7 +120,7 @@ describe("LoginForm", () => {
 
     // then
     expect(input).toHaveValue("123456");
-    expect(submit).toBeEnabled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 
   it("drops digits past the sixth", async () => {
@@ -138,7 +138,7 @@ describe("LoginForm", () => {
 
   it("disables submit until six digits are entered", async () => {
     // given
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    fetchMock.mockReturnValue(new Promise(() => {}));
     const { input, submit } = renderForm();
 
     // when, then
@@ -148,7 +148,9 @@ describe("LoginForm", () => {
     expect(submit).toBeDisabled();
 
     await userEvent.type(input, "6");
-    expect(submit).toBeEnabled();
+    // 6자리가 차면 자동으로 요청해 요청 중에는 다시 비활성이 된다.
+    await waitFor(() => expect(submit).toBeDisabled());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("코드_입력칸은_어두운_토큰_색을_쓴다", () => {

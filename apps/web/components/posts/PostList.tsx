@@ -110,7 +110,7 @@ export function PostList() {
       <p role="alert" className="text-sm text-danger">
         {posts.error instanceof ApiError
           ? posts.error.message
-          : "기록을 불러오지 못했습니다."}
+          : "기록을 불러오지 못했어요."}
       </p>
     );
   }
@@ -119,7 +119,7 @@ export function PostList() {
     <div className="flex flex-col gap-4">
       {items.length === 0 ? (
         <div className="flex flex-col gap-1 py-6">
-          <p className="font-serif text-lg text-text">아직 기록이 없어요.</p>
+          <p className="text-lg text-text">아직 기록이 없어요.</p>
           <p className="text-sm text-muted">
             휴대폰 사진 앱에서 k-drinker로 공유하거나 텔레그램 봇에 사진을
             보내면 여기에 쌓여요.

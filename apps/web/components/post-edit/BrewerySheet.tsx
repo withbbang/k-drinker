@@ -26,7 +26,11 @@ export function BrewerySheet({ brewery, onClose }: BrewerySheetProps) {
         <p className="text-sm text-muted">
           이 양조장을 쓰는 다른 게시물에도 반영돼요
         </p>
-        <BreweryForm brewery={brewery} onSaved={() => onClose()} />
+        <BreweryForm
+          brewery={brewery}
+          onSaved={() => onClose()}
+          barClassName="bg-surface"
+        />
         <button
           type="button"
           onClick={onClose}

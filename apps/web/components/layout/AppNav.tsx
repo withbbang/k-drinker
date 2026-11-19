@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // 탭을 쓰는 화면의 main에 붙여 마지막 내용이 탭에 가려지지 않게 한다.
-export const TAB_SAFE_PADDING = "pb-[calc(4rem+env(safe-area-inset-bottom))]";
+export const TAB_SAFE_PADDING = "pb-[calc(5.5rem+env(safe-area-inset-bottom))]";
 
 const ICON_PROPS = {
   width: 24,

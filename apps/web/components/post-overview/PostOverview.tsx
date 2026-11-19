@@ -14,8 +14,7 @@ import { usePostAction } from "@/hooks/use-post-action";
 import { ApiError } from "@/lib/api";
 import type { PostDetailResponse } from "@/types/api/post";
 
-const FALLBACK_ERROR =
-  "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+const FALLBACK_ERROR = "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.";
 const TITLE = "후기";
 const BACK_HREF = "/";
 
@@ -167,7 +166,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
   );
   const telegramNotice = (
     <Section>
-      <p className="text-text">텔레그램에서 진행 중인 게시물입니다.</p>
+      <p className="text-text">텔레그램에서 진행 중인 게시물이에요.</p>
     </Section>
   );
 
@@ -178,14 +177,14 @@ function Overview({ post }: { post: PostDetailResponse }) {
     case "ANALYZING":
       content = (
         <Section>
-          <Progress message="분석 중입니다" />
+          <Progress message="분석 중이에요" />
         </Section>
       );
       break;
     case "PUBLISHING":
       content = (
         <Section>
-          <Progress message="게시 중입니다" />
+          <Progress message="게시 중이에요" />
         </Section>
       );
       break;
@@ -193,7 +192,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
       content = (
         <>
           <Section>
-            <p className="font-semibold text-text">게시했습니다</p>
+            <p className="font-semibold text-text">게시했어요</p>
           </Section>
           <Review post={post} />
         </>
@@ -214,7 +213,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
     case "CANCELED":
       content = (
         <Section>
-          <p className="text-text">취소한 게시물입니다</p>
+          <p className="text-text">취소한 게시물이에요</p>
         </Section>
       );
       break;
@@ -232,7 +231,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
               <p className="text-sm text-muted">
                 {post.editable
                   ? "[수정]에서 고친 뒤 다시 게시해 주세요."
-                  : "다시 시도할 수 없는 게시물입니다."}
+                  : "다시 시도할 수 없는 게시물이에요."}
               </p>
             )}
           </Section>
@@ -268,7 +267,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
                     status: post.status,
                   })
                 }
-                className={buttonClass("text", "self-start text-danger")}
+                className={buttonClass("danger", "self-start")}
               >
                 게시물 취소
               </button>

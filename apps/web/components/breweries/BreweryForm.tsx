@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
   useState,
   type FormEvent,
   type HTMLInputTypeAttribute,
   type HTMLInputAutoCompleteAttribute,
 } from "react";
+
+import { useRouter } from "next/navigation";
 
 import { buttonClass } from "@/components/ui/button";
 import { useSaveBrewery } from "@/hooks/use-breweries";
@@ -67,9 +68,15 @@ type BreweryFormProps = {
   brewery?: BreweryResponse;
   // 있으면 저장 성공 때 부르고, 저장 완료 표시는 하지 않는다.
   onSaved?: (saved: BreweryResponse) => void;
+  // 아래에 붙는 저장 막대의 배경 토큰. 놓이는 면의 배경과 맞춘다.
+  barClassName?: string;
 };
 
-export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
+export function BreweryForm({
+  brewery,
+  onSaved,
+  barClassName = "bg-bg",
+}: BreweryFormProps) {
   const [values, setValues] = useState(() => initial(brewery));
   const [savedId, setSavedId] = useState<number | null>(brewery?.id ?? null);
   const [nameError, setNameError] = useState(false);
@@ -143,7 +150,9 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
           저장했어요. 다음 게시물부터 이 정보가 쓰여요.
         </p>
       )}
-      <div className="sticky bottom-0 bg-inherit pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div
+        className={`sticky bottom-0 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] ${barClassName}`}
+      >
         <button
           type="submit"
           disabled={save.isPending}
