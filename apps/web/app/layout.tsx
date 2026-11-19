@@ -6,6 +6,7 @@ import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
 import "./globals.css";
+import { gowunBatang, pretendard } from "./fonts";
 
 export const metadata: Metadata = {
   title: "k-drinker",
@@ -13,13 +14,16 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#171717",
+  themeColor: "#1D1713",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko">
-      <body className="bg-neutral-50 text-neutral-900 antialiased">
+    <html
+      lang="ko"
+      className={`${pretendard.variable} ${gowunBatang.variable}`}
+    >
+      <body className="bg-bg text-text font-sans antialiased">
         <ServiceWorkerRegister />
         <QueryProvider>{children}</QueryProvider>
       </body>
