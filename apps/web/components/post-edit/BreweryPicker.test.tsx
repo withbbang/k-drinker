@@ -195,7 +195,10 @@ describe("BreweryPicker", () => {
     try {
       // when
       await userEvent.type(search(), "국");
-      await vi.advanceTimersByTimeAsync(10_000);
+      // 입력이 멈출 때까지 기다린 뒤, 재시도 대기(1·2·4초)를 넘긴다.
+      for (let i = 0; i < 12; i += 1) {
+        await vi.advanceTimersByTimeAsync(1_000);
+      }
 
       // then
       expect(
@@ -207,6 +210,39 @@ describe("BreweryPicker", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("searches once after typing stops instead of on every keystroke", async () => {
+    // given
+    setup();
+
+    // when
+    await userEvent.type(search(), "배상면");
+    await screen.findByRole("listbox");
+
+    // then
+    const searches = apiFetchMock.mock.calls.filter(([path]) =>
+      String(path).startsWith("/api/v1/breweries?"),
+    );
+    expect(searches).toHaveLength(1);
+    expect(searches[0][0]).toContain(`q=${encodeURIComponent("배상면")}`);
+  });
+
+  it("drops the old no-match notice as soon as the query changes", async () => {
+    // given
+    renderPicker([]);
+    await userEvent.type(search(), "없는");
+    await screen.findByText("‘없는’에 대한 양조장이 없어요.");
+
+    // when: 입력이 멈추기 전에는 새 검색어로 '없어요'를 단정하지 않는다.
+    await userEvent.type(search(), "양");
+
+    // then: 입력 직후에는 이전 문구도 새 문구도 없고, 입력이 멈춘 뒤 새 문구가 뜬다.
+    expect(screen.queryByText("‘없는’에 대한 양조장이 없어요.")).toBeNull();
+    expect(screen.queryByText("‘없는양’에 대한 양조장이 없어요.")).toBeNull();
+    expect(
+      await screen.findByText("‘없는양’에 대한 양조장이 없어요."),
+    ).toBeInTheDocument();
   });
 
   it("clears the query and closes the list after a click", async () => {

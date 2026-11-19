@@ -25,7 +25,9 @@ export function BreweryPicker({
 }: BreweryPickerProps) {
   const [q, setQ] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const search = useBrewerySearch(q);
+  const { query: search, waiting } = useBrewerySearch(q);
+  // 입력이 멈추기 전에는 이전 검색어의 결과·안내를 보여 주지 않는다(Enter로 엉뚱한 양조장을 고르지 않게).
+  const settled = !waiting;
 
   return (
     <fieldset className="flex flex-col gap-2" disabled={disabled}>
@@ -36,7 +38,7 @@ export function BreweryPicker({
       )}
       <SearchCombobox
         label="양조장 검색"
-        items={search.data?.items ?? []}
+        items={settled ? (search.data?.items ?? []) : []}
         getKey={(item) => item.id}
         renderItem={(item) => item.name}
         selectedKey={brewery?.id ?? null}
@@ -46,14 +48,16 @@ export function BreweryPicker({
         selectedLabel={brewery?.name ?? null}
         onClear={clearable ? () => onPick(null) : undefined}
         errorText={
-          search.isError
+          settled && search.isError
             ? search.error instanceof ApiError
               ? search.error.message
               : "양조장을 검색하지 못했어요."
             : undefined
         }
         emptyText={
-          search.isSuccess ? `‘${q.trim()}’에 대한 양조장이 없어요.` : undefined
+          settled && search.isSuccess
+            ? `‘${q.trim()}’에 대한 양조장이 없어요.`
+            : undefined
         }
       />
       {brewery && (
