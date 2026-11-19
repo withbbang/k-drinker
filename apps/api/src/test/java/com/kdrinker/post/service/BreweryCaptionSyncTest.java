@@ -1,10 +1,15 @@
 package com.kdrinker.post.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 
 import com.kdrinker.brewery.dto.BreweryRequest;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.entity.BrewerySource;
+import com.kdrinker.brewery.event.BreweryUpdatedEvent;
 import com.kdrinker.brewery.repository.BreweryRepository;
 import com.kdrinker.brewery.service.BreweryService;
 import com.kdrinker.caption.BreweryBlock;
@@ -25,8 +30,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -44,8 +51,10 @@ class BreweryCaptionSyncTest {
 	private BreweryRepository breweryRepository;
 	@Autowired
 	private DrinkRepository drinkRepository;
-	@Autowired
+	@MockitoSpyBean
 	private PostRepository postRepository;
+	@Autowired
+	private ApplicationEventPublisher applicationEventPublisher;
 	@Autowired
 	private JdbcTemplate jdbc;
 	@Autowired
@@ -137,8 +146,38 @@ class BreweryCaptionSyncTest {
 
 		Post after = postRepository.findById(saved.getId()).orElseThrow();
 		assertThat(after.getCaption()).isEqualTo(broken);
-		assertThat(after.getChannel()).isEqualTo(PostChannel.WEB);
-		assertThat(applicationEvents.stream(PostHandedOverEvent.class)).hasSize(1);
+		assertThat(after.getVersion()).isEqualTo(saved.getVersion());
+		assertThat(after.getChannel()).isEqualTo(PostChannel.TELEGRAM);
+		assertThat(applicationEvents.stream(PostHandedOverEvent.class)).isEmpty();
+	}
+
+	@Test
+	void leavesPostAloneWhenRenderedCaptionIsIdentical() {
+		Brewery brewery = saveBrewery("같은 주소");
+		Post saved = savePost(brewery, PostStatus.PENDING_REVIEW, PostSource.TELEGRAM, captionWith(brewery));
+
+		// 양조장 값이 그대로여서 다시 그려도 캡션이 같다
+		applicationEventPublisher.publishEvent(new BreweryUpdatedEvent(brewery.getId()));
+
+		Post after = postRepository.findById(saved.getId()).orElseThrow();
+		assertThat(after.getCaption()).isEqualTo(saved.getCaption());
+		assertThat(after.getVersion()).isEqualTo(saved.getVersion());
+		assertThat(after.getChannel()).isEqualTo(PostChannel.TELEGRAM);
+		assertThat(applicationEvents.stream(PostHandedOverEvent.class)).isEmpty();
+	}
+
+	@Test
+	void skipsPostWhoseTransitionLostRace() {
+		Brewery brewery = saveBrewery("옛 주소");
+		Post saved = savePost(brewery, PostStatus.PENDING_REVIEW, PostSource.TELEGRAM, captionWith(brewery));
+		doReturn(0).when(postRepository).transition(eq(saved.getId()), any(), any(), anyInt(), any());
+
+		changeAddress(brewery, "새 주소");
+
+		Post after = postRepository.findById(saved.getId()).orElseThrow();
+		assertThat(after.getCaption()).isEqualTo(saved.getCaption());
+		assertThat(after.getChannel()).isEqualTo(PostChannel.TELEGRAM);
+		assertThat(applicationEvents.stream(PostHandedOverEvent.class)).isEmpty();
 	}
 
 	@Test

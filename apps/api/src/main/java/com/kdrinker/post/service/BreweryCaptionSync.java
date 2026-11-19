@@ -37,20 +37,29 @@ public class BreweryCaptionSync {
 		}
 		for (Long id : postRepository.findEditableIdsByBreweryId(event.breweryId())) {
 			Post post = postRepository.findById(id).orElse(null);
-			if (post == null) {
+			if (post == null || !CaptionParts.hasBreweryBlock(post.getCaption())) {
 				continue;
 			}
-			if (CaptionParts.hasBreweryBlock(post.getCaption())) {
-				String caption = CaptionParts.split(post.getCaption()).join(brewery);
-				post.replaceCaption(caption, post.getHashtags(), post.isCaptionEdited());
-			}
-			boolean handedOver = post.getChannel() == PostChannel.TELEGRAM;
-			if (handedOver) {
-				post.moveToWeb();
+			String caption = CaptionParts.split(post.getCaption()).join(brewery);
+			if (caption.equals(post.getCaption())) {
+				continue;
 			}
 			PostStatus status = post.getStatus();
-			// transition 이 변경을 flush 한 뒤 영속성 컨텍스트를 비운다. 이 뒤로 post 는 쓰지 않는다.
-			postRepository.transition(id, status, status, post.getVersion(), Instant.now(clock));
+			// 상태·version 이 맞을 때만 먼저 선점한다. 동시에 상태가 바뀐 게시물은 건드리지 않는다.
+			// transition 이 flush 한 뒤 영속성 컨텍스트를 비우므로 이 뒤로 post 는 다시 읽는다.
+			if (postRepository.transition(id, status, status, post.getVersion(), Instant.now(clock)) == 0) {
+				continue;
+			}
+			Post fresh = postRepository.findById(id).orElse(null);
+			if (fresh == null || !PostQueryService.editable(fresh)) {
+				continue;
+			}
+			fresh.replaceCaption(caption, fresh.getHashtags(), fresh.isCaptionEdited());
+			boolean handedOver = fresh.getChannel() == PostChannel.TELEGRAM;
+			if (handedOver) {
+				fresh.moveToWeb();
+			}
+			postRepository.saveAndFlush(fresh);
 			if (handedOver) {
 				events.publishEvent(new PostHandedOverEvent(id));
 			}

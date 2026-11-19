@@ -119,6 +119,20 @@ class BreweryServiceTest {
 	}
 
 	@Test
+	void update_publishesNothingWhenNothingChanged() {
+		// given
+		Brewery brewery = Brewery.of("화요", "화요", BrewerySource.MANUAL);
+		brewery.editManually("화요", "화요", "서울", null, null, null, null);
+		when(breweryRepository.findById(1L)).thenReturn(Optional.of(brewery));
+
+		// when
+		service().update(1L, request("화요", null));
+
+		// then
+		verifyNoMoreInteractions(events);
+	}
+
+	@Test
 	void create_publishesNothing() {
 		// given
 		when(breweryRepository.save(any(Brewery.class))).thenAnswer(i -> i.getArgument(0));

@@ -49,9 +49,13 @@ public class BreweryService {
 	@Transactional
 	public BreweryResponse update(Long id, BreweryRequest request) {
 		Brewery brewery = find(id);
+		BreweryResponse before = BreweryResponse.from(brewery);
 		applyEdit(brewery, request);
-		events.publishEvent(new BreweryUpdatedEvent(id));
-		return BreweryResponse.from(brewery);
+		BreweryResponse after = BreweryResponse.from(brewery);
+		if (!after.equals(before)) {
+			events.publishEvent(new BreweryUpdatedEvent(id));
+		}
+		return after;
 	}
 
 	/** 조회하지 않고 받은 엔티티만 고친다. */
