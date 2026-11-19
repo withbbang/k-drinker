@@ -9,6 +9,18 @@ import java.util.Objects;
 /** 저장된 캡션을 양조장 블록 앞(훅·소개·맛·별점)과 뒤(해시태그)로 나눈 것. */
 public record CaptionParts(String head, String tail) {
 
+	/** 양조장 마커가 정확히 2개(여는 것, 닫는 것)일 때만 블록을 바꿀 수 있다. */
+	public static boolean hasBreweryBlock(String stored) {
+		if (stored == null) {
+			return false;
+		}
+		int count = 0;
+		for (int i = stored.indexOf(BreweryBlock.MARKER); i >= 0; i = stored.indexOf(BreweryBlock.MARKER, i + BreweryBlock.MARKER.length())) {
+			count++;
+		}
+		return count == 2;
+	}
+
 	public static CaptionParts split(String stored) {
 		if (stored == null) {
 			return new CaptionParts("", "");
