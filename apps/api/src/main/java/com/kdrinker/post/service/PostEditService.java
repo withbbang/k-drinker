@@ -26,7 +26,7 @@ import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostStatus;
-import com.kdrinker.post.event.PostEditedEvent;
+import com.kdrinker.post.event.PostHandedOverEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
 import java.math.BigDecimal;
@@ -51,7 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 웹 수정 화면의 저장. 검토 대기(또는 컨테이너가 없는 실패) 게시물을 고친 뒤 버전 검사 전이로 PENDING_REVIEW에 두고
- * 웹 담당으로 바꾼다. 텔레그램 담당이던 게시물이면 {@link PostEditedEvent}로 텔레그램 개요 버튼을 지운다.
+ * 웹 담당으로 바꾼다. 텔레그램 담당이던 게시물이면 {@link PostHandedOverEvent}로 텔레그램 버튼을 지우고 웹 안내를 보낸다.
  * <p>
  * 클래스·메서드에 {@code @Transactional}을 두지 않는다. 캡션 재생성(Claude 호출)은 트랜잭션 밖에서 하고, DB 쓰기는
  * {@link TransactionTemplate}으로 짧게 한다({@code AnalysisService}와 같은 이유). 텔레그램 [확인]과 동시에 저장되면
@@ -131,7 +131,9 @@ public class PostEditService {
 					status.setRollbackOnly();
 					throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
 				}
-				events.publishEvent(new PostEditedEvent(id, snapshot.channel() == PostChannel.TELEGRAM));
+				if (snapshot.channel() == PostChannel.TELEGRAM) {
+					events.publishEvent(new PostHandedOverEvent(id));
+				}
 				bodyDone.set(true);
 			});
 		} catch (RuntimeException e) {

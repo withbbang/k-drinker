@@ -58,6 +58,35 @@ class TelegramClientTest {
 	}
 
 	@Test
+	void sendMessage_withReplyTo_sendsReplyParameters() {
+		// given
+		server.expect(requestTo(BASE + "sendMessage"))
+			.andExpect(jsonPath("$.reply_parameters.message_id").value(77))
+			.andExpect(jsonPath("$.reply_parameters.allow_sending_without_reply").value(true))
+			.andRespond(withSuccess("{\"ok\":true,\"result\":{\"message_id\":1}}", MediaType.APPLICATION_JSON));
+
+		// when
+		client.sendMessage(TelegramText.of("안녕").withReplyTo(77L));
+
+		// then
+		server.verify();
+	}
+
+	@Test
+	void 답장_대상이_없으면_reply_parameters를_보내지_않는다() {
+		// given
+		server.expect(requestTo(BASE + "sendMessage"))
+			.andExpect(jsonPath("$.reply_parameters").doesNotExist())
+			.andRespond(withSuccess("{\"ok\":true,\"result\":{\"message_id\":1}}", MediaType.APPLICATION_JSON));
+
+		// when
+		client.sendMessage(TelegramText.of("안녕"));
+
+		// then
+		server.verify();
+	}
+
+	@Test
 	void 버튼이_없으면_reply_markup을_보내지_않는다() {
 		// given
 		server.expect(requestTo(BASE + "sendMessage"))

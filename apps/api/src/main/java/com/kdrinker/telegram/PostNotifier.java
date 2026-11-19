@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -33,10 +34,11 @@ public class PostNotifier {
 	private final PostPhotoRepository photoRepository;
 	private final CaptionLengthGuard captionLengthGuard;
 	private final TransactionTemplate readTx;
+	private final String publicBaseUrl;
 
 	public PostNotifier(TelegramSender sender, TelegramClient client, PostRepository postRepository,
 			PostPhotoRepository photoRepository, CaptionLengthGuard captionLengthGuard,
-			TransactionTemplate transactionTemplate) {
+			TransactionTemplate transactionTemplate, @Value("${app.public-base-url}") String publicBaseUrl) {
 		this.sender = sender;
 		this.client = client;
 		this.postRepository = postRepository;
@@ -44,6 +46,8 @@ public class PostNotifier {
 		this.captionLengthGuard = captionLengthGuard;
 		this.readTx = new TransactionTemplate(transactionTemplate.getTransactionManager());
 		this.readTx.setReadOnly(true);
+		this.publicBaseUrl = publicBaseUrl.endsWith("/") ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
+				: publicBaseUrl;
 	}
 
 	/** 읽은 시점의 문구와 중복 키 재료. */
@@ -85,15 +89,19 @@ public class PostNotifier {
 			NotificationKind.ANALYSIS_FAILED, NotificationKind.PUBLISH_FAILED);
 
 	/**
-	 * 웹 담당으로 넘어간 게시물의 텔레그램 버튼(개요·실패 알림)을 모두 지운다. 하나가 실패해도 나머지는 계속 지운다.
+	 * 웹 담당으로 넘어간 게시물의 텔레그램 버튼(개요·실패 알림)을 모두 지우고, 가장 최근 개요에 답장으로 웹 안내를 보낸다.
+	 * 버튼 하나가 실패해도 나머지는 계속 지운다.
 	 */
 	@Async(TelegramExecutorConfig.EXECUTOR)
-	public void removeOverviewButtons(Long postId) {
+	public void handOverToWeb(Long postId) {
 		for (NotificationKind kind : BUTTON_KINDS) {
 			for (Long messageId : sender.messageIds(postId, kind)) {
 				removeKeyboard(postId, messageId);
 			}
 		}
+		Long replyTo = sender.messageIds(postId, NotificationKind.OVERVIEW).stream().max(Long::compare).orElse(null);
+		TelegramText text = MessageFormatter.handoff(publicBaseUrl + "/posts/" + postId).withReplyTo(replyTo);
+		sender.send("handoff:" + postId, NotificationKind.HANDOFF, postId, text);
 	}
 
 	private void removeKeyboard(Long postId, Long messageId) {

@@ -65,6 +65,11 @@ public final class MessageFormatter {
 				+ "\">수정하기</a>\n저장하면 이후 확인과 게시는 웹 화면에서 진행합니다.");
 	}
 
+	public static TelegramText handoff(String url) {
+		return TelegramText.of("검토와 업로드는 k-drinker에서 이어서 진행해 주세요.\n<a href=\"" + escapeAttr(url)
+				+ "\">웹에서 열기</a>");
+	}
+
 	public static TelegramText canceled(Post post) {
 		return TelegramText.of(withName("게시를 취소했습니다.", post) + "\n사진은 7일 뒤에 삭제됩니다.");
 	}

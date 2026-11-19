@@ -2,7 +2,7 @@ package com.kdrinker.telegram;
 
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.event.PostAnalyzedEvent;
-import com.kdrinker.post.event.PostEditedEvent;
+import com.kdrinker.post.event.PostHandedOverEvent;
 import com.kdrinker.post.event.PostPublishFinishedEvent;
 import com.kdrinker.post.event.PostReceivedEvent;
 import org.springframework.context.event.EventListener;
@@ -25,15 +25,10 @@ public class PostNotificationListener {
 		notifier.notifyReceived(event.postId());
 	}
 
-	/**
-	 * 수정 저장이 커밋된 뒤, 이번 저장으로 웹 담당이 됐으면 텔레그램 개요·실패 알림 버튼을 지운다.
-	 * 저장 뒤 게시물은 항상 웹 담당이라 새 개요는 보내지 않는다.
-	 */
+	/** 웹 담당으로 넘어간 변경(웹 저장·양조장 수정)이 커밋된 뒤, 텔레그램 버튼을 지우고 웹 안내를 보낸다. */
 	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-	public void onEdited(PostEditedEvent event) {
-		if (event.handedOverToWeb()) {
-			notifier.removeOverviewButtons(event.postId());
-		}
+	public void onHandedOver(PostHandedOverEvent event) {
+		notifier.handOverToWeb(event.postId());
 	}
 
 	@EventListener

@@ -3,10 +3,9 @@ package com.kdrinker.telegram;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.kdrinker.post.event.PostEditedEvent;
+import com.kdrinker.post.event.PostHandedOverEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -17,10 +16,10 @@ class PostNotificationListenerTest {
 	private final PostNotificationListener listener = new PostNotificationListener(notifier);
 
 	@Test
-	void 수정_이벤트는_커밋_뒤에_받는다() throws Exception {
+	void 웹_전환_이벤트는_커밋_뒤에_받는다() throws Exception {
 		// when
 		TransactionalEventListener annotation = PostNotificationListener.class
-				.getMethod("onEdited", PostEditedEvent.class).getAnnotation(TransactionalEventListener.class);
+				.getMethod("onHandedOver", PostHandedOverEvent.class).getAnnotation(TransactionalEventListener.class);
 
 		// then
 		assertThat(annotation).isNotNull();
@@ -28,21 +27,12 @@ class PostNotificationListenerTest {
 	}
 
 	@Test
-	void 웹으로_넘겨받은_수정은_텔레그램_개요_버튼만_지운다() {
+	void onHandedOver_callsNotifier() {
 		// when
-		listener.onEdited(new PostEditedEvent(1L, true));
+		listener.onHandedOver(new PostHandedOverEvent(1L));
 
 		// then
-		verify(notifier).removeOverviewButtons(1L);
+		verify(notifier).handOverToWeb(1L);
 		verifyNoMoreInteractions(notifier);
-	}
-
-	@Test
-	void 이미_웹_담당인_수정은_아무것도_보내지_않는다() {
-		// when
-		listener.onEdited(new PostEditedEvent(1L, false));
-
-		// then
-		verifyNoInteractions(notifier);
 	}
 }

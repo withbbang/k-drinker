@@ -165,7 +165,7 @@ class PostEditIntegrationTest {
 	}
 
 	@Test
-	void 텔레그램_담당_게시물을_저장하면_웹_담당이_되고_개요_버튼을_지운다() throws IOException {
+	void 텔레그램_담당_게시물을_저장하면_웹_담당이_되고_웹_전환_안내를_보낸다() throws IOException {
 		// given
 		Saved saved = savePost();
 		jdbc.update("UPDATE post SET channel = 'TELEGRAM' WHERE id = ?", saved.postId());
@@ -176,7 +176,7 @@ class PostEditIntegrationTest {
 
 		// then
 		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel()).isEqualTo(PostChannel.WEB);
-		verify(postNotifier).removeOverviewButtons(saved.postId());
+		verify(postNotifier).handOverToWeb(saved.postId());
 		verify(postNotifier, never()).notifyReviewReady(any());
 	}
 
@@ -195,7 +195,7 @@ class PostEditIntegrationTest {
 		// then
 		assertThat(postRepository.findById(saved.postId()).orElseThrow().getChannel())
 				.isEqualTo(PostChannel.TELEGRAM);
-		verify(postNotifier, never()).removeOverviewButtons(any());
+		verify(postNotifier, never()).handOverToWeb(any());
 	}
 
 	private static PhotoInput jpeg() throws IOException {

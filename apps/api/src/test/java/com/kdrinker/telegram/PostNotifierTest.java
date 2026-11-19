@@ -43,7 +43,7 @@ class PostNotifierTest {
 	@BeforeEach
 	void setUp() {
 		TransactionTemplate tx = new TransactionTemplate(mock(PlatformTransactionManager.class));
-		notifier = new PostNotifier(sender, client, postRepository, photoRepository, guard, tx);
+		notifier = new PostNotifier(sender, client, postRepository, photoRepository, guard, tx, "https://k.example/");
 		when(photoRepository.findByPostIdOrderByPositionAsc(anyLong())).thenReturn(List.of());
 		when(sender.send(any(), any(), any(), any())).thenReturn(Optional.of(77L));
 	}
@@ -185,13 +185,40 @@ class PostNotifierTest {
 		doThrow(new RuntimeException("telegram down")).when(client).removeKeyboard(71L);
 
 		// when
-		notifier.removeOverviewButtons(5L);
+		notifier.handOverToWeb(5L);
 
 		// then
 		verify(client).removeKeyboard(70L);
 		verify(client).removeKeyboard(71L);
 		verify(client).removeKeyboard(72L);
-		verify(sender, never()).send(any(), any(), any(), any());
+	}
+
+	@Test
+	void handOverToWeb_removesButtonsAndRepliesToLatestOverview() {
+		// given
+		when(sender.messageIds(5L, NotificationKind.OVERVIEW)).thenReturn(List.of(10L, 11L));
+
+		// when
+		notifier.handOverToWeb(5L);
+
+		// then
+		verify(client).removeKeyboard(10L);
+		verify(client).removeKeyboard(11L);
+		ArgumentCaptor<TelegramText> text = ArgumentCaptor.forClass(TelegramText.class);
+		verify(sender).send(eq("handoff:5"), eq(NotificationKind.HANDOFF), eq(5L), text.capture());
+		assertThat(text.getValue().replyToMessageId()).isEqualTo(11L);
+		assertThat(text.getValue().html()).contains("<a href=\"https://k.example/posts/5\">");
+	}
+
+	@Test
+	void handOverToWeb_withoutOverview_sendsWithoutReply() {
+		// when
+		notifier.handOverToWeb(5L);
+
+		// then
+		ArgumentCaptor<TelegramText> text = ArgumentCaptor.forClass(TelegramText.class);
+		verify(sender).send(eq("handoff:5"), eq(NotificationKind.HANDOFF), eq(5L), text.capture());
+		assertThat(text.getValue().replyToMessageId()).isNull();
 	}
 
 	@Test
@@ -202,7 +229,7 @@ class PostNotifierTest {
 		when(sender.messageIds(5L, NotificationKind.PUBLISH_FAILED)).thenReturn(List.of(90L, 91L));
 
 		// when
-		notifier.removeOverviewButtons(5L);
+		notifier.handOverToWeb(5L);
 
 		// then
 		verify(client).removeKeyboard(70L);

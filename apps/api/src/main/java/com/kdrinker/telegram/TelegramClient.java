@@ -67,6 +67,10 @@ public class TelegramClient {
 		if (text.keyboard() != null && !text.keyboard().isEmpty()) {
 			body.put("reply_markup", Map.of("inline_keyboard", keyboardOf(text.keyboard())));
 		}
+		if (text.replyToMessageId() != null) {
+			body.put("reply_parameters",
+					Map.of("message_id", text.replyToMessageId(), "allow_sending_without_reply", true));
+		}
 		SentMessage sent = result(postJson("sendMessage", body, new ParameterizedTypeReference<Envelope<SentMessage>>() {
 		}));
 		if (sent == null) {
