@@ -1,7 +1,11 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { undoableReducer, useUndoable } from "@/hooks/use-undoable";
+import {
+  undoableReducer,
+  useUndoable,
+  type UndoableState,
+} from "@/hooks/use-undoable";
 
 describe("useUndoable", () => {
   it("set 두 번 뒤 undo 두 번이면 처음 값, canUndo=false", () => {
@@ -89,7 +93,7 @@ describe("useUndoable", () => {
 
 describe("undoableReducer", () => {
   it("redo는 undo한 값을 되살린다", () => {
-    const start = { past: [], present: 0, future: [] };
+    const start = { past: [], present: 0, future: [], group: null };
 
     const set = undoableReducer(start, { type: "set", next: 1, limit: 50 });
     const undone = undoableReducer(set, { type: "undo" });
@@ -97,5 +101,81 @@ describe("undoableReducer", () => {
 
     expect(redone.present).toBe(1);
     expect(redone.past).toEqual([0]);
+  });
+
+  describe("글자 입력 묶기", () => {
+    type Form = { memo: string; caption: string; rating: number };
+    const start: UndoableState<Form> = {
+      past: [],
+      present: { memo: "", caption: "", rating: 3 },
+      future: [],
+      group: null,
+    };
+    const type = (
+      state: UndoableState<Form>,
+      key: string,
+      patch: Partial<Form>,
+      at: number,
+    ) =>
+      undoableReducer(state, {
+        type: "set",
+        next: (prev) => ({ ...prev, ...patch }),
+        limit: 50,
+        group: { key, at, windowMs: 1000 },
+      });
+
+    it("메모를_1초_안에_이어_치면_한_번으로_기록된다", () => {
+      let s = type(start, "memo", { memo: "a" }, 0);
+      s = type(s, "memo", { memo: "ab" }, 500);
+      s = type(s, "memo", { memo: "abc" }, 900);
+
+      expect(s.past).toHaveLength(1);
+      expect(s.present.memo).toBe("abc");
+      expect(undoableReducer(s, { type: "undo" }).present.memo).toBe("");
+    });
+
+    it("1초_넘게_멈췄다_치면_따로_기록된다", () => {
+      let s = type(start, "memo", { memo: "a" }, 0);
+      s = type(s, "memo", { memo: "ab" }, 1500);
+
+      expect(s.past).toHaveLength(2);
+    });
+
+    it("다른_칸으로_옮기면_따로_기록된다", () => {
+      let s = type(start, "memo", { memo: "a" }, 0);
+      s = type(s, "caption", { caption: "x" }, 100);
+
+      expect(s.past).toHaveLength(2);
+    });
+
+    it("endGroup_뒤에는_따로_기록된다", () => {
+      let s = type(start, "memo", { memo: "a" }, 0);
+      s = undoableReducer(s, { type: "endGroup" });
+      s = type(s, "memo", { memo: "ab" }, 100);
+
+      expect(s.past).toHaveLength(2);
+    });
+
+    it("메모를_치고_별점을_바꾸면_되돌리기가_하나씩_돌아간다", () => {
+      let s = type(start, "memo", { memo: "a" }, 0);
+      s = type(s, "memo", { memo: "ab" }, 300);
+      s = undoableReducer(s, {
+        type: "set",
+        next: (prev) => ({ ...prev, rating: 5 }),
+        limit: 50,
+      });
+
+      s = undoableReducer(s, { type: "undo" });
+      expect(s.present).toEqual({ memo: "ab", caption: "", rating: 3 });
+      s = undoableReducer(s, { type: "undo" });
+      expect(s.present.memo).toBe("");
+    });
+
+    it("묶인_입력_뒤_undo하면_그룹이_풀린다", () => {
+      let s = type(start, "memo", { memo: "a" }, 0);
+      s = undoableReducer(s, { type: "undo" });
+
+      expect(s.group).toBeNull();
+    });
   });
 });

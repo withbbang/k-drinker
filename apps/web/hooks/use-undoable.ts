@@ -1,11 +1,25 @@
 import { useCallback, useReducer } from "react";
 
-type UndoableState<T> = { past: T[]; present: T; future: T[] };
+type TypingGroup = { key: string; at: number };
+
+export type UndoableState<T> = {
+  past: T[];
+  present: T;
+  future: T[];
+  // 이어 치는 중인 글자칸. 같은 칸을 windowMs 안에 또 바꾸면 한 번으로 묶는다.
+  group: TypingGroup | null;
+};
 
 type Action<T> =
-  | { type: "set"; next: T | ((prev: T) => T); limit: number }
+  | {
+      type: "set";
+      next: T | ((prev: T) => T);
+      limit: number;
+      group?: TypingGroup & { windowMs: number };
+    }
   | { type: "undo" }
-  | { type: "redo" };
+  | { type: "redo" }
+  | { type: "endGroup" };
 
 // 같은 값인지. 일반 객체는 필드 하나씩 Object.is로 본다(updater가 늘 새 객체를 만들기 때문).
 function sameValue<T>(a: T, b: T): boolean {
@@ -39,10 +53,24 @@ export function undoableReducer<T>(
           ? (action.next as (prev: T) => T)(state.present)
           : action.next;
       if (sameValue(next, state.present)) return state;
+      const { group } = action;
+      if (
+        group &&
+        state.group?.key === group.key &&
+        group.at - state.group.at <= group.windowMs
+      ) {
+        return {
+          ...state,
+          present: next,
+          future: [],
+          group: { key: group.key, at: group.at },
+        };
+      }
       return {
         past: [...state.past, state.present].slice(-action.limit),
         present: next,
         future: [],
+        group: group ? { key: group.key, at: group.at } : null,
       };
     }
     case "undo": {
@@ -51,6 +79,7 @@ export function undoableReducer<T>(
         past: state.past.slice(0, -1),
         present: state.past[state.past.length - 1],
         future: [state.present, ...state.future],
+        group: null,
       };
     }
     case "redo": {
@@ -59,26 +88,47 @@ export function undoableReducer<T>(
         past: [...state.past, state.present],
         present: state.future[0],
         future: state.future.slice(1),
+        group: null,
       };
     }
+    case "endGroup":
+      return state.group ? { ...state, group: null } : state;
   }
 }
 
-export function useUndoable<T>(initial: T, limit = 50) {
+export function useUndoable<T>(
+  initial: T,
+  { limit = 50, groupMs = 1000 }: { limit?: number; groupMs?: number } = {},
+) {
   const [state, dispatch] = useReducer(undoableReducer<T>, {
     past: [],
     present: initial,
     future: [],
+    group: null,
   });
   const set = useCallback(
     (next: T | ((prev: T) => T)) => dispatch({ type: "set", next, limit }),
     [limit],
   );
+  // 같은 key로 groupMs 안에 이어 바꾸면 되돌리기 한 단계로 묶는다.
+  const setTyping = useCallback(
+    (key: string, next: T | ((prev: T) => T)) =>
+      dispatch({
+        type: "set",
+        next,
+        limit,
+        group: { key, at: Date.now(), windowMs: groupMs },
+      }),
+    [limit, groupMs],
+  );
+  const endTyping = useCallback(() => dispatch({ type: "endGroup" }), []);
   const undo = useCallback(() => dispatch({ type: "undo" }), []);
   const redo = useCallback(() => dispatch({ type: "redo" }), []);
   return {
     state: state.present,
     set,
+    setTyping,
+    endTyping,
     undo,
     redo,
     canUndo: state.past.length > 0,
