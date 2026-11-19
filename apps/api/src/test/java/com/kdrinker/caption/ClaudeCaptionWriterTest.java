@@ -79,6 +79,12 @@ class ClaudeCaptionWriterTest {
 				.contains("지어 쓰지 않는다").contains("고정 태그");
 	}
 
+	@Test
+	void systemPromptMentionsPlaceholders() {
+		assertThat(ClaudeCaptionWriter.SYSTEM).contains("{술이름}").contains("{종류}").contains("{도수}")
+				.contains("{용량}").contains("{양조장}").contains("은(는)").contains("이름·양조장 태그는 코드가 붙이니");
+	}
+
 	private String requestText(String abv) {
 		LabelResult l = new LabelResult("화요41", "증류주", abv == null ? null : new BigDecimal(abv), null, null, null,
 				null, null, List.of());

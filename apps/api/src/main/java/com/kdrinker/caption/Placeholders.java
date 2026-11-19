@@ -20,6 +20,23 @@ public final class Placeholders {
 	private Placeholders() {
 	}
 
+	private static final Pattern BRACES = Pattern.compile("\\{[^{}\\n]*\\}");
+
+	/** Claude가 쓴 글에서 목록에 없는 {…}를 지운다. 사용자가 쓴 글에는 쓰지 않는다. */
+	public static String stripUnknown(String text) {
+		if (text == null) {
+			return null;
+		}
+		Matcher m = BRACES.matcher(text);
+		StringBuilder sb = new StringBuilder();
+		while (m.find()) {
+			String inner = m.group().substring(1, m.group().length() - 1);
+			m.appendReplacement(sb, Matcher.quoteReplacement(NAMES.contains(inner) ? m.group() : ""));
+		}
+		m.appendTail(sb);
+		return sb.toString().replaceAll(" {2,}", " ").strip();
+	}
+
 	public static boolean isTemplate(String stored) {
 		return stored != null && NAMES.stream().anyMatch(n -> stored.contains("{" + n + "}"));
 	}

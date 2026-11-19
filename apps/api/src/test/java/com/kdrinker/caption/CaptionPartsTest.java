@@ -54,8 +54,7 @@ class CaptionPartsTest {
 	void 나눈_뒤_다시_이으면_원래_캡션이다() {
 		// given
 		Brewery brewery = Brewery.of("국순당", "국순당", BrewerySource.PUBLIC_DATA);
-		String stored = CaptionAssembler.assemble(new CaptionDraft("훅", "소개", "맛", null),
-				new BigDecimal("4.5"), brewery, "#막걸리");
+		String stored = "훅\n\n소개\n\n맛\n\n★4.5\n\n" + BreweryBlock.render(brewery) + "\n\n#막걸리";
 
 		// when
 		String joined = CaptionParts.split(stored).join(brewery);

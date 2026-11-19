@@ -29,14 +29,14 @@ class HashtagsTest {
 			t("#깔끔", TagCategory.PAIRING_TASTE));
 
 	@Test
-	void 고정_태그가_앞에_그대로_오고_이름_공백이_제거된다() {
+	void 고정_태그가_앞에_그대로_오고_이름_양조장은_이름표다() {
 		// when
 		List<String> all = Hashtags.finalize(fromClaude, label("화요 25"), brewery).all();
 
 		// then
 		assertThat(all.subList(0, 6)).containsExactlyElementsOf(FIXED);
-		assertThat(all).contains("#화요25").doesNotContain("#화요 25");
-		assertThat(all).containsSubsequence("#화요25", "#여주", "#화요", "#전과막걸리", "#달달");
+		assertThat(all).contains("#{술이름태그}").doesNotContain("#화요25", "#화요 25");
+		assertThat(all).containsSubsequence("#{술이름태그}", "#여주", "#{양조장태그}", "#전과막걸리", "#달달");
 	}
 
 	@Test
@@ -55,7 +55,7 @@ class HashtagsTest {
 		List<String> all = Hashtags.finalize(fromClaude, label("화요 25"), null).all();
 
 		// then
-		assertThat(all).doesNotContain("#여주", "#화요").contains("#화요25");
+		assertThat(all).doesNotContain("#여주", "#화요", "#{양조장태그}").contains("#{술이름태그}");
 	}
 
 	@Test
@@ -86,12 +86,13 @@ class HashtagsTest {
 	}
 
 	@Test
-	void 술_이름_태그는_Claude가_빼먹어도_라벨_이름으로_만든다() {
+	void 술_이름이_있으면_Claude_태그와_상관없이_이름표_태그다() {
 		// when
 		HashtagSet set = Hashtags.finalize(List.of(), label("새 술 12"), null);
 
 		// then
-		assertThat(set.name()).isEqualTo("#새술12");
+		assertThat(set.name()).isEqualTo("#{술이름태그}");
+		assertThat(set.brewery()).isNull();
 	}
 
 	@Test
@@ -131,8 +132,8 @@ class HashtagsTest {
 		// then
 		assertThat(s1.all()).doesNotContain("#달달").contains("#전과막걸리");
 		assertThat(s2.all()).doesNotContain("#전과막걸리").contains("#여주");
-		assertThat(s3.all()).doesNotContain("#여주").contains("#화요");
-		assertThat(s4.all()).doesNotContain("#화요").contains("#화요25");
+		assertThat(s3.all()).doesNotContain("#여주").contains("#{양조장태그}");
+		assertThat(s4.all()).doesNotContain("#{양조장태그}").contains("#{술이름태그}");
 	}
 
 	@Test
@@ -145,7 +146,7 @@ class HashtagsTest {
 
 		// then
 		assertThat(dropped).isEmpty();
-		assertThat(set.all()).contains("#화요25").hasSize(7);
+		assertThat(set.all()).contains("#{술이름태그}").hasSize(7);
 	}
 
 	@Test

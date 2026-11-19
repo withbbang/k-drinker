@@ -46,4 +46,10 @@ class BreweryBlockTest {
 	void 양조장이_없으면_마커_두_줄만_나온다() {
 		assertThat(BreweryBlock.render(null)).isEqualTo("<!--brewery-->\n<!--brewery-->");
 	}
+
+	@Test
+	void 틀은_마커_사이에_이름표_줄이_정해진_순서로_있다() {
+		assertThat(BreweryBlock.TEMPLATE).isEqualTo(
+				"<!--brewery-->\n🍶 {양조장}\n📍 {주소}\n☎ {전화}\n🏠 {홈페이지}\n📷 {인스타그램}\n{기타SNS}\n<!--brewery-->");
+	}
 }

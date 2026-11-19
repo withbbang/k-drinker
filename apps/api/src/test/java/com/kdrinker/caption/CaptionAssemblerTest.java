@@ -18,65 +18,45 @@ class CaptionAssemblerTest {
 	}
 
 	@Test
-	void 모든_블록이_순서대로_빈_줄_하나로_나뉜다() {
+	void assemble_usesPlaceholders() {
 		// when
-		String stored = CaptionAssembler.assemble(draft("달았어요."), new BigDecimal("4.5"), brewery, TAGS);
+		String stored = CaptionAssembler.assemble(draft("달았어요."), TAGS);
 
 		// then
-		assertThat(stored).isEqualTo(
-				"훅이에요\n\n소개예요\n\n달았어요.\n\n★4.5\n\n<!--brewery-->\n🍶 화요\n<!--brewery-->\n\n#전통주 #우리술");
-	}
-
-	@Test
-	void 별점이_없으면_별점_블록과_빈_줄이_없다() {
-		// when
-		String stored = CaptionAssembler.assemble(draft("달았어요."), null, brewery, TAGS);
-
-		// then
-		assertThat(stored).doesNotContain("★").doesNotContain("\n\n\n");
-	}
-
-	@Test
-	void 정수_별점은_소수_한_자리로_쓴다() {
-		assertThat(CaptionAssembler.assemble(draft("a"), new BigDecimal("4"), null, TAGS)).contains("★4.0");
+		assertThat(stored).isEqualTo("훅이에요\n\n소개예요\n\n달았어요.\n\n{별점}\n\n" + BreweryBlock.TEMPLATE + "\n\n#전통주 #우리술");
 	}
 
 	@Test
 	void tasting이_비면_그_블록과_빈_줄이_없다() {
 		// when
-		String stored = CaptionAssembler.assemble(draft(" "), null, null, TAGS);
+		String stored = CaptionAssembler.assemble(draft(" "), TAGS);
 
 		// then
-		assertThat(stored).isEqualTo("훅이에요\n\n소개예요\n\n<!--brewery-->\n<!--brewery-->\n\n#전통주 #우리술");
+		assertThat(stored).isEqualTo("훅이에요\n\n소개예요\n\n{별점}\n\n" + BreweryBlock.TEMPLATE + "\n\n#전통주 #우리술");
 	}
 
 	@Test
-	void 양조장이_없어도_마커를_지운_결과에_연속_빈_줄이_없다() {
+	void 채우면_별점이_없을_때_별점_줄과_빈_줄이_빠진다() {
+		// given
+		String stored = CaptionAssembler.assemble(draft("달았어요."), TAGS);
+
 		// when
-		String shown = CaptionAssembler.stripMarkers(CaptionAssembler.assemble(draft("달았어요."), new BigDecimal("4.5"), null, TAGS));
+		String shown = CaptionAssembler.render(stored, CaptionValues.EMPTY);
 
 		// then
-		assertThat(shown).doesNotContain("\n\n\n").doesNotContain("<!--");
-		assertThat(shown).isEqualTo("훅이에요\n\n소개예요\n\n달았어요.\n\n★4.5\n\n#전통주 #우리술");
+		assertThat(shown).doesNotContain("★").doesNotContain("\n\n\n").doesNotContain("{");
 	}
 
 	@Test
-	void 양조장이_있으면_마커만_지워지고_블록은_남는다() {
+	void 채우면_별점과_양조장_블록이_나온다() {
+		// given
+		String stored = CaptionAssembler.assemble(draft("달았어요."), TAGS);
+
 		// when
-		String shown = CaptionAssembler.stripMarkers(CaptionAssembler.assemble(draft("달았어요."), null, brewery, TAGS));
+		String shown = CaptionAssembler.render(stored, CaptionValues.of(null, null, brewery, new BigDecimal("4")));
 
 		// then
-		assertThat(shown).doesNotContain("\n\n\n").doesNotContain("<!--");
-		assertThat(shown).isEqualTo("훅이에요\n\n소개예요\n\n달았어요.\n\n🍶 화요\n\n#전통주 #우리술");
-	}
-
-	@Test
-	void 해시태그가_없고_양조장도_없으면_끝에_빈_줄이_남지_않는다() {
-		// when
-		String shown = CaptionAssembler.stripMarkers(CaptionAssembler.assemble(draft("a"), null, null, ""));
-
-		// then
-		assertThat(shown).isEqualTo("훅이에요\n\n소개예요\n\na");
+		assertThat(shown).isEqualTo("훅이에요\n\n소개예요\n\n달았어요.\n\n★4.0\n\n🍶 화요\n\n#전통주 #우리술");
 	}
 
 	@Test

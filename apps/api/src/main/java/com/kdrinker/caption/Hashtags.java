@@ -16,23 +16,24 @@ public final class Hashtags {
 	/** `#`을 뺀 태그 한 개의 최대 글자 수(코드 포인트). 12개를 이어도 post.hashtags(VARCHAR(500))에 들어간다. */
 	public static final int MAX_TAG_LENGTH = 30;
 
+	/** 이름·양조장 태그는 이름표로 저장하고 게시·표시할 때 채운다. */
+	public static final String NAME_TAG = "#{술이름태그}";
+	public static final String BREWERY_TAG = "#{양조장태그}";
+
 	private Hashtags() {
 	}
 
 	/**
 	 * Claude 태그를 정리해 구성표대로 놓는다. 분류는 Claude가 준 category를 따른다. 양조장이 없으면 지역·양조장 태그를
-	 * 버리고, 술 이름 태그는 Claude가 빼먹으면 label.drinkName으로 만든다.
+	 * 버린다. 이름·양조장 태그는 Claude의 NAME·BREWERY 태그를 쓰지 않고 이름표로 둔다(술 이름·양조장이 있고 태그로 쓸 수 있을 때).
 	 */
 	public static HashtagSet finalize(List<DraftTag> fromClaude, LabelResult label, Brewery brewery) {
 		List<DraftTag> tags = fromClaude == null ? List.of() : fromClaude;
 		Set<String> seen = new HashSet<>(FIXED);
 		String type = first(tags, TagCategory.TYPE, seen);
-		String name = first(tags, TagCategory.NAME, seen);
-		if (name == null && label != null) {
-			name = claim(label.drinkName(), seen);
-		}
+		String name = label != null && normalize(label.drinkName()) != null ? NAME_TAG : null;
 		String region = brewery == null ? null : first(tags, TagCategory.REGION, seen);
-		String breweryTag = brewery == null ? null : first(tags, TagCategory.BREWERY, seen);
+		String breweryTag = brewery != null && normalize(brewery.getName()) != null ? BREWERY_TAG : null;
 		List<String> pairing = new ArrayList<>();
 		for (DraftTag t : tags) {
 			if (pairing.size() >= MAX_PAIRING_TASTE) {

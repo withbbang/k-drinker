@@ -1,27 +1,24 @@
 package com.kdrinker.caption;
 
-import com.kdrinker.brewery.entity.Brewery;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 블록 조립. 순서: 훅, 소개, 맛·페어링, 별점, 양조장 블록, 해시태그. 블록 사이는 빈 줄 하나. */
+/** 블록 조립. 순서: 훅, 소개, 맛·페어링, 별점 이름표, 양조장 블록 이름표, 해시태그. 블록 사이는 빈 줄 하나. */
 public final class CaptionAssembler {
 
 	private CaptionAssembler() {
 	}
 
-	/** 마커를 포함한 저장용 캡션. 입력에 없는 블록은 통째로 뺀다(양조장 블록만 마커 두 줄로 남긴다). */
-	public static String assemble(CaptionDraft d, BigDecimal rating, Brewery b, String hashtags) {
+	/** 마커를 포함한 저장용 캡션 틀. 별점·양조장 블록은 항상 이름표로 두고, 채울 때 값이 없으면 빠진다. */
+	public static String assemble(CaptionDraft d, String hashtags) {
 		List<String> blocks = new ArrayList<>();
 		addIfPresent(blocks, d.hook());
 		addIfPresent(blocks, d.intro());
 		addIfPresent(blocks, d.tasting());
-		if (rating != null) {
-			blocks.add(ratingBlock(rating));
-		}
-		blocks.add(BreweryBlock.render(b));
+		blocks.add("{별점}");
+		blocks.add(BreweryBlock.TEMPLATE);
 		addIfPresent(blocks, hashtags);
 		return String.join("\n\n", blocks);
 	}

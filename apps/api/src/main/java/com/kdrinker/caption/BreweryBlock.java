@@ -9,6 +9,10 @@ public final class BreweryBlock {
 
 	public static final String MARKER = "<!--brewery-->";
 
+	/** 새 캡션의 양조장 블록 틀. 기타 SNS 줄에는 이모지를 붙이지 않는다. */
+	public static final String TEMPLATE = String.join("\n", MARKER, "🍶 {양조장}", "📍 {주소}", "☎ {전화}", "🏠 {홈페이지}",
+			"📷 {인스타그램}", "{기타SNS}", MARKER);
+
 	private BreweryBlock() {
 	}
 

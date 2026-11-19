@@ -1,5 +1,6 @@
 package com.kdrinker.caption;
 
+import com.kdrinker.analysis.label.LabelResult;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.drink.entity.Drink;
 import java.math.BigDecimal;
@@ -17,6 +18,15 @@ public record CaptionValues(String drinkName, String category, BigDecimal abv, I
 			return new CaptionValues(null, null, null, null, rating, null);
 		}
 		return of(drinkOrNull.getName(), drinkOrNull, drinkOrNull.getBrewery(), rating);
+	}
+
+	/** 새 캡션 길이 계산용. 라벨의 이름·종류·도수·용량과 양조장·별점을 담는다. */
+	public static CaptionValues of(LabelResult labelOrNull, Brewery breweryOrNull, BigDecimal rating) {
+		if (labelOrNull == null) {
+			return new CaptionValues(null, null, null, null, rating, breweryOrNull);
+		}
+		return new CaptionValues(labelOrNull.drinkName(), labelOrNull.category(), labelOrNull.abv(),
+				labelOrNull.volumeMl(), rating, breweryOrNull);
 	}
 
 	/** 미리보기·새 술 이름용. 술 이름과 양조장을 따로 받는다. */

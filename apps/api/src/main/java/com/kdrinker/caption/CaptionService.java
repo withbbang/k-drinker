@@ -22,31 +22,32 @@ public class CaptionService {
 	}
 
 	public ComposedCaption compose(CaptionInput in) {
-		CaptionDraft draft = writer.write(in);
+		CaptionValues values = CaptionValues.of(in.label(), in.brewery(), in.rating());
+		CaptionDraft draft = clean(writer.write(in));
 		HashtagSet tags = Hashtags.finalize(draft.hashtags(), in.label(), in.brewery());
-		String caption = build(in, draft, tags);
-		if (CaptionAssembler.length(caption, CaptionValues.EMPTY) <= MAX_LENGTH) {
+		String caption = build(draft, tags);
+		if (CaptionAssembler.length(caption, values) <= MAX_LENGTH) {
 			return result(caption, tags);
 		}
 		try {
-			CaptionDraft shorter = writer.shorten(in, draft, CaptionAssembler.length(caption, CaptionValues.EMPTY));
+			CaptionDraft shorter = clean(writer.shorten(in, draft, CaptionAssembler.length(caption, values)));
 			draft = shorter;
 			tags = Hashtags.finalize(shorter.hashtags(), in.label(), in.brewery());
-			caption = build(in, draft, tags);
+			caption = build(draft, tags);
 		} catch (ClaudeUnavailableException e) {
 			// 줄이기에 실패해도 코드의 폴백(태그 삭제, 문장 제거)으로 계속한다
 		}
-		while (CaptionAssembler.length(caption, CaptionValues.EMPTY) > MAX_LENGTH) {
+		while (CaptionAssembler.length(caption, values) > MAX_LENGTH) {
 			Optional<HashtagSet> fewer = tags.dropOne();
 			if (fewer.isEmpty()) {
 				break;
 			}
 			tags = fewer.get();
-			caption = build(in, draft, tags);
+			caption = build(draft, tags);
 		}
-		while (CaptionAssembler.length(caption, CaptionValues.EMPTY) > MAX_LENGTH && hasText(draft.tasting())) {
+		while (CaptionAssembler.length(caption, values) > MAX_LENGTH && hasText(draft.tasting())) {
 			draft = new CaptionDraft(draft.hook(), draft.intro(), dropLastSentence(draft.tasting()), draft.hashtags());
-			caption = build(in, draft, tags);
+			caption = build(draft, tags);
 		}
 		return result(caption, tags);
 	}
@@ -55,8 +56,14 @@ public class CaptionService {
 		return s != null && !s.isBlank();
 	}
 
-	private static String build(CaptionInput in, CaptionDraft draft, HashtagSet tags) {
-		return CaptionAssembler.assemble(draft, in.rating(), in.brewery(), tags.joined());
+	/** Claude가 쓴 글에서 목록에 없는 중괄호를 지운다. */
+	private static CaptionDraft clean(CaptionDraft d) {
+		return new CaptionDraft(Placeholders.stripUnknown(d.hook()), Placeholders.stripUnknown(d.intro()),
+				Placeholders.stripUnknown(d.tasting()), d.hashtags());
+	}
+
+	private static String build(CaptionDraft draft, HashtagSet tags) {
+		return CaptionAssembler.assemble(draft, tags.joined());
 	}
 
 	private static ComposedCaption result(String caption, HashtagSet tags) {
