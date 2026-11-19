@@ -6,6 +6,7 @@ import { useEffect, useRef, type ComponentProps } from "react";
 export function AutoTextarea({
   className = "",
   onInput,
+  ref: outerRef,
   ...props
 }: ComponentProps<"textarea">) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -25,7 +26,11 @@ export function AutoTextarea({
     <textarea
       rows={3}
       {...props}
-      ref={ref}
+      ref={(node) => {
+        ref.current = node;
+        if (typeof outerRef === "function") outerRef(node);
+        else if (outerRef) outerRef.current = node;
+      }}
       onInput={(event) => {
         fit();
         onInput?.(event);
