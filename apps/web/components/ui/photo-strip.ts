@@ -18,3 +18,46 @@ export function moveByKey<T>(
   if (from < 0 || to < 0) return items;
   return arrayMove(items, from, to);
 }
+
+// 화면 낭독기 안내. dnd-kit 기본값은 영어라 한국어로 바꾼다.
+export const SCREEN_READER_INSTRUCTIONS = {
+  draggable:
+    "스페이스나 엔터로 들고, 화살표로 옮긴 뒤 다시 눌러 놓으세요. 취소는 Esc입니다.",
+};
+
+type DragIds = {
+  active: { id: string | number };
+  over: { id: string | number } | null;
+};
+
+// keys는 지금 줄 순서의 키 목록. 키를 몇 번째 사진인지로 바꿔 읽어 준다.
+export function makeAnnouncements(keys: string[]) {
+  const nth = (id: string | number) => keys.indexOf(String(id)) + 1;
+  return {
+    onDragStart: ({ active }: Pick<DragIds, "active">) =>
+      `${nth(active.id)}번째 사진을 들었어요.`,
+    onDragOver: ({ active, over }: DragIds) =>
+      over
+        ? `${nth(active.id)}번째 사진이 ${nth(over.id)}번째 자리 위에 있어요.`
+        : undefined,
+    onDragEnd: ({ active, over }: DragIds) =>
+      over
+        ? `${nth(active.id)}번째 사진을 ${nth(over.id)}번째 자리로 옮겼어요.`
+        : `${nth(active.id)}번째 사진을 제자리에 놓았어요.`,
+    onDragCancel: ({ active }: Pick<DragIds, "active">) =>
+      `끌기를 취소했어요. ${nth(active.id)}번째 사진은 그대로예요.`,
+  };
+}
+
+// matchMedia가 없는 환경(jsdom 등)에서는 모션 감소가 아닌 것으로 본다
+export function prefersReducedMotion(): boolean {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
+    return false;
+  }
+  return (
+    window.matchMedia("(prefers-reduced-motion: reduce)")?.matches ?? false
+  );
+}

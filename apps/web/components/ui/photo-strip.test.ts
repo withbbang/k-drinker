@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  makeAnnouncements,
   MOUSE_ACTIVATION,
   moveByKey,
+  prefersReducedMotion,
+  SCREEN_READER_INSTRUCTIONS,
   TOUCH_ACTIVATION,
 } from "@/components/ui/photo-strip";
 
@@ -32,5 +35,32 @@ describe("끌기 시작 조건", () => {
 
   it("마우스는 5px 움직여야 시작한다", () => {
     expect(MOUSE_ACTIVATION).toEqual({ distance: 5 });
+  });
+});
+
+describe("한국어 안내", () => {
+  it("끌기 안내 문구가 한국어다", () => {
+    expect(SCREEN_READER_INSTRUCTIONS.draggable).toContain("화살표");
+    const a = makeAnnouncements(["a", "b", "c"]);
+    expect(a.onDragStart({ active: { id: "b" } })).toBe(
+      "2번째 사진을 들었어요.",
+    );
+    expect(a.onDragEnd({ active: { id: "a" }, over: { id: "c" } })).toBe(
+      "1번째 사진을 3번째 자리로 옮겼어요.",
+    );
+  });
+});
+
+describe("prefersReducedMotion", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("matchMedia가 없으면 거짓", () => {
+    vi.stubGlobal("matchMedia", undefined);
+    expect(prefersReducedMotion()).toBe(false);
+  });
+
+  it("모션 감소면 참", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    expect(prefersReducedMotion()).toBe(true);
   });
 });

@@ -22,7 +22,10 @@ import type { ReactNode } from "react";
 import { AddPhotoTile } from "@/components/ui/AddPhotoTile";
 import {
   MOUSE_ACTIVATION,
+  makeAnnouncements,
   moveByKey,
+  prefersReducedMotion,
+  SCREEN_READER_INSTRUCTIONS,
   TOUCH_ACTIVATION,
 } from "@/components/ui/photo-strip";
 
@@ -83,7 +86,10 @@ function Thumb<T>({
     <li
       ref={setNodeRef}
       // dnd-kit이 계산하는 transform·transition은 Tailwind 클래스로 줄 수 없어 style로만 준다.
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition: prefersReducedMotion() ? undefined : transition,
+      }}
       className={`relative flex w-20 shrink-0 flex-col gap-1 ${
         isDragging ? "z-10" : ""
       }`}
@@ -164,6 +170,10 @@ export function PhotoStrip<T>({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      accessibility={{
+        announcements: makeAnnouncements(keys),
+        screenReaderInstructions: SCREEN_READER_INSTRUCTIONS,
+      }}
       onDragStart={() => onBusyChange?.(true)}
       onDragEnd={handleDragEnd}
       onDragCancel={() => onBusyChange?.(false)}
