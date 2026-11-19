@@ -1,48 +1,24 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppNav } from "@/components/layout/AppNav";
-import { QueryProvider } from "@/components/providers/QueryProvider";
 
-const fetchMock = vi.fn();
-const { replaceMock } = vi.hoisted(() => ({ replaceMock: vi.fn() }));
+const { pathnameMock } = vi.hoisted(() => ({ pathnameMock: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/breweries",
-  useRouter: () => ({ replace: replaceMock }),
+  usePathname: () => pathnameMock(),
 }));
-
-function renderNav() {
-  render(
-    <QueryProvider>
-      <AppNav />
-    </QueryProvider>,
-  );
-}
-
-// [로그아웃] → 확인 모달의 [로그아웃]
-async function confirmLogout() {
-  await userEvent.click(screen.getByRole("button", { name: "로그아웃" }));
-  const dialog = await screen.findByRole("dialog");
-  await userEvent.click(
-    within(dialog).getByRole("button", { name: "로그아웃" }),
-  );
-}
 
 describe("AppNav", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    fetchMock.mockReset();
-    replaceMock.mockReset();
+    pathnameMock.mockReturnValue("/breweries");
   });
 
   it("marks the current page", () => {
-    renderNav();
+    render(<AppNav />);
 
     expect(screen.getByRole("link", { name: "양조장" })).toHaveAttribute(
       "aria-current",
@@ -57,63 +33,44 @@ describe("AppNav", () => {
     );
   });
 
-  it("logs out and moves to the login page", async () => {
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    renderNav();
+  it("keeps the brewery tab current on a sub page", () => {
+    pathnameMock.mockReturnValue("/breweries/12");
+    render(<AppNav />);
 
-    await confirmLogout();
-
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toContain("/api/v1/sessions");
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "DELETE" });
-    expect(replaceMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("moves to the login page even when logout fails", async () => {
-    fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          code: "AUTH_REQUIRED",
-          message: "로그인이 필요합니다",
-        }),
-        { status: 401, headers: { "Content-Type": "application/json" } },
-      ),
+    expect(screen.getByRole("link", { name: "양조장" })).toHaveAttribute(
+      "aria-current",
+      "page",
     );
-    renderNav();
-
-    await confirmLogout();
-
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"));
-    expect(replaceMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("로그아웃은_확인해야_한다", async () => {
-    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-    renderNav();
-
-    await userEvent.click(screen.getByRole("button", { name: "로그아웃" }));
-
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("로그아웃할까요?")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "로그아웃" }),
+    expect(screen.getByRole("link", { name: "기록" })).not.toHaveAttribute(
+      "aria-current",
     );
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock.mock.calls[0][0]).toContain("/api/v1/sessions");
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "DELETE" });
   });
 
-  it("로그아웃_확인_모달에서_취소하면_닫힌다", async () => {
-    renderNav();
+  it("marks the record tab only on the root", () => {
+    pathnameMock.mockReturnValue("/");
+    render(<AppNav />);
 
-    await userEvent.click(screen.getByRole("button", { name: "로그아웃" }));
-    const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByRole("button", { name: "취소" }));
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "기록" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
+
+  it("has no logout button", () => {
+    render(<AppNav />);
+
+    expect(
+      screen.queryByRole("button", { name: "로그아웃" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(["app/page.tsx", "app/breweries/page.tsx", "app/settings/page.tsx"])(
+    "%s reserves room for the tab bar",
+    (file) => {
+      const source = readFileSync(join(process.cwd(), file), "utf8");
+
+      expect(source).toMatch(/import \{[^}]*TAB_SAFE_PADDING[^}]*\}/);
+      expect(source).toMatch(/\$\{TAB_SAFE_PADDING\}/);
+    },
+  );
 });
