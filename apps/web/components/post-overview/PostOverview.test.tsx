@@ -378,11 +378,17 @@ describe("PostOverview", () => {
       screen.queryByRole("button", { name: "게시물 취소" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "수정" })).toBeInTheDocument();
+    expect(
+      screen.getByText("[수정]에서 저장하면 여기서 게시할 수 있어요."),
+    ).toBeInTheDocument();
   });
 
   it("hides edit for a telegram post that is not editable", async () => {
     setup(post({ channel: "TELEGRAM", editable: false }));
     await screen.findByText("텔레그램에서 진행 중인 게시물이에요.");
+    expect(
+      screen.queryByText("[수정]에서 저장하면 여기서 게시할 수 있어요."),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "수정" }),
     ).not.toBeInTheDocument();

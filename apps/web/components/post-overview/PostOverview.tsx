@@ -162,6 +162,12 @@ function Overview({ post }: { post: PostDetailResponse }) {
   const telegramNotice = (
     <Section>
       <p className="text-text">텔레그램에서 진행 중인 게시물이에요.</p>
+      {/* 웹에서 저장하면 웹 담당으로 넘어온다(API Post.moveToWeb). */}
+      {post.editable && (
+        <p className="text-sm text-muted">
+          [수정]에서 저장하면 여기서 게시할 수 있어요.
+        </p>
+      )}
     </Section>
   );
 
