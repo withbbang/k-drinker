@@ -46,18 +46,17 @@ export function LoginForm() {
           inputMode="numeric"
           autoComplete="one-time-code"
           value={code}
+          // 요청 중에 코드를 바꾸면 끝난 요청의 결과가 다른 코드에 붙으므로 잠근다.
+          readOnly={login.isPending}
           onChange={(event) => {
             const value = event.target.value
               .replace(/\D/g, "")
               .slice(0, CODE_LENGTH);
-            if (value === code) return;
-            if (login.isPending) {
-              setCode(value);
-              return;
-            }
+            if (value === code || login.isPending) return;
             login.reset();
             setCode(value);
-            if (value.length === CODE_LENGTH && code.length !== CODE_LENGTH) {
+            // 6자리를 통째로 새로 붙여 넣은 경우도 바로 요청한다.
+            if (value.length === CODE_LENGTH) {
               login.mutate({ code: value });
             }
           }}

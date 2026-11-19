@@ -42,6 +42,20 @@ const BREWERY = {
 };
 
 describe("BreweryForm", () => {
+  it("새로_만든_뒤_옮겨_온_화면이면_저장_완료를_보인다", () => {
+    // given
+    render(
+      <QueryProvider>
+        <BreweryForm brewery={BREWERY} justCreated />
+      </QueryProvider>,
+    );
+
+    // then
+    expect(
+      screen.getByText("저장했어요. 다음 게시물부터 이 정보가 쓰여요."),
+    ).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     apiFetchMock.mockReset();
     replaceMock.mockReset();
@@ -198,7 +212,7 @@ describe("BreweryForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1));
-    expect(replaceMock).toHaveBeenCalledWith("/breweries/7");
+    expect(replaceMock).toHaveBeenCalledWith("/breweries/7?saved=1");
   });
 
   it("있는_양조장을_저장하면_머문다", async () => {

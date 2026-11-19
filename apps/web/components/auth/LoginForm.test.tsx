@@ -48,6 +48,42 @@ describe("LoginForm", () => {
     replaceMock.mockReset();
   });
 
+  it("6자리를_통째로_새로_붙여_넣어도_다시_요청한다", async () => {
+    // given
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: "INVALID_CODE", message: "코드가 틀렸어요." }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const { input } = renderForm();
+    await userEvent.type(input, "111111");
+    await screen.findByRole("alert");
+
+    // when
+    await userEvent.clear(input);
+    await userEvent.paste("222222");
+
+    // then
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/v1/sessions",
+      expect.objectContaining({ body: JSON.stringify({ code: "222222" }) }),
+    );
+  });
+
+  it("요청_중에는_코드를_고칠_수_없다", async () => {
+    // given
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    const { input } = renderForm();
+
+    // when
+    await userEvent.type(input, "123456");
+
+    // then
+    await waitFor(() => expect(input).toHaveAttribute("readonly"));
+  });
+
   it("submits the six-digit code and moves to home", async () => {
     // when
     await loginWith(null);

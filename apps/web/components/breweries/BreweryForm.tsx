@@ -70,12 +70,15 @@ type BreweryFormProps = {
   onSaved?: (saved: BreweryResponse) => void;
   // 아래에 붙는 저장 막대의 배경 토큰. 놓이는 면의 배경과 맞춘다.
   barClassName?: string;
+  // 새로 만든 뒤 상세 화면으로 옮겨 왔으면 첫 화면에 저장 완료 문구를 보인다.
+  justCreated?: boolean;
 };
 
 export function BreweryForm({
   brewery,
   onSaved,
   barClassName = "bg-bg",
+  justCreated = false,
 }: BreweryFormProps) {
   const [values, setValues] = useState(() => initial(brewery));
   const [savedId, setSavedId] = useState<number | null>(brewery?.id ?? null);
@@ -107,7 +110,8 @@ export function BreweryForm({
           setSavedId(saved.id);
           onSaved?.(saved);
           // 새로 만든 양조장은 상세 화면으로 옮긴다(시트·수정에서는 머문다).
-          if (!brewery && !onSaved) router.replace(`/breweries/${saved.id}`);
+          if (!brewery && !onSaved)
+            router.replace(`/breweries/${saved.id}?saved=1`);
         },
       },
     );
@@ -145,7 +149,7 @@ export function BreweryForm({
           {apiError ? apiError.message : "저장하지 못했어요."}
         </p>
       )}
-      {save.isSuccess && !onSaved && (
+      {(save.isSuccess || (justCreated && save.isIdle)) && !onSaved && (
         <p role="status" className="text-sm text-accent">
           저장했어요. 다음 게시물부터 이 정보가 쓰여요.
         </p>

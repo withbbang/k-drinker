@@ -267,7 +267,7 @@ function Overview({ post }: { post: PostDetailResponse }) {
                     status: post.status,
                   })
                 }
-                className={buttonClass("danger", "self-start")}
+                className={buttonClass("danger", "-ml-3 self-start")}
               >
                 게시물 취소
               </button>

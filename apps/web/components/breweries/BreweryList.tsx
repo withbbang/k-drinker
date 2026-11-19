@@ -63,7 +63,10 @@ export function BreweryList() {
               <p className="text-lg text-text">
                 {q ? `‘${q}’에 맞는 양조장이 없어요.` : "아직 양조장이 없어요."}
               </p>
-              <Link href="/breweries/new" className={buttonClass("text")}>
+              <Link
+                href="/breweries/new"
+                className={buttonClass("text", "-ml-3")}
+              >
                 새 양조장 추가
               </Link>
             </div>

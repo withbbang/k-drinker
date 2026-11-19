@@ -5,10 +5,12 @@ import Link from "next/link";
 import { buttonClass } from "@/components/ui/button";
 
 export default function ErrorScreen({
-  reset,
+  retry,
 }: {
   error: Error;
   reset: () => void;
+  // 서버 컴포넌트를 다시 받아 그린다. reset은 경계 상태만 지워 같은 오류가 다시 난다.
+  retry: () => void;
 }) {
   return (
     <main className="mx-auto flex max-w-sm flex-col items-start gap-6 px-4 py-16">
@@ -16,7 +18,7 @@ export default function ErrorScreen({
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={reset}
+          onClick={retry}
           className={buttonClass("primary")}
         >
           다시 시도

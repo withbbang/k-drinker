@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+
 import { BreweryForm } from "@/components/breweries/BreweryForm";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { TopBar } from "@/components/ui/TopBar";
@@ -8,6 +10,7 @@ import { ApiError } from "@/lib/api";
 
 export function BreweryDetail({ id }: { id: string }) {
   const brewery = useBrewery(id);
+  const justCreated = useSearchParams().get("saved") === "1";
 
   if (brewery.isPending) {
     return (
@@ -41,7 +44,7 @@ export function BreweryDetail({ id }: { id: string }) {
     <>
       <TopBar title={brewery.data.name} backHref="/breweries" />
       <div className="px-4 pt-4">
-        <BreweryForm brewery={brewery.data} />
+        <BreweryForm brewery={brewery.data} justCreated={justCreated} />
       </div>
     </>
   );

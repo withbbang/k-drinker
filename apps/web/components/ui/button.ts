@@ -6,8 +6,9 @@ const base =
 const variants: Record<ButtonVariant, string> = {
   primary: "rounded-full bg-accent px-5 text-on-accent",
   secondary: "rounded-full border border-line bg-surface px-5 text-text",
-  text: "text-accent",
-  danger: "text-danger",
+  // 글자 버튼도 누르는 영역을 44px 이상으로 둔다.
+  text: "min-w-11 px-3 text-accent",
+  danger: "min-w-11 px-3 text-danger",
 };
 
 export function buttonClass(variant: ButtonVariant, extra?: string): string {
