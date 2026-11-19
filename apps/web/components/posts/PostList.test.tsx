@@ -105,4 +105,56 @@ describe("PostList", () => {
 
     expect(await screen.findByText("이름 미확인")).toBeInTheDocument();
   });
+
+  it("손볼_상태는_강조해서_보인다", async () => {
+    setup([
+      summary({ id: 1, status: "PENDING_REVIEW" }),
+      summary({ id: 2, status: "FAILED" }),
+      summary({ id: 3, status: "PUBLISHED" }),
+    ]);
+
+    expect(await screen.findByText("검토 대기")).toHaveAttribute(
+      "data-tone",
+      "action",
+    );
+    expect(screen.getByText("실패")).toHaveAttribute("data-tone", "danger");
+    expect(screen.getByText("게시됨")).toHaveAttribute("data-tone", "muted");
+  });
+
+  it("알_수_없는_상태_코드는_기타로_보인다", async () => {
+    setup([summary({ status: "WEIRD" })]);
+
+    expect(await screen.findByText("기타")).toBeInTheDocument();
+    expect(screen.queryByText("WEIRD")).not.toBeInTheDocument();
+  });
+
+  it("술_이름은_고운바탕이다", async () => {
+    setup([summary()]);
+
+    expect(await screen.findByText("막걸리")).toHaveClass("font-serif");
+  });
+
+  it("기록이_없으면_올리는_방법을_안내한다", async () => {
+    setup([]);
+
+    expect(await screen.findByText("아직 기록이 없어요.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "휴대폰 사진 앱에서 k-drinker로 공유하거나 텔레그램 봇에 사진을 보내면 여기에 쌓여요.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("불러오는_중에는_뼈대를_보인다", () => {
+    apiFetchMock.mockReturnValue(new Promise(() => {}));
+    render(
+      <QueryProvider>
+        <PostList />
+      </QueryProvider>,
+    );
+
+    expect(
+      screen.getByRole("status", { name: "불러오는 중" }),
+    ).toBeInTheDocument();
+  });
 });

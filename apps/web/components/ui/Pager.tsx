@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { buttonClass } from "@/components/ui/button";
+
 type PagerProps = {
   /** 0부터 시작하는 현재 페이지 */
   page: number;
@@ -7,7 +9,7 @@ type PagerProps = {
   hrefFor: (page: number) => string;
 };
 
-const BASE = "rounded-full border border-neutral-300 px-4 py-2 text-sm";
+const BASE = buttonClass("secondary");
 
 export function Pager({ page, totalPages, hrefFor }: PagerProps) {
   const hasPrev = page > 0;
@@ -24,7 +26,7 @@ export function Pager({ page, totalPages, hrefFor }: PagerProps) {
           이전
         </span>
       )}
-      <span className="text-sm text-neutral-700">
+      <span className="text-sm tabular-nums text-muted">
         {page + 1} / {Math.max(totalPages, 1)}
       </span>
       {hasNext ? (

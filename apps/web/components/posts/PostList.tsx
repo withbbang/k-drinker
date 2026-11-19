@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { Pager } from "@/components/ui/Pager";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { usePosts } from "@/hooks/use-posts";
 import { ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/format";
@@ -19,8 +20,21 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELED: "취소됨",
 };
 
+type Tone = "action" | "danger" | "muted";
+
+const STATUS_TONE: Record<string, Tone> = {
+  PENDING_REVIEW: "action",
+  FAILED: "danger",
+};
+
+const TONE_CLASS: Record<Tone, string> = {
+  action: "rounded-full bg-accent px-2 text-xs font-semibold text-on-accent",
+  danger: "text-xs font-semibold text-danger",
+  muted: "text-xs text-muted",
+};
+
 const ROW =
-  "flex items-center gap-3 rounded-lg border border-line bg-surface p-3 text-text";
+  "flex items-center gap-3 rounded-lg border border-line bg-surface p-3 text-text active:bg-line";
 
 function pageOf(value: string | null): number {
   const n = Number(value);
@@ -28,6 +42,7 @@ function pageOf(value: string | null): number {
 }
 
 function PostRow({ post }: { post: PostSummaryResponse }) {
+  const tone = STATUS_TONE[post.status] ?? "muted";
   const body = (
     <>
       {post.thumbnailUrl ? (
@@ -35,20 +50,28 @@ function PostRow({ post }: { post: PostSummaryResponse }) {
         <img
           src={post.thumbnailUrl}
           alt=""
-          className="size-16 shrink-0 rounded-md object-cover"
+          className="aspect-[4/5] w-14 shrink-0 rounded-thumb object-cover"
         />
       ) : (
-        <span className="size-16 shrink-0 rounded-thumb bg-line" />
+        <span className="aspect-[4/5] w-14 shrink-0 rounded-thumb bg-line" />
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate font-medium">
+        <span className="truncate font-serif text-lg">
           {post.drinkName ?? "이름 미확인"}
         </span>
         <span className="text-sm text-muted">
-          {post.rating !== null ? `★ ${post.rating.toFixed(1)}` : "별점 없음"}
+          {post.rating !== null ? (
+            <>
+              <span className="text-accent">★</span> {post.rating.toFixed(1)}
+            </>
+          ) : (
+            "별점 없음"
+          )}
         </span>
-        <span className="flex gap-2 text-xs text-muted">
-          <span>{STATUS_LABELS[post.status] ?? post.status}</span>
+        <span className="flex items-center gap-2 text-xs text-muted">
+          <span data-tone={tone} className={TONE_CLASS[tone]}>
+            {STATUS_LABELS[post.status] ?? "기타"}
+          </span>
           <span>{formatDate(post.createdAt)}</span>
         </span>
       </span>
@@ -67,7 +90,20 @@ export function PostList() {
   const posts = usePosts(page);
 
   if (posts.isPending) {
-    return <p className="text-sm text-muted">불러오는 중…</p>;
+    return (
+      <div
+        role="status"
+        aria-label="불러오는 중"
+        className="flex flex-col gap-2"
+      >
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton
+            key={i}
+            className="h-[calc(3.5rem*5/4+1.5rem+2px)] w-full"
+          />
+        ))}
+      </div>
+    );
   }
   if (posts.isError) {
     return (
@@ -82,7 +118,13 @@ export function PostList() {
   return (
     <div className="flex flex-col gap-4">
       {items.length === 0 ? (
-        <p className="text-sm text-muted">아직 기록이 없습니다.</p>
+        <div className="flex flex-col gap-1 py-6">
+          <p className="font-serif text-lg text-text">아직 기록이 없어요.</p>
+          <p className="text-sm text-muted">
+            휴대폰 사진 앱에서 k-drinker로 공유하거나 텔레그램 봇에 사진을
+            보내면 여기에 쌓여요.
+          </p>
+        </div>
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((post) => (
