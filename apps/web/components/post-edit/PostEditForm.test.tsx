@@ -59,6 +59,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
     captionTail: "#막걸리",
     captionEdited: false,
     captionLength: 123,
+    captionTemplated: true,
     photos: [
       { id: 1, position: 0, url: "/m/1.jpg", fitMode: "CROP" },
       { id: 2, position: 1, url: "/m/2.jpg", fitMode: "CROP" },
@@ -71,10 +72,13 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
   };
 }
 
-function setup(detail: PostDetailResponse) {
+const defaultPreview = { caption: "채운 캡션", length: 123, templated: true };
+
+function setup(detail: PostDetailResponse, previewResult = defaultPreview) {
   apiFetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path === "/api/v1/posts/7" && init?.method === "PUT") return detail;
     if (path === "/api/v1/posts/7") return detail;
+    if (path === "/api/v1/posts/7/caption-preview") return previewResult;
     return undefined;
   });
   render(
@@ -138,7 +142,40 @@ describe("PostEditForm", () => {
     expect(screen.getByLabelText("캡션 머리")).toHaveValue("머리 문장");
     expect(screen.getByLabelText("캡션 꼬리")).toHaveValue("#막걸리");
     expect(screen.getByText("선택한 술: 막걸리")).toBeInTheDocument();
-    expect(screen.getByText(/캡션 123자 \/ 2,200자/)).toBeInTheDocument();
+  });
+
+  it("shows the server preview text and length", async () => {
+    setup(post());
+    expect(await screen.findByText("채운 캡션")).toBeInTheDocument();
+    expect(screen.getByText("123자 / 2,200자")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("warns when the preview is over 2,200 characters", async () => {
+    setup(post(), { caption: "길다", length: 2300, templated: true });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "2,300자 / 2,200자",
+    );
+  });
+
+  const NOTICE = "이 글은 이름표가 없어 술 이름이 자동으로 바뀌지 않아요";
+
+  it("explains that a plain caption keeps the old drink name", async () => {
+    setup(post({ captionTemplated: false }));
+    await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it("shows no notice before the drink changes", async () => {
+    setup(post({ captionTemplated: false }));
+    await screen.findByText("채운 캡션");
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+
+  it("shows no notice for a templated caption", async () => {
+    setup(post({ captionTemplated: true }));
+    await userEvent.type(await screen.findByLabelText("새 이름으로"), "새 술");
+    expect(screen.queryByText(NOTICE)).toBeNull();
   });
 
   it("sends version and photo order on save", async () => {

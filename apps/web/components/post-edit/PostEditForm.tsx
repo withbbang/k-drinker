@@ -19,6 +19,7 @@ import { overflowMessage } from "@/components/ui/AddPhotoTile";
 import { RatingInput } from "@/components/ui/RatingInput";
 import { UndoRedoBar } from "@/components/ui/UndoRedoBar";
 import { useBrewery } from "@/hooks/use-breweries";
+import { useCaptionPreview } from "@/hooks/use-caption-preview";
 import { usePost } from "@/hooks/use-post";
 import { useUndoable } from "@/hooks/use-undoable";
 import { useUpdatePost } from "@/hooks/use-update-post";
@@ -27,6 +28,7 @@ import type { BreweryResponse } from "@/types/api/brewery";
 import type { PostDetailResponse } from "@/types/api/post";
 
 const MAX_MEMO_LENGTH = 2000;
+const MAX_CAPTION_LENGTH = 2200;
 const FALLBACK_ERROR = "저장에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 const TEXTAREA =
   "rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
@@ -88,6 +90,20 @@ function Editor({ post, onSave }: EditorProps) {
 
   const hasDrink = drink.drinkId !== null || newName !== "";
 
+  const preview = useCaptionPreview(String(post.id), {
+    drinkId: newName === "" ? drink.drinkId : null,
+    newDrinkName: newName === "" ? null : newName,
+    breweryId: hasDrink ? (picked?.id ?? null) : null,
+    rating,
+    captionHead,
+    captionTail,
+  });
+  const previewLength = preview.data?.length ?? post.captionLength;
+  const overLimit = previewLength > MAX_CAPTION_LENGTH;
+  const drinkNameFixed =
+    !post.captionTemplated &&
+    (newName !== "" || drink.drinkId !== post.drinkId);
+
   const handleDrinkChange = (next: DrinkChoice) => {
     if (next.drinkId !== drink.drinkId) setPicked(null);
     setDrink(next);
@@ -147,12 +163,6 @@ function Editor({ post, onSave }: EditorProps) {
           className={TEXTAREA}
         />
       </label>
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">양조장 블록</span>
-        <pre className="whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-sm">
-          {post.breweryBlock ?? ""}
-        </pre>
-      </div>
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium">캡션 꼬리</span>
         <textarea
@@ -162,9 +172,25 @@ function Editor({ post, onSave }: EditorProps) {
           className={TEXTAREA}
         />
       </label>
-      <p className="text-sm text-neutral-700">
-        캡션 {post.captionLength.toLocaleString("ko-KR")}자 / 2,200자
-      </p>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">미리보기</span>
+        <pre
+          className={`whitespace-pre-wrap rounded-md bg-neutral-100 p-3 text-sm ${preview.isFetching ? "opacity-50" : ""}`}
+        >
+          {preview.data?.caption ?? post.publishCaption}
+        </pre>
+        <p
+          role={overLimit ? "alert" : undefined}
+          className={`text-sm ${overLimit ? "text-red-700" : "text-neutral-700"}`}
+        >
+          {previewLength.toLocaleString("ko-KR")}자 / 2,200자
+        </p>
+        {drinkNameFixed && (
+          <p className="text-sm text-neutral-700">
+            이 글은 이름표가 없어 술 이름이 자동으로 바뀌지 않아요
+          </p>
+        )}
+      </div>
       <UndoRedoBar
         canUndo={canUndo}
         canRedo={canRedo}

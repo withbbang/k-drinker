@@ -56,6 +56,7 @@ function post(overrides: Partial<PostDetailResponse> = {}): PostDetailResponse {
     captionTail: "#막걸리",
     captionEdited: false,
     captionLength: 123,
+    captionTemplated: true,
     photos: [
       { id: 1, position: 0, url: "/m/1.jpg", fitMode: "CROP" },
       { id: 2, position: 1, url: "/m/2.jpg", fitMode: "CROP" },

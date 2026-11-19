@@ -44,6 +44,8 @@ export type PostDetailResponse = {
   captionTail: string | null;
   captionEdited: boolean;
   captionLength: number;
+  /** 캡션에 이름표가 들어 있는지. false면 술 이름이 바뀌어도 글이 자동으로 바뀌지 않는다. */
+  captionTemplated: boolean;
   photos: PostPhotoResponse[];
   permalink: string | null;
   channel: PostChannel;
@@ -67,4 +69,19 @@ export type PostUpdateRequest = {
   captionHead: string | null;
   captionTail: string | null;
   photos: PhotoEdit[];
+};
+
+export type CaptionPreviewRequest = {
+  drinkId: number | null;
+  newDrinkName: string | null;
+  breweryId: number | null;
+  rating: number | null;
+  captionHead: string | null;
+  captionTail: string | null;
+};
+
+export type CaptionPreviewResponse = {
+  caption: string;
+  length: number;
+  templated: boolean;
 };
