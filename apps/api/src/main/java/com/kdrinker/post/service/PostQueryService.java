@@ -6,6 +6,8 @@ import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.caption.BreweryBlock;
 import com.kdrinker.caption.CaptionAssembler;
 import com.kdrinker.caption.CaptionParts;
+import com.kdrinker.caption.CaptionValues;
+import com.kdrinker.caption.Placeholders;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
 import com.kdrinker.common.PageResponse;
@@ -45,6 +47,7 @@ public class PostQueryService {
 				.orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
 		Drink drink = post.getDrink();
 		Brewery brewery = drink == null ? null : drink.getBrewery();
+		CaptionValues values = CaptionValues.of(drink, post.getRating());
 		CaptionParts parts = CaptionParts.split(post.getCaption());
 		List<PostPhotoResponse> photos = postPhotoRepository.findByPostIdOrderByPositionAsc(id).stream()
 				.map(p -> new PostPhotoResponse(p.getId(), p.getPosition(), photoService.publicUrl(p),
@@ -54,10 +57,11 @@ public class PostQueryService {
 				post.getFailedStage() == null ? null : post.getFailedStage().name(), post.getFailureReason(),
 				drink == null ? null : drink.getId(), drink == null ? null : drink.getName(),
 				brewery == null ? null : BreweryResponse.from(brewery), post.getRating(), post.getMemo(),
-				parts.head(), displayBlock(brewery), parts.tail(), post.isCaptionEdited(),
-				post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption()), photos,
+				parts.head(), displayBlock(post.getCaption(), brewery, values), parts.tail(), post.isCaptionEdited(),
+				post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption(), values), photos,
 				post.getPermalink(), post.getChannel().name(),
-				post.getCaption() == null ? "" : CaptionAssembler.stripMarkers(post.getCaption()), retryable(post));
+				post.getCaption() == null ? "" : CaptionAssembler.render(post.getCaption(), values), retryable(post),
+				Placeholders.isTemplate(post.getCaption()));
 	}
 
 	/** 서버가 재시도를 받아 주는 실패인지. 실제 재시도({@link AnalysisService#startRetry}·{@link PublishService#retry})와 같은 규칙. */
@@ -71,7 +75,12 @@ public class PostQueryService {
 				|| (post.getStatus() == PostStatus.FAILED && post.getIgContainerId() == null);
 	}
 
-	private static String displayBlock(Brewery brewery) {
+	private static String displayBlock(String stored, Brewery brewery, CaptionValues values) {
+		if (Placeholders.isTemplate(stored) && CaptionParts.hasBreweryBlock(stored)) {
+			int first = stored.indexOf(BreweryBlock.MARKER) + BreweryBlock.MARKER.length();
+			int last = stored.lastIndexOf(BreweryBlock.MARKER);
+			return Placeholders.fill(stored.substring(first, last), values).strip();
+		}
 		return BreweryBlock.render(brewery).replace(BreweryBlock.MARKER + "\n", "")
 				.replace("\n" + BreweryBlock.MARKER, "").replace(BreweryBlock.MARKER, "");
 	}

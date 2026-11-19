@@ -65,7 +65,7 @@ class CaptionServiceTest {
 		// then
 		verify(writer, times(1)).shorten(any(), any(), anyInt());
 		assertThat(out.caption()).contains("짧아요.").doesNotContain("달아요.");
-		assertThat(CaptionAssembler.length(out.caption())).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
+		assertThat(CaptionAssembler.length(out.caption(), CaptionValues.EMPTY)).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
 	}
 
 	@Test
@@ -81,7 +81,7 @@ class CaptionServiceTest {
 		service.compose(in);
 
 		// then
-		verify(writer).shorten(in, first, CaptionAssembler.length(stored));
+		verify(writer).shorten(in, first, CaptionAssembler.length(stored, CaptionValues.EMPTY));
 	}
 
 	@Test
@@ -95,7 +95,7 @@ class CaptionServiceTest {
 		ComposedCaption out = service.compose(in);
 
 		// then
-		assertThat(CaptionAssembler.length(out.caption())).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
+		assertThat(CaptionAssembler.length(out.caption(), CaptionValues.EMPTY)).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
 		assertThat(out.hashtags()).doesNotContain("#달달").doesNotContain("#전과막걸리").doesNotContain("#여주")
 				.doesNotContain("#화요 ").contains("#화요25");
 		String shown = CaptionAssembler.stripMarkers(out.caption());
@@ -110,7 +110,7 @@ class CaptionServiceTest {
 		HashtagSet full = Hashtags.finalize(TAGS, label, brewery);
 		int n = 1;
 		while (CaptionAssembler.length(CaptionAssembler.assemble(draft(sentences(n)), in.rating(), brewery,
-				full.joined())) <= CaptionService.MAX_LENGTH) {
+				full.joined()), CaptionValues.EMPTY) <= CaptionService.MAX_LENGTH) {
 			n++;
 		}
 		String tasting = sentences(n);
@@ -121,7 +121,7 @@ class CaptionServiceTest {
 		ComposedCaption out = service.compose(in);
 
 		// then
-		assertThat(CaptionAssembler.length(out.caption())).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
+		assertThat(CaptionAssembler.length(out.caption(), CaptionValues.EMPTY)).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
 		assertThat(out.caption()).contains("\n\n" + tasting + "\n\n");
 		assertThat(out.hashtags().split(" ")).hasSizeLessThan(full.all().size());
 	}
@@ -136,7 +136,7 @@ class CaptionServiceTest {
 		ComposedCaption out = service.compose(in);
 
 		// then
-		assertThat(CaptionAssembler.length(out.caption())).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
+		assertThat(CaptionAssembler.length(out.caption(), CaptionValues.EMPTY)).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
 	}
 
 	@Test
@@ -151,7 +151,7 @@ class CaptionServiceTest {
 
 		// then
 		String shown = CaptionAssembler.stripMarkers(out.caption());
-		assertThat(CaptionAssembler.length(out.caption())).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
+		assertThat(CaptionAssembler.length(out.caption(), CaptionValues.EMPTY)).isLessThanOrEqualTo(CaptionService.MAX_LENGTH);
 		assertThat(shown).doesNotContain("달아요").doesNotContain("\n\n\n");
 	}
 

@@ -9,6 +9,7 @@ import com.kdrinker.caption.CaptionAssembler;
 import com.kdrinker.caption.CaptionInput;
 import com.kdrinker.caption.CaptionParts;
 import com.kdrinker.caption.CaptionService;
+import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.caption.ComposedCaption;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
@@ -277,7 +278,7 @@ public class PostEditService {
 		post.assignDrink(drink);
 		post.recordRating(req.rating());
 		post.updateMemo(req.memo());
-		if (CaptionAssembler.length(caption.caption()) > CaptionService.MAX_LENGTH) {
+		if (CaptionAssembler.length(caption.caption(), CaptionValues.of(post.getDrink(), req.rating())) > CaptionService.MAX_LENGTH) {
 			throw new BusinessException(ErrorCode.POST_CAPTION_TOO_LONG);
 		}
 		post.replaceCaption(caption.caption(), caption.hashtags(), caption.edited());

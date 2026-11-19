@@ -2,6 +2,7 @@ package com.kdrinker.publish;
 
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.caption.CaptionAssembler;
+import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.event.PostPublishFinishedEvent;
@@ -107,7 +108,8 @@ public class PublishService implements CaptionLengthGuard {
 	}
 
 	private static boolean tooLong(Post post) {
-		return post.getCaption() != null && CaptionAssembler.length(post.getCaption()) > MAX_CAPTION_LENGTH;
+		return post.getCaption() != null && CaptionAssembler.length(post.getCaption(),
+				CaptionValues.of(post.getDrink(), post.getRating())) > MAX_CAPTION_LENGTH;
 	}
 
 	/** PENDING_REVIEW → FAILED(게시 단계, 캡션 초과). version이 null이면 버전을 보지 않는다. 갱신 0건이면 롤백하고 false. */

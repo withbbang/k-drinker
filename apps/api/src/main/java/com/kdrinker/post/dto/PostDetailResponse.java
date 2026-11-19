@@ -12,5 +12,5 @@ public record PostDetailResponse(Long id, String status, int version, boolean ed
 		String failureReason, Long drinkId, String drinkName, BreweryResponse brewery, BigDecimal rating,
 		String memo, String captionHead, String breweryBlock, String captionTail, boolean captionEdited,
 		int captionLength, List<PostPhotoResponse> photos, String permalink, String channel,
-		String publishCaption, boolean retryable) {
+		String publishCaption, boolean retryable, boolean captionTemplated) {
 }

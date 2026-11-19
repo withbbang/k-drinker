@@ -42,9 +42,14 @@ public final class CaptionAssembler {
 		return stored.replaceAll(BreweryBlock.MARKER + "\n?", "").replaceAll("\n{3,}", "\n\n").strip();
 	}
 
-	/** 마커를 뺀 코드 포인트 수. 이모지는 한 글자로 센다. */
-	public static int length(String stored) {
-		String s = stripMarkers(stored);
+	/** 게시·표시용: 이름표를 채운 뒤 마커를 지운다. */
+	public static String render(String stored, CaptionValues v) {
+		return stripMarkers(Placeholders.fill(stored, v));
+	}
+
+	/** 채운 뒤 마커를 뺀 코드 포인트 수. 이모지는 한 글자로 센다. */
+	public static int length(String stored, CaptionValues v) {
+		String s = render(stored, v);
 		return s.codePointCount(0, s.length());
 	}
 }

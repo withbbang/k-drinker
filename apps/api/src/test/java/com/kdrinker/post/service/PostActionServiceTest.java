@@ -61,7 +61,7 @@ class PostActionServiceTest {
 		service = new PostActionService(postRepository, publishService, analysisService, executor, postQueryService,
 				CLOCK, mock(PlatformTransactionManager.class));
 		detail = new PostDetailResponse(ID, "PUBLISHING", 3, false, null, null, null, null, null, null, null, "", "",
-				"", false, 0, List.of(), null, "WEB", "", false);
+				"", false, 0, List.of(), null, "WEB", "", false, false);
 		when(postQueryService.detail(ID)).thenReturn(detail);
 	}
 

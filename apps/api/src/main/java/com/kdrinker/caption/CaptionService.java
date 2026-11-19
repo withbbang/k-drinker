@@ -25,18 +25,18 @@ public class CaptionService {
 		CaptionDraft draft = writer.write(in);
 		HashtagSet tags = Hashtags.finalize(draft.hashtags(), in.label(), in.brewery());
 		String caption = build(in, draft, tags);
-		if (CaptionAssembler.length(caption) <= MAX_LENGTH) {
+		if (CaptionAssembler.length(caption, CaptionValues.EMPTY) <= MAX_LENGTH) {
 			return result(caption, tags);
 		}
 		try {
-			CaptionDraft shorter = writer.shorten(in, draft, CaptionAssembler.length(caption));
+			CaptionDraft shorter = writer.shorten(in, draft, CaptionAssembler.length(caption, CaptionValues.EMPTY));
 			draft = shorter;
 			tags = Hashtags.finalize(shorter.hashtags(), in.label(), in.brewery());
 			caption = build(in, draft, tags);
 		} catch (ClaudeUnavailableException e) {
 			// 줄이기에 실패해도 코드의 폴백(태그 삭제, 문장 제거)으로 계속한다
 		}
-		while (CaptionAssembler.length(caption) > MAX_LENGTH) {
+		while (CaptionAssembler.length(caption, CaptionValues.EMPTY) > MAX_LENGTH) {
 			Optional<HashtagSet> fewer = tags.dropOne();
 			if (fewer.isEmpty()) {
 				break;
@@ -44,7 +44,7 @@ public class CaptionService {
 			tags = fewer.get();
 			caption = build(in, draft, tags);
 		}
-		while (CaptionAssembler.length(caption) > MAX_LENGTH && hasText(draft.tasting())) {
+		while (CaptionAssembler.length(caption, CaptionValues.EMPTY) > MAX_LENGTH && hasText(draft.tasting())) {
 			draft = new CaptionDraft(draft.hook(), draft.intro(), dropLastSentence(draft.tasting()), draft.hashtags());
 			caption = build(in, draft, tags);
 		}

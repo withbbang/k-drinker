@@ -4,6 +4,7 @@ import com.kdrinker.analysis.AnalysisFailure;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.entity.BrewerySource;
 import com.kdrinker.caption.CaptionAssembler;
+import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.publish.PublishFailure;
 import com.kdrinker.telegram.dto.InlineButton;
@@ -55,7 +56,7 @@ public final class MessageFormatter {
 	}
 
 	public static TelegramText detailCaption(Post post) {
-		String caption = post.getCaption() == null ? "" : CaptionAssembler.stripMarkers(post.getCaption());
+		String caption = post.getCaption() == null ? "" : CaptionAssembler.render(post.getCaption(), values(post));
 		int length = caption.codePointCount(0, caption.length());
 		return TelegramText.of("캡션 원문 (" + length + "자)\n\n" + escape(caption));
 	}
@@ -163,8 +164,12 @@ public final class MessageFormatter {
 		return rating == null ? "별점 없음" : "★" + rating.setScale(1, java.math.RoundingMode.HALF_UP).toPlainString();
 	}
 
+	private static CaptionValues values(Post post) {
+		return CaptionValues.of(post.getDrink(), post.getRating());
+	}
+
 	private static int captionLength(Post post) {
-		return post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption());
+		return post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption(), values(post));
 	}
 
 	private static int hashtagCount(Post post) {

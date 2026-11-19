@@ -83,6 +83,40 @@ class PostQueryServiceTest {
 	}
 
 	@Test
+	void 이름표_캡션은_채운_값을_주고_원문은_머리와_꼬리에_남긴다() {
+		// given
+		Brewery brewery = Brewery.of("국순당", "국순당", BrewerySource.PUBLIC_DATA);
+		Post post = post(PostStatus.PENDING_REVIEW);
+		post.assignDrink(Drink.of("막걸리", "막걸리", brewery));
+		post.recordRating(new java.math.BigDecimal("4"));
+		post.writeCaption("{술이름} {별점}\n\n<!--brewery-->\n🍶 {양조장}\n<!--brewery-->\n\n#{술이름태그}", "#태그", null, null);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when
+		PostDetailResponse detail = service.detail(1L);
+
+		// then
+		assertThat(detail.captionTemplated()).isTrue();
+		assertThat(detail.publishCaption()).isEqualTo("막걸리 ★4.0\n\n🍶 국순당\n\n#막걸리");
+		assertThat(detail.captionLength()).isEqualTo(21);
+		assertThat(detail.breweryBlock()).isEqualTo("🍶 국순당");
+		assertThat(detail.captionHead()).isEqualTo("{술이름} {별점}");
+	}
+
+	@Test
+	void 이름표가_없으면_captionTemplated는_false다() {
+		// given
+		Post post = post(PostStatus.PENDING_REVIEW);
+		post.writeCaption("훅", "#태그", null, null);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when / then
+		assertThat(service.detail(1L).captionTemplated()).isFalse();
+	}
+
+	@Test
 	void 캡션이_없으면_게시용_캡션은_빈_문자열이다() {
 		// given
 		Post post = post(PostStatus.RECEIVED);

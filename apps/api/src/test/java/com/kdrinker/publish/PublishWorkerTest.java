@@ -95,10 +95,17 @@ class PublishWorkerTest {
 	}
 
 	private Long post(int photos, String containerId) {
+		return post(photos, containerId, CAPTION_STORED, null);
+	}
+
+	private Long post(int photos, String containerId, String captionStored, java.math.BigDecimal rating) {
 		Post post = Post.receive(PostSource.TELEGRAM, null, null, CLOCK);
 		ReflectionTestUtils.setField(post, "status", PostStatus.PUBLISHING);
 		ReflectionTestUtils.setField(post, "version", 5);
-		post.writeCaption(CAPTION_STORED, "#태그", null, null);
+		post.writeCaption(captionStored, "#태그", null, null);
+		if (rating != null) {
+			post.recordRating(rating);
+		}
 		if (containerId != null) {
 			ReflectionTestUtils.setField(post, "igContainerId", containerId);
 		}
@@ -141,6 +148,24 @@ class PublishWorkerTest {
 		assertThat(after.getIgMediaId()).isEqualTo("m1");
 		assertThat(after.getPermalink()).isEqualTo("https://ig/p/1");
 		assertThat(after.getPublishedAt()).isNotNull();
+	}
+
+	@Test
+	void 이름표가_든_캡션은_채운_글로_게시한다() {
+		// given
+		Long id = post(1, null, "본문 {별점}\n\n<!--brewery-->\n<!--brewery-->\n\n#태그", new java.math.BigDecimal("4"));
+		when(client.createImageContainer(eq(TOKEN), eq("https://img/0"), eq(false), anyString())).thenReturn("c1");
+		when(client.containerStatus(TOKEN, "c1")).thenReturn(ContainerStatus.FINISHED);
+		when(client.publish(TOKEN, "c1")).thenReturn("m1");
+		when(client.permalink(TOKEN, "m1")).thenReturn(Optional.empty());
+
+		// when
+		worker.publish(id);
+
+		// then
+		ArgumentCaptor<String> caption = ArgumentCaptor.forClass(String.class);
+		verify(client).createImageContainer(eq(TOKEN), eq("https://img/0"), eq(false), caption.capture());
+		assertThat(caption.getValue()).isEqualTo("본문 ★4.0\n\n#태그").doesNotContain("{");
 	}
 
 	@Test

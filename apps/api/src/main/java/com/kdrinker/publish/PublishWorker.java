@@ -1,6 +1,7 @@
 package com.kdrinker.publish;
 
 import com.kdrinker.caption.CaptionAssembler;
+import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.instagram.InstagramApiException;
 import com.kdrinker.instagram.InstagramClient;
 import com.kdrinker.instagram.InstagramClient.ContainerStatus;
@@ -154,7 +155,8 @@ public class PublishWorker {
 		for (PostPhoto photo : photos) {
 			urls.add(photoService.publicUrl(photo));
 		}
-		String caption = post.getCaption() == null ? "" : CaptionAssembler.stripMarkers(post.getCaption());
+		String caption = post.getCaption() == null ? "" : CaptionAssembler.render(post.getCaption(),
+				CaptionValues.of(post.getDrink(), post.getRating()));
 		return new Snapshot(caption, post.getIgContainerId(), urls);
 	}
 

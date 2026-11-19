@@ -147,6 +147,21 @@ class PublishServiceTest {
 	}
 
 	@Test
+	void 길이_검사는_이름표를_채운_글_기준이다() {
+		// given — 채우기 전은 2204자, 채운 뒤는 2200자
+		Post post = post(PostStatus.PENDING_REVIEW, 1, "가".repeat(2192) + "\n{별점}이에요(예요)");
+		post.recordRating(new java.math.BigDecimal("4"));
+		postRepository.saveAndFlush(post);
+
+		// when
+		ConfirmResult result = service.confirm(post.getId(), 1);
+
+		// then
+		assertThat(result).isEqualTo(ConfirmResult.STARTED);
+		verify(worker, timeout(3000)).publish(post.getId());
+	}
+
+	@Test
 	void 확정하면_양조장을_확인됨으로_표시한다() {
 		// given
 		Brewery brewery = breweryRepository.saveAndFlush(Brewery.of("새술양조장", "새술양조장", BrewerySource.PUBLIC_DATA));

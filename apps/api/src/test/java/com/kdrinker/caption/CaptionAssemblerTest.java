@@ -85,9 +85,25 @@ class CaptionAssemblerTest {
 		String stored = "🍶\n\n<!--brewery-->\n<!--brewery-->";
 
 		// when
-		int length = CaptionAssembler.length(stored);
+		int length = CaptionAssembler.length(stored, CaptionValues.EMPTY);
 
 		// then
 		assertThat(length).isEqualTo(1);
+	}
+
+	@Test
+	void 렌더는_이름표를_채우고_마커를_뺀다() {
+		// given
+		String stored = "별점은 {별점}\n\n<!--brewery-->\n<!--brewery-->";
+		CaptionValues values = CaptionValues.of(null, new BigDecimal("4"));
+
+		// when / then
+		assertThat(CaptionAssembler.render(stored, values)).isEqualTo("별점은 ★4.0");
+		assertThat(CaptionAssembler.length(stored, values)).isEqualTo(8);
+	}
+
+	@Test
+	void 이름표가_없는_캡션의_렌더는_마커만_뺀다() {
+		assertThat(CaptionAssembler.render("본문\n\n<!--brewery-->\n<!--brewery-->", CaptionValues.EMPTY)).isEqualTo("본문");
 	}
 }

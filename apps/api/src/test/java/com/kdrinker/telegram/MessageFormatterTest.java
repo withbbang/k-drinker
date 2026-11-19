@@ -76,6 +76,18 @@ class MessageFormatterTest {
 	}
 
 	@Test
+	void overviewAndDetailFillPlaceholders() {
+		// given
+		Post post = post("화요 25", "4.5", "{술이름}은(는) {별점}\n<!--brewery-->\n<!--brewery-->", "#a");
+
+		// when / then
+		String filled = "화요 25는 ★4.5";
+		assertThat(MessageFormatter.overview(post, null, 1).html())
+				.contains("캡션 " + filled.length() + "자");
+		assertThat(MessageFormatter.detailCaption(post).html()).contains(filled).doesNotContain("{");
+	}
+
+	@Test
 	void overviewWebSearchAddsPerFieldSource() {
 		// given
 		Post post = post("문배술", "4.0", "c", "#a");

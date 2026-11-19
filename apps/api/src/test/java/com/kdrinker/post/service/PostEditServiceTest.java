@@ -24,6 +24,7 @@ import com.kdrinker.caption.CaptionAssembler;
 import com.kdrinker.caption.CaptionInput;
 import com.kdrinker.caption.CaptionParts;
 import com.kdrinker.caption.CaptionService;
+import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.caption.ComposedCaption;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
@@ -467,7 +468,7 @@ class PostEditServiceTest {
 	@Test
 	void 캡션이_2200자를_넘으면_400이다() {
 		// given: 머리 글자 수를 조절해 전체를 2,201자로 맞춘다
-		int base = CaptionAssembler.length(new CaptionParts("가", "#막걸리").join(kooksoondang));
+		int base = CaptionAssembler.length(new CaptionParts("가", "#막걸리").join(kooksoondang), CaptionValues.EMPTY);
 		String head = "가".repeat(2201 - base + 1);
 		PostUpdateRequest req = request(null, head, keepPhotos());
 
@@ -482,7 +483,7 @@ class PostEditServiceTest {
 	@Test
 	void 캡션이_2200자면_저장된다() {
 		// given
-		int base = CaptionAssembler.length(new CaptionParts("가", "#막걸리").join(kooksoondang));
+		int base = CaptionAssembler.length(new CaptionParts("가", "#막걸리").join(kooksoondang), CaptionValues.EMPTY);
 		String head = "가".repeat(2200 - base + 1);
 		PostUpdateRequest req = request(null, head, keepPhotos());
 
@@ -490,7 +491,7 @@ class PostEditServiceTest {
 		service.update(POST_ID, req, List.of());
 
 		// then
-		assertThat(CaptionAssembler.length(post.getCaption())).isEqualTo(2200);
+		assertThat(CaptionAssembler.length(post.getCaption(), CaptionValues.EMPTY)).isEqualTo(2200);
 		verify(events, never()).publishEvent(any(PostHandedOverEvent.class));
 	}
 
