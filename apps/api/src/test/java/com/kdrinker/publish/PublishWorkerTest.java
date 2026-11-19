@@ -209,6 +209,29 @@ class PublishWorkerTest {
 	}
 
 	@Test
+	void 컨테이너가_이미_있는_이름표_캡션도_게시되면_채운_글로_고정한다() {
+		// given
+		Drink drink = drinkRepository.saveAndFlush(Drink.of("옛술", "옛술", null));
+		Long id = post(1, "old", "{술이름} 본문\n\n<!--brewery-->\n<!--brewery-->\n\n#{술이름태그}", null);
+		Post post = reload(id);
+		post.assignDrink(drink);
+		post.writeCaption(post.getCaption(), "#{술이름태그}", null, null);
+		postRepository.saveAndFlush(post);
+		when(client.containerStatus(TOKEN, "old")).thenReturn(ContainerStatus.FINISHED);
+		when(client.publish(TOKEN, "old")).thenReturn("m1");
+		when(client.permalink(TOKEN, "m1")).thenReturn(Optional.empty());
+
+		// when
+		worker.publish(id);
+
+		// then
+		Post after = reload(id);
+		assertThat(after.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+		assertThat(after.getCaption()).isEqualTo("옛술 본문\n\n<!--brewery-->\n<!--brewery-->\n\n#옛술").doesNotContain("{");
+		assertThat(after.getHashtags()).isEqualTo("#옛술");
+	}
+
+	@Test
 	void 캐러셀은_위치_순서를_지키고_부모_id를_게시_전에_저장한다() {
 		// given
 		Long id = post(3, null);

@@ -21,6 +21,15 @@ public record CaptionParts(String head, String tail) {
 		return count == 2;
 	}
 
+	/** 양조장 마커 사이의 글(마커 제외). 블록이 없으면 null. */
+	public static String breweryBody(String stored) {
+		if (!hasBreweryBlock(stored)) {
+			return null;
+		}
+		int first = stored.indexOf(BreweryBlock.MARKER) + BreweryBlock.MARKER.length();
+		return stored.substring(first, stored.lastIndexOf(BreweryBlock.MARKER));
+	}
+
 	public static CaptionParts split(String stored) {
 		if (stored == null) {
 			return new CaptionParts("", "");

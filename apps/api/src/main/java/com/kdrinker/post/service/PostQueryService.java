@@ -57,7 +57,7 @@ public class PostQueryService {
 				post.getFailedStage() == null ? null : post.getFailedStage().name(), post.getFailureReason(),
 				drink == null ? null : drink.getId(), drink == null ? null : drink.getName(),
 				brewery == null ? null : BreweryResponse.from(brewery), post.getRating(), post.getMemo(),
-				parts.head(), displayBlock(post.getCaption(), brewery, values), parts.tail(), post.isCaptionEdited(),
+				parts.head(), displayBlock(post, brewery, values), parts.tail(), post.isCaptionEdited(),
 				post.getCaption() == null ? 0 : CaptionAssembler.length(post.getCaption(), values), photos,
 				post.getPermalink(), post.getChannel().name(),
 				post.getCaption() == null ? "" : CaptionAssembler.render(post.getCaption(), values), retryable(post),
@@ -75,11 +75,12 @@ public class PostQueryService {
 				|| (post.getStatus() == PostStatus.FAILED && post.getIgContainerId() == null);
 	}
 
-	private static String displayBlock(String stored, Brewery brewery, CaptionValues values) {
-		if (Placeholders.isTemplate(stored) && CaptionParts.hasBreweryBlock(stored)) {
-			int first = stored.indexOf(BreweryBlock.MARKER) + BreweryBlock.MARKER.length();
-			int last = stored.lastIndexOf(BreweryBlock.MARKER);
-			return Placeholders.fill(stored.substring(first, last), values).strip();
+	/** 고칠 수 없는 글(게시 중·게시됨 등)은 저장된 블록을 보여 준다. 고칠 수 있는 글만 현재 양조장으로 그린다. */
+	private static String displayBlock(Post post, Brewery brewery, CaptionValues values) {
+		String stored = post.getCaption();
+		String body = CaptionParts.breweryBody(stored);
+		if (body != null && (Placeholders.isTemplate(stored) || !editable(post))) {
+			return Placeholders.fill(body, values).strip();
 		}
 		return BreweryBlock.render(brewery).replace(BreweryBlock.MARKER + "\n", "")
 				.replace("\n" + BreweryBlock.MARKER, "").replace(BreweryBlock.MARKER, "");

@@ -157,11 +157,19 @@ public class PublishWorker {
 			urls.add(photoService.publicUrl(photo));
 		}
 		// 이름표를 채운 글(마커는 둔다). 컨테이너를 만들 때 이 글로 캡션을 고정해 이후 술·양조장 수정이 게시된 글을 바꾸지 않게 한다.
+		Filled f = fill(post);
+		String caption = f.caption() == null ? "" : CaptionAssembler.stripMarkers(f.caption());
+		return new Snapshot(caption, f.caption(), f.hashtags(), post.getIgContainerId(), urls);
+	}
+
+	/** 이름표를 현재 술·별점으로 채운 캡션·해시태그(마커는 둔다). */
+	private static Filled fill(Post post) {
 		CaptionValues values = CaptionValues.of(post.getDrink(), post.getRating());
-		String filled = post.getCaption() == null ? null : Placeholders.fill(post.getCaption(), values);
-		String filledHashtags = post.getHashtags() == null ? null : Placeholders.fill(post.getHashtags(), values);
-		String caption = filled == null ? "" : CaptionAssembler.stripMarkers(filled);
-		return new Snapshot(caption, filled, filledHashtags, post.getIgContainerId(), urls);
+		return new Filled(post.getCaption() == null ? null : Placeholders.fill(post.getCaption(), values),
+				post.getHashtags() == null ? null : Placeholders.fill(post.getHashtags(), values));
+	}
+
+	private record Filled(String caption, String hashtags) {
 	}
 
 	private void run(Long postId, Snapshot snapshot) throws InterruptedException {
@@ -274,6 +282,11 @@ public class PublishWorker {
 	private void finish(Long postId, String mediaId, String permalink) {
 		tx.executeWithoutResult(status -> {
 			Post post = postRepository.findById(postId).orElseThrow();
+			// 컨테이너를 고정 도입 전에 만든 글은 아직 이름표가 남아 있다. 상태 전이 전에 채워 고정한다.
+			if (Placeholders.isTemplate(post.getCaption())) {
+				Filled f = fill(post);
+				post.replaceCaption(f.caption(), f.hashtags(), post.isCaptionEdited());
+			}
 			post.recordPublished(mediaId, permalink, clock.instant());
 			if (postRepository.transition(postId, PostStatus.PUBLISHING, PostStatus.PUBLISHED, clock.instant()) == 0) {
 				throw new IllegalStateException("게시 중 게시물 상태가 바뀌었습니다. postId=" + postId);

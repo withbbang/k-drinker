@@ -83,6 +83,24 @@ class PostQueryServiceTest {
 	}
 
 	@Test
+	void 게시된_캡션의_양조장_블록은_저장된_글을_보여_준다() {
+		// given — 게시 뒤 양조장 연락처가 바뀌었다
+		Brewery brewery = Brewery.of("국순당", "국순당", BrewerySource.PUBLIC_DATA);
+		Post post = post(PostStatus.PUBLISHED);
+		post.assignDrink(Drink.of("막걸리", "막걸리", brewery));
+		post.writeCaption("훅\n\n" + BreweryBlock.render(brewery) + "\n\n#태그", "#태그", null, null);
+		brewery.updateContact("서울시", "02-000-0000", null, null, null, null);
+		when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+		when(postPhotoRepository.findByPostIdOrderByPositionAsc(1L)).thenReturn(List.of());
+
+		// when
+		PostDetailResponse detail = service.detail(1L);
+
+		// then
+		assertThat(detail.breweryBlock()).isEqualTo("🍶 국순당").doesNotContain("02-000-0000");
+	}
+
+	@Test
 	void 이름표_캡션은_채운_값을_주고_원문은_머리와_꼬리에_남긴다() {
 		// given
 		Brewery brewery = Brewery.of("국순당", "국순당", BrewerySource.PUBLIC_DATA);
