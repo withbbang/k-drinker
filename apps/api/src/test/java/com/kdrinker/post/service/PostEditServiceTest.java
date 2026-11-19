@@ -32,6 +32,8 @@ import com.kdrinker.drink.repository.DrinkRepository;
 import com.kdrinker.media.FocusBox;
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.media.service.PhotoService;
+import com.kdrinker.post.dto.CaptionPreviewRequest;
+import com.kdrinker.post.dto.CaptionPreviewResponse;
 import com.kdrinker.post.dto.PostUpdateRequest;
 import com.kdrinker.post.dto.PostUpdateRequest.PhotoEdit;
 import com.kdrinker.post.entity.FitMode;
@@ -622,6 +624,63 @@ class PostEditServiceTest {
 		ReflectionTestUtils.setField(other, "id", 21L);
 		when(drinkRepository.findById(21L)).thenReturn(Optional.of(other));
 		return other;
+	}
+
+	private CaptionPreviewRequest previewRequest(Long drinkId, String newName, String head) {
+		return new CaptionPreviewRequest(drinkId, newName, null, new BigDecimal("4.0"), head, "#{술이름태그}");
+	}
+
+	@Test
+	void preview_fillsWithChosenDrink() {
+		// given
+		post.writeCaption("훅 {술이름}\n\n{별점}\n\n" + BreweryBlock.TEMPLATE + "\n\n#막걸리", "#막걸리", "달다", "전");
+		hwayo.updateContact("서울 어딘가", null, null, null, null, null);
+		drinkOf(hwayo);
+
+		// when
+		CaptionPreviewResponse res = service.preview(POST_ID, previewRequest(21L, null, "훅 {술이름}\n\n{별점}"));
+
+		// then
+		assertThat(res.templated()).isTrue();
+		assertThat(res.caption()).contains("훅 화요25").contains("🍶 화요").contains("📍 서울 어딘가")
+				.doesNotContain("국순당").doesNotContain("{");
+		assertThat(res.length()).isEqualTo(res.caption().codePointCount(0, res.caption().length()));
+	}
+
+	@Test
+	void preview_newDrinkName_dropsLinesWithoutValues() {
+		// given
+		post.writeCaption("{술이름}\n{도수} 도수\n\n" + BreweryBlock.TEMPLATE, "#막걸리", "달다", "전");
+
+		// when
+		CaptionPreviewResponse res = service.preview(POST_ID, previewRequest(null, "새 술", "{술이름}\n{도수} 도수"));
+
+		// then
+		assertThat(res.caption()).startsWith("새 술").doesNotContain("도수").contains("🍶 국순당");
+	}
+
+	@Test
+	void preview_doesNotPersist() {
+		// given
+		String before = post.getCaption();
+
+		// when
+		service.preview(POST_ID, previewRequest(null, null, "훅\n\n★4.0"));
+
+		// then
+		assertThat(post.getCaption()).isEqualTo(before);
+		assertThat(post.getVersion()).isEqualTo(VERSION);
+		verifyNoInteractions(captionService);
+		verify(postRepository, never()).save(any());
+		verify(postRepository, never()).transition(any(), any(), any(), anyInt(), any());
+	}
+
+	@Test
+	void preview_unknownPost_is404() {
+		when(postRepository.findById(99L)).thenReturn(Optional.empty());
+
+		assertThat(errorOf(() -> service.preview(99L, previewRequest(null, null, "훅"))))
+				.isEqualTo(ErrorCode.COMMON_NOT_FOUND);
 	}
 
 	private PostUpdateRequest ratingChange(BigDecimal rating, String head) {

@@ -20,6 +20,8 @@ import com.kdrinker.drink.repository.DrinkRepository;
 import com.kdrinker.media.FocusBox;
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.media.service.PhotoService;
+import com.kdrinker.post.dto.CaptionPreviewRequest;
+import com.kdrinker.post.dto.CaptionPreviewResponse;
 import com.kdrinker.post.dto.PostDetailResponse;
 import com.kdrinker.post.dto.PostUpdateRequest;
 import com.kdrinker.post.dto.PostUpdateRequest.PhotoEdit;
@@ -159,39 +161,11 @@ public class PostEditService {
 		}
 		checkPhotos(req.photos(), postPhotoRepository.findByPostIdOrderByPositionAsc(id), newPhotoCount);
 		PostIntakeService.validateMemoAndRating(req.memo(), req.rating());
-		if (req.drinkId() != null && req.newDrinkName() != null) {
-			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-		}
 
-		Drink currentDrink = post.getDrink();
-		Brewery currentBrewery = currentDrink == null ? null : currentDrink.getBrewery();
-
-		Drink targetDrink;
-		String drinkName;
-		if (req.drinkId() != null) {
-			targetDrink = findDrink(req.drinkId());
-			drinkName = targetDrink.getName();
-		} else if (req.newDrinkName() != null) {
-			targetDrink = null;
-			drinkName = newDrinkName(req.newDrinkName());
-		} else {
-			targetDrink = currentDrink;
-			drinkName = currentDrink == null ? null : currentDrink.getName();
-		}
-		boolean hasDrink = targetDrink != null || req.newDrinkName() != null;
-
-		Brewery targetBrewery;
-		if (req.breweryId() != null) {
-			if (!hasDrink) {
-				// 양조장은 술에 붙는다. 술이 없는 게시물에는 양조장만 고를 수 없다.
-				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-			}
-			targetBrewery = findBrewery(req.breweryId());
-		} else if (targetDrink != null) {
-			targetBrewery = targetDrink.getBrewery();
-		} else {
-			targetBrewery = currentBrewery;
-		}
+		Target target = resolveTarget(post, req.drinkId(), req.newDrinkName(), req.breweryId());
+		Drink targetDrink = target.drink();
+		String drinkName = target.drinkName();
+		Brewery targetBrewery = target.brewery();
 		Long targetBreweryId = targetBrewery == null ? null : targetBrewery.getId();
 
 		// 캡션 블록에 쓸 저장하지 않는 사본.
@@ -203,6 +177,63 @@ public class PostEditService {
 		return new Snapshot(post.getStatus(), post.getVersion(), post.getChannel(), CaptionParts.split(post.getCaption()),
 				post.isCaptionEdited(), Placeholders.isTemplate(post.getCaption()), label, captionBrewery, targetBreweryId, post.getRating(),
 				post.getCaption() == null || post.getCaption().isBlank());
+	}
+
+	/**
+	 * 저장과 미리보기가 같은 규칙으로 대상 술·양조장을 정한다. drinkId·newDrinkName은 하나만, 둘 다 없으면 현재 술이다.
+	 * 양조장은 술에 붙으므로 술이 없는 게시물에는 breweryId만 줄 수 없다.
+	 */
+	private Target resolveTarget(Post post, Long drinkId, String newName, Long breweryId) {
+		if (drinkId != null && newName != null) {
+			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+		}
+		Drink currentDrink = post.getDrink();
+		Brewery currentBrewery = currentDrink == null ? null : currentDrink.getBrewery();
+
+		Drink targetDrink;
+		String drinkName;
+		if (drinkId != null) {
+			targetDrink = findDrink(drinkId);
+			drinkName = targetDrink.getName();
+		} else if (newName != null) {
+			targetDrink = null;
+			drinkName = newDrinkName(newName);
+		} else {
+			targetDrink = currentDrink;
+			drinkName = currentDrink == null ? null : currentDrink.getName();
+		}
+		boolean hasDrink = targetDrink != null || newName != null;
+
+		Brewery targetBrewery;
+		if (breweryId != null) {
+			if (!hasDrink) {
+				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
+			}
+			targetBrewery = findBrewery(breweryId);
+		} else if (targetDrink != null) {
+			targetBrewery = targetDrink.getBrewery();
+		} else {
+			targetBrewery = currentBrewery;
+		}
+		return new Target(targetDrink, drinkName, targetBrewery);
+	}
+
+	/**
+	 * 저장하지 않은 수정 화면 입력으로 채운 캡션과 글자 수를 돌려준다. 저장도 Claude 호출도 하지 않는다.
+	 * 머리·꼬리는 저장된 캡션의 형식(이름표 캡션이면 틀, 아니면 양조장 블록 포함)으로 이어 채운다.
+	 */
+	public CaptionPreviewResponse preview(Long id, CaptionPreviewRequest req) {
+		return tx.execute(status -> {
+			Post post = postRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
+			PostIntakeService.validateMemoAndRating(null, req.rating());
+			Target target = resolveTarget(post, req.drinkId(), req.newDrinkName(), req.breweryId());
+			CaptionParts parts = new CaptionParts(req.captionHead().strip(), req.captionTail().strip());
+			boolean templated = Placeholders.isTemplate(post.getCaption());
+			String stored = templated ? parts.joinTemplate() : parts.join(target.brewery());
+			CaptionValues values = CaptionValues.of(target.drinkName(), target.drink(), target.brewery(), req.rating());
+			return new CaptionPreviewResponse(CaptionAssembler.render(stored, values),
+					CaptionAssembler.length(stored, values), templated);
+		});
 	}
 
 	/**
@@ -393,6 +424,9 @@ public class PostEditService {
 	private record Snapshot(PostStatus status, int version, PostChannel channel, CaptionParts parts, boolean captionEdited,
 			boolean template, LabelResult label, Brewery captionBrewery, Long targetBreweryId,
 			BigDecimal rating, boolean captionMissing) {
+	}
+
+	private record Target(Drink drink, String drinkName, Brewery brewery) {
 	}
 
 	private record NewCaption(String caption, String hashtags, boolean edited) {

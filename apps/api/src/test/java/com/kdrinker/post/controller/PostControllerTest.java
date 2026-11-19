@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import com.kdrinker.post.dto.CaptionPreviewResponse;
 import com.kdrinker.post.dto.PostUpdateRequest;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpMethod;
@@ -316,5 +317,22 @@ class PostControllerTest {
 		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/cancel").contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error.code").value("POST_VERSION_CONFLICT"));
+	}
+
+	@Test
+	void captionPreview_returnsWrappedResponse() throws Exception {
+		// given
+		when(postEditService.preview(eq(5L), any()))
+				.thenReturn(new CaptionPreviewResponse("훅 막걸리", 5, true));
+		String body = "{\"rating\": 4.0, \"captionHead\": \"훅 {술이름}\", \"captionTail\": \"\"}";
+
+		// when / then
+		mockMvc.perform(MockMvcRequestBuilders.post("/api/v1/posts/5/caption-preview")
+				.contentType(MediaType.APPLICATION_JSON).content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.caption").value("훅 막걸리"))
+				.andExpect(jsonPath("$.data.length").value(5))
+				.andExpect(jsonPath("$.data.templated").value(true));
 	}
 }

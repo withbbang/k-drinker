@@ -2,6 +2,8 @@ package com.kdrinker.post.controller;
 
 import com.kdrinker.common.ApiResponse;
 import com.kdrinker.common.PageResponse;
+import com.kdrinker.post.dto.CaptionPreviewRequest;
+import com.kdrinker.post.dto.CaptionPreviewResponse;
 import com.kdrinker.post.dto.PostActionRequest;
 import com.kdrinker.post.dto.PostDetailResponse;
 import com.kdrinker.post.dto.PostSummaryResponse;
@@ -65,6 +67,13 @@ public class PostController {
 		List<MultipartFile> files = newPhotos == null ? List.of() : newPhotos;
 		List<PhotoInput> inputs = files.stream().map(PostController::toInput).toList();
 		return ApiResponse.success(postEditService.update(id, request, inputs));
+	}
+
+	/** 수정 화면 미리보기. 저장하지 않은 입력으로 이름표를 채운 캡션과 글자 수를 돌려준다. */
+	@PostMapping("/{id}/caption-preview")
+	public ApiResponse<CaptionPreviewResponse> captionPreview(@PathVariable("id") Long id,
+			@Valid @RequestBody CaptionPreviewRequest request) {
+		return ApiResponse.success(postEditService.preview(id, request));
 	}
 
 	/** 웹 [확인]. 웹 담당 검토 대기 게시물의 게시를 시작하고 갱신된 상세를 돌려준다. */
