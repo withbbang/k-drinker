@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -65,5 +65,31 @@ describe("옹기 테마", () => {
     expect(m.background_color).toBe("#1D1713");
     expect(m.theme_color).toBe("#1D1713");
     expect(viewport.themeColor).toBe("#1D1713");
+  });
+});
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)
+      ? [path]
+      : [];
+  });
+}
+
+describe("옛 색 정리", () => {
+  it("화면 코드에 옛 색 클래스가 없다", () => {
+    const root = join(__dirname, "..");
+    const legacy =
+      /\b(?:bg|text|border|outline|ring|divide)-(?:neutral|red|green|white|black)\b|-(?:neutral|red|green)-\d{2,3}\b/;
+    const offenders = ["app", "components"]
+      .flatMap((dir) => sourceFiles(join(root, dir)))
+      .filter((file) => legacy.test(readFileSync(file, "utf8")))
+      .map((file) => file.slice(root.length + 1));
+    expect(
+      offenders,
+      `옛 색 클래스가 남은 파일: ${offenders.join(", ")}`,
+    ).toEqual([]);
   });
 });

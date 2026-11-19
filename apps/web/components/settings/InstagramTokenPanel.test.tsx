@@ -48,7 +48,7 @@ describe("InstagramTokenPanel", () => {
     );
 
     expect(
-      await screen.findByText("환경변수의 토큰을 다시 불러왔습니다."),
+      await screen.findByText("인스타그램 토큰을 다시 불러왔어요."),
     ).toBeInTheDocument();
     expect(
       screen.getByText("마지막 반영: 2026.11.18 12:00"),

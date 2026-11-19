@@ -42,7 +42,7 @@ export function ConfirmDialog({
         if (event.target === event.currentTarget && !pending) onClose();
       }}
       aria-labelledby={titleId}
-      className="m-auto w-[min(90vw,24rem)] rounded-2xl border border-line bg-surface text-text backdrop:bg-black/60"
+      className="m-auto w-[min(90vw,24rem)] rounded-2xl border border-line bg-surface text-text backdrop:bg-bg/80"
     >
       <div className="p-5">
         <h2 id={titleId} className="mb-3 font-semibold">

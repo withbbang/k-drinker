@@ -14,7 +14,7 @@ export default async function Icon({ id }: { id: Promise<string | number> }) {
   const size = Number(await id);
   return new ImageResponse(
     <div
-      tw="flex h-full w-full items-center justify-center bg-neutral-900 font-bold text-neutral-50"
+      tw="flex h-full w-full items-center justify-center bg-[#1D1713] font-bold text-[#D6B04C]"
       style={{ fontSize: size * 0.6 }}
     >
       k

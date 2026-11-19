@@ -48,7 +48,7 @@ export function BottomSheet({
         if (fromBackdrop && event.target === event.currentTarget) onClose();
       }}
       onSubmit={(event) => event.stopPropagation()}
-      className="fixed inset-x-0 bottom-0 m-0 max-h-[90vh] w-full max-w-none overflow-y-auto rounded-t-2xl border-t border-line bg-surface text-text backdrop:bg-black/60 motion-safe:animate-[sheet-up_200ms_ease-out]"
+      className="fixed inset-x-0 bottom-0 m-0 max-h-[90vh] w-full max-w-none overflow-y-auto rounded-t-2xl border-t border-line bg-surface text-text backdrop:bg-bg/80 motion-safe:animate-[sheet-up_200ms_ease-out]"
     >
       <div className="flex flex-col gap-3 p-5">
         <h2 id={titleId} className="font-semibold">

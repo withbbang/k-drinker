@@ -30,7 +30,7 @@ export function AddPhotoTile({
         aria-label="사진 추가"
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
-        className="flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-md border border-dashed border-neutral-300 text-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+        className="flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-md border border-dashed border-line text-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
       >
         +
       </button>
