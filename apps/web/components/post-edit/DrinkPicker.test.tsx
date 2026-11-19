@@ -93,15 +93,16 @@ describe("DrinkPicker", () => {
     await userEvent.type(search(), "청");
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
 
-    expect(search()).toHaveValue("");
     expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.getByText("선택한 술: 청주")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "청주" })).toBeInTheDocument();
   });
 
   it("marks the chosen drink as selected on a later search", async () => {
     setup();
     await userEvent.type(search(), "청");
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
+    await userEvent.click(screen.getByRole("button", { name: "청주" }));
+    expect(search()).toHaveValue("");
     await userEvent.type(search(), "청");
 
     expect(await screen.findByRole("option", { name: /청주/ })).toHaveAttribute(
@@ -112,6 +113,17 @@ describe("DrinkPicker", () => {
       "aria-selected",
       "false",
     );
+  });
+
+  it("clears the chosen drink with the chip x", async () => {
+    setup();
+    await userEvent.type(search(), "청");
+    await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
+
+    await userEvent.click(screen.getByRole("button", { name: "청주 지우기" }));
+
+    expect(onChange).toHaveBeenLastCalledWith(START);
+    expect(search()).toHaveFocus();
   });
 
   it("moves the active option with arrow keys and picks it on Enter", async () => {

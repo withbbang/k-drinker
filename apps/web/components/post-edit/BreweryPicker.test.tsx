@@ -93,9 +93,11 @@ describe("BreweryPicker", () => {
       await screen.findByRole("option", { name: "배상면주가" }),
     );
 
-    expect(search()).toHaveValue("");
     expect(screen.queryByRole("listbox")).toBeNull();
-    expect(screen.getByText("선택한 양조장: 배상면주가")).toBeInTheDocument();
+    expect(screen.queryByText(/선택한 양조장/)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "배상면주가" }),
+    ).toBeInTheDocument();
   });
 
   it("marks the chosen brewery as selected on a later search", async () => {
@@ -104,6 +106,8 @@ describe("BreweryPicker", () => {
     await userEvent.click(
       await screen.findByRole("option", { name: "배상면주가" }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "배상면주가" }));
+    expect(search()).toHaveValue("");
     await userEvent.type(search(), "배");
 
     expect(
@@ -126,6 +130,17 @@ describe("BreweryPicker", () => {
     await userEvent.keyboard("{ArrowUp}{ArrowDown}{Enter}");
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 6 }));
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("clears the brewery with the chip x", async () => {
+    setup(make(5, "국순당"));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "국순당 지우기" }),
+    );
+
+    expect(onPick).toHaveBeenCalledWith(null);
+    expect(search()).toHaveFocus();
   });
 
   it("has no inline brewery info inputs", () => {

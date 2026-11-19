@@ -18,9 +18,13 @@ const MANY: Item[] = [
 function Harness({
   items,
   onPick,
+  selectedLabel = null,
+  onClear = () => undefined,
 }: {
   items: Item[];
   onPick: (item: Item) => void;
+  selectedLabel?: string | null;
+  onClear?: () => void;
 }) {
   const [query, setQuery] = useState("");
   return (
@@ -33,7 +37,8 @@ function Harness({
       onPick={onPick}
       query={query}
       onQueryChange={setQuery}
-      inputClassName=""
+      selectedLabel={selectedLabel}
+      onClear={onClear}
     />
   );
 }
@@ -114,5 +119,86 @@ describe("SearchCombobox", () => {
 
     // then
     expect(onPick).toHaveBeenCalledWith(MANY[0]);
+  });
+
+  it("shows a chip instead of the search input when a value is selected", () => {
+    render(<Harness items={MANY} onPick={vi.fn()} selectedLabel="서울장수" />);
+
+    expect(
+      screen.getByRole("button", { name: "서울장수" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "서울장수 지우기" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("turns the chip into a focused search input on click", async () => {
+    render(<Harness items={MANY} onPick={vi.fn()} selectedLabel="서울장수" />);
+
+    await userEvent.click(screen.getByRole("button", { name: "서울장수" }));
+
+    expect(screen.getByRole("combobox")).toHaveFocus();
+  });
+
+  it("calls onClear once and focuses the search input on the chip x", async () => {
+    const onClear = vi.fn();
+    render(
+      <Harness
+        items={MANY}
+        onPick={vi.fn()}
+        selectedLabel="서울장수"
+        onClear={onClear}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "서울장수 지우기" }),
+    );
+
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("combobox")).toHaveFocus();
+  });
+
+  it("returns to the chip when focus leaves without picking", async () => {
+    render(
+      <>
+        <Harness items={MANY} onPick={vi.fn()} selectedLabel="서울장수" />
+        <button type="button">바깥</button>
+      </>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "서울장수" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "바깥" }));
+
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "서울장수" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes the list on Escape", async () => {
+    render(<Harness items={MANY} onPick={vi.fn()} />);
+    await userEvent.type(screen.getByRole("combobox"), "술");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("closes the list on a pointerdown outside", async () => {
+    render(
+      <>
+        <Harness items={MANY} onPick={vi.fn()} />
+        <button type="button">바깥</button>
+      </>,
+    );
+    await userEvent.type(screen.getByRole("combobox"), "술");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: "바깥" }));
+
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 });

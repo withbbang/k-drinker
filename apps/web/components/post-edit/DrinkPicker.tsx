@@ -18,23 +18,27 @@ type DrinkPickerProps = {
   onChange: (value: DrinkChoice) => void;
 };
 
+const NONE: DrinkChoice = {
+  drinkId: null,
+  drinkName: null,
+  breweryId: null,
+  newDrinkName: "",
+};
+
 const INPUT =
-  "rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+  "min-h-11 rounded-field border border-line bg-surface px-3 text-text focus-visible:outline-2 focus-visible:outline-accent";
 
 export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
   const [q, setQ] = useState("");
   const search = useDrinkSearch(q);
+  const newName = value.newDrinkName.trim();
 
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="text-sm font-medium">술</legend>
-      <p className="text-sm text-neutral-700">
-        {value.newDrinkName.trim() !== ""
-          ? `새 술: ${value.newDrinkName.trim()}`
-          : value.drinkId !== null
-            ? `선택한 술: ${value.drinkName}`
-            : "정해진 술이 없습니다."}
-      </p>
+      {newName === "" && value.drinkId === null && (
+        <p className="text-sm text-muted">정해진 술이 없습니다.</p>
+      )}
       <SearchCombobox
         label="술 검색"
         items={search.data ?? []}
@@ -42,7 +46,7 @@ export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
         renderItem={(drink) =>
           `${drink.name}${drink.breweryName ? ` · ${drink.breweryName}` : ""}`
         }
-        selectedKey={value.newDrinkName.trim() === "" ? value.drinkId : null}
+        selectedKey={newName === "" ? value.drinkId : null}
         onPick={(drink) =>
           onChange({
             drinkId: drink.id,
@@ -53,10 +57,17 @@ export function DrinkPicker({ value, onChange }: DrinkPickerProps) {
         }
         query={q}
         onQueryChange={setQ}
-        inputClassName={INPUT}
+        selectedLabel={
+          newName !== ""
+            ? newName
+            : value.drinkId !== null
+              ? value.drinkName
+              : null
+        }
+        onClear={() => onChange(NONE)}
       />
       <label className="flex flex-col gap-1">
-        <span className="text-sm">새 이름으로</span>
+        <span className="text-sm text-muted">새 이름으로</span>
         <input
           type="text"
           value={value.newDrinkName}

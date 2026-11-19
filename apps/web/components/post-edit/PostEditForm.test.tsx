@@ -141,7 +141,7 @@ describe("PostEditForm", () => {
     expect(await screen.findByLabelText("메모")).toHaveValue("좋음");
     expect(screen.getByLabelText("캡션 머리")).toHaveValue("머리 문장");
     expect(screen.getByLabelText("캡션 꼬리")).toHaveValue("#막걸리");
-    expect(screen.getByText("선택한 술: 막걸리")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "막걸리" })).toBeInTheDocument();
   });
 
   it("shows the server preview text and length", async () => {
@@ -394,7 +394,10 @@ describe("PostEditForm", () => {
 
   it("sends drinkId of a searched drink without newDrinkName", async () => {
     setupSearch(post());
-    await userEvent.type(await screen.findByLabelText("술 검색"), "청");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "막걸리" }),
+    );
+    await userEvent.type(screen.getByLabelText("술 검색"), "청");
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
@@ -405,9 +408,12 @@ describe("PostEditForm", () => {
 
   it("keeps the drink choice and memo after opening and closing the sheet", async () => {
     setupSearch(post());
-    await userEvent.type(await screen.findByLabelText("술 검색"), "청");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "막걸리" }),
+    );
+    await userEvent.type(screen.getByLabelText("술 검색"), "청");
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
-    await screen.findByText("선택한 양조장: 배상면주가");
+    await screen.findByRole("button", { name: "배상면주가" });
     await userEvent.clear(screen.getByLabelText("메모"));
     await userEvent.type(screen.getByLabelText("메모"), "새 메모");
 
@@ -418,7 +424,9 @@ describe("PostEditForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "닫기" }));
 
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByText("선택한 양조장: 배상면주가")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "배상면주가" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("메모")).toHaveValue("새 메모");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
     await waitFor(() => expect(putCalls()).toHaveLength(1));
@@ -429,9 +437,12 @@ describe("PostEditForm", () => {
 
   it("keeps unsaved input and uses the new version after a sheet save refetches the post", async () => {
     setupSearch(post());
-    await userEvent.type(await screen.findByLabelText("술 검색"), "청");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "막걸리" }),
+    );
+    await userEvent.type(screen.getByLabelText("술 검색"), "청");
     await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
-    await screen.findByText("선택한 양조장: 배상면주가");
+    await screen.findByRole("button", { name: "배상면주가" });
     await userEvent.clear(screen.getByLabelText("메모"));
     await userEvent.type(screen.getByLabelText("메모"), "새 메모");
 
@@ -451,8 +462,10 @@ describe("PostEditForm", () => {
     );
 
     expect(screen.getByLabelText("메모")).toHaveValue("새 메모");
-    expect(screen.getByLabelText("술 검색")).toBeInTheDocument();
-    expect(screen.getByText("선택한 양조장: 배상면주가")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "청주" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "배상면주가" }),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     const body = (await putBodies())[0];
@@ -463,7 +476,10 @@ describe("PostEditForm", () => {
 
   it("shows no brewery after picking a drink without one", async () => {
     setupSearch(post());
-    await userEvent.type(await screen.findByLabelText("술 검색"), "탁");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "막걸리" }),
+    );
+    await userEvent.type(screen.getByLabelText("술 검색"), "탁");
     await userEvent.click(await screen.findByRole("option", { name: "탁주" }));
 
     expect(
