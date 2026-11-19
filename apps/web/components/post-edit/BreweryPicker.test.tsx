@@ -31,38 +31,28 @@ const make = (id: number, name: string): BreweryResponse => ({
   verified: false,
 });
 
-const FIELDS = {
-  address: "",
-  phone: "",
-  homepage: "",
-  instagramHandle: "",
-  otherSns: "",
-};
-
 const onPick = vi.fn();
 const onSubmit = vi.fn((event: { preventDefault: () => void }) =>
   event.preventDefault(),
 );
 
-function Harness() {
-  const [brewery, setBrewery] = useState<BreweryResponse | null>(null);
+function Harness({ initial = null }: { initial?: BreweryResponse | null }) {
+  const [brewery, setBrewery] = useState<BreweryResponse | null>(initial);
   return (
     <form onSubmit={onSubmit}>
       <BreweryPicker
         disabled={false}
         brewery={brewery}
-        fields={FIELDS}
         onPick={(next) => {
           onPick(next);
           setBrewery(next);
         }}
-        onFieldsChange={() => undefined}
       />
     </form>
   );
 }
 
-function setup() {
+function setup(initial: BreweryResponse | null = null) {
   apiFetchMock.mockResolvedValue({
     items: [make(5, "국순당"), make(6, "배상면주가")],
     page: 0,
@@ -72,7 +62,7 @@ function setup() {
   });
   render(
     <QueryProvider>
-      <Harness />
+      <Harness initial={initial} />
     </QueryProvider>,
   );
 }
@@ -136,5 +126,33 @@ describe("BreweryPicker", () => {
     await userEvent.keyboard("{ArrowUp}{ArrowDown}{Enter}");
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 6 }));
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("has no inline brewery info inputs", () => {
+    setup(make(5, "국순당"));
+
+    expect(screen.queryByLabelText("주소")).toBeNull();
+    expect(screen.queryByLabelText("전화")).toBeNull();
+  });
+
+  it("opens the brewery sheet from the edit button", async () => {
+    setup(make(5, "국순당"));
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "양조장 정보 고치기" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "양조장 정보" }),
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("has no edit button without a brewery", () => {
+    setup();
+
+    expect(
+      screen.queryByRole("button", { name: "양조장 정보 고치기" }),
+    ).toBeNull();
   });
 });

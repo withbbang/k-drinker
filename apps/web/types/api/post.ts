@@ -1,4 +1,4 @@
-import type { BreweryRequest, BreweryResponse } from "@/types/api/brewery";
+import type { BreweryResponse } from "@/types/api/brewery";
 
 export type PostChannel = "TELEGRAM" | "WEB";
 
@@ -62,7 +62,6 @@ export type PostUpdateRequest = {
   drinkId: number | null;
   newDrinkName: string | null;
   breweryId: number | null;
-  breweryEdit: BreweryRequest | null;
   rating: number | null;
   memo: string | null;
   captionHead: string | null;

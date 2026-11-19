@@ -82,9 +82,10 @@ class BreweryServiceTest {
 	void 정규화한_이름이_비면_400이다() {
 		// given
 		Brewery brewery = Brewery.of("화요", "화요", BrewerySource.PUBLIC_DATA);
+		when(breweryRepository.findById(1L)).thenReturn(Optional.of(brewery));
 
 		// when / then
-		assertThatThrownBy(() -> service().applyEdit(brewery, request("(주)", null)))
+		assertThatThrownBy(() -> service().update(1L, request("(주)", null)))
 				.isInstanceOfSatisfying(BusinessException.class,
 						e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.COMMON_VALIDATION_FAILED));
 	}

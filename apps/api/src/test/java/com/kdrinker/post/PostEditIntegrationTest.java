@@ -116,7 +116,7 @@ class PostEditIntegrationTest {
 	}
 
 	private static PostUpdateRequest request(int version, List<PhotoEdit> photos) {
-		return new PostUpdateRequest(version, null, null, null, null, null, "메모", "훅", "", photos);
+		return new PostUpdateRequest(version, null, null, null, null, "메모", "훅", "", photos);
 	}
 
 	@Test

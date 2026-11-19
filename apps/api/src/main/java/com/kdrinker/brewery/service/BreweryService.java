@@ -54,8 +54,8 @@ public class BreweryService {
 		return BreweryResponse.from(brewery);
 	}
 
-	/** 다른 서비스의 트랜잭션 안에서도 부를 수 있다. 조회하지 않고 받은 엔티티만 고친다. */
-	public void applyEdit(Brewery brewery, BreweryRequest request) {
+	/** 조회하지 않고 받은 엔티티만 고친다. */
+	private void applyEdit(Brewery brewery, BreweryRequest request) {
 		String normalizedName = Names.normalize(request.name());
 		if (normalizedName.isEmpty()) {
 			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);

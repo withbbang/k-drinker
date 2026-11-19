@@ -130,4 +130,33 @@ describe("BreweryForm", () => {
       ["PUT", "/api/v1/breweries/3"],
     ]);
   });
+
+  it("calls onSaved with the saved brewery", async () => {
+    const saved = {
+      id: 3,
+      name: "국순당",
+      address: null,
+      phone: null,
+      homepage: null,
+      instagramHandle: null,
+      otherSns: null,
+      source: "MANUAL",
+      verified: true,
+    };
+    apiFetchMock.mockResolvedValue(saved);
+    const onSaved = vi.fn();
+    render(
+      <QueryProvider>
+        <BreweryForm onSaved={onSaved} />
+      </QueryProvider>,
+    );
+
+    await userEvent.type(screen.getByLabelText("이름"), "국순당");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved));
+    expect(
+      screen.queryByText("저장했습니다. 다음 게시물부터 이 정보가 쓰입니다."),
+    ).toBeNull();
+  });
 });

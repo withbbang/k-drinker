@@ -3,10 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 
-import {
-  BreweryPicker,
-  type BreweryFields,
-} from "@/components/post-edit/BreweryPicker";
+import { BreweryPicker } from "@/components/post-edit/BreweryPicker";
 import {
   DrinkPicker,
   type DrinkChoice,
@@ -34,18 +31,6 @@ const FALLBACK_ERROR = "저장에 실패했습니다. 잠시 후 다시 시도�
 const TEXTAREA =
   "rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
 
-function fieldsOf(brewery: BreweryResponse | null): BreweryFields {
-  return {
-    address: brewery?.address ?? "",
-    phone: brewery?.phone ?? "",
-    homepage: brewery?.homepage ?? "",
-    instagramHandle: brewery?.instagramHandle ?? "",
-    otherSns: brewery?.otherSns ?? "",
-  };
-}
-
-const orNull = (value: string) => (value.trim() === "" ? null : value.trim());
-
 // 되돌리기 기록에 남기는 값. 글자 칸은 넣지 않는다.
 type EditState = { photos: PhotoItem[]; rating: number | null };
 
@@ -70,14 +55,9 @@ function Editor({ post, onSave }: EditorProps) {
   const drinkChanged = newName === "" && drink.drinkId !== post.drinkId;
   const drinkBrewery = useBrewery(drinkChanged ? drink.breweryId : null);
   const current = drinkChanged ? (drinkBrewery.data ?? null) : post.brewery;
-  const base = picked ?? current;
-  // 양조장 칸은 그 칸을 채운 양조장과 함께 둔다. 보이는 양조장이 바뀌면 그 양조장 값으로 다시 채운다.
-  const [edits, setEdits] = useState({
-    breweryId: post.brewery?.id ?? null,
-    fields: fieldsOf(post.brewery),
-  });
-  const baseId = base?.id ?? null;
-  const fields = edits.breweryId === baseId ? edits.fields : fieldsOf(base);
+  // 고른 양조장은 시트에서 고친 값이 보이도록 최신 조회 결과를 쓴다.
+  const pickedFresh = useBrewery(picked?.id ?? null);
+  const base = (picked && (pickedFresh.data ?? picked)) ?? current;
   const [memo, setMemo] = useState(post.memo ?? "");
   const [captionHead, setCaptionHead] = useState(post.captionHead ?? "");
   const [captionTail, setCaptionTail] = useState(post.captionTail ?? "");
@@ -113,16 +93,9 @@ function Editor({ post, onSave }: EditorProps) {
     setDrink(next);
   };
 
-  const handleFieldsChange = (next: BreweryFields) =>
-    setEdits({ breweryId: baseId, fields: next });
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (photosBusy) return;
-    const original = fieldsOf(base);
-    const changed = (Object.keys(fields) as (keyof BreweryFields)[]).some(
-      (key) => orNull(fields[key]) !== orNull(original[key]),
-    );
     const { photos: photoEdits, newPhotos } = toUpdatePhotos(photos);
     // 저장하면 새 버전으로 Editor가 다시 만들어지므로 mutate 콜백 대신 Promise로 이동한다.
     // 실패하면 사진·기록을 그대로 두어 다시 저장하거나 되돌릴 수 있다.
@@ -133,17 +106,6 @@ function Editor({ post, onSave }: EditorProps) {
           drinkId: newName === "" ? drink.drinkId : null,
           newDrinkName: newName === "" ? null : newName,
           breweryId: hasDrink ? (picked?.id ?? null) : null,
-          breweryEdit:
-            hasDrink && base && changed
-              ? {
-                  name: base.name,
-                  address: orNull(fields.address),
-                  phone: orNull(fields.phone),
-                  homepage: orNull(fields.homepage),
-                  instagramHandle: orNull(fields.instagramHandle),
-                  otherSns: orNull(fields.otherSns),
-                }
-              : null,
           rating,
           memo,
           captionHead,
@@ -160,13 +122,7 @@ function Editor({ post, onSave }: EditorProps) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <DrinkPicker value={drink} onChange={handleDrinkChange} />
-      <BreweryPicker
-        disabled={!hasDrink}
-        brewery={base}
-        fields={fields}
-        onPick={setPicked}
-        onFieldsChange={handleFieldsChange}
-      />
+      <BreweryPicker disabled={!hasDrink} brewery={base} onPick={setPicked} />
       <RatingInput
         value={rating}
         onChange={(value) => change((prev) => ({ ...prev, rating: value }))}

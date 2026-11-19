@@ -31,7 +31,13 @@ function initial(brewery?: BreweryResponse): Record<FieldName, string> {
   };
 }
 
-export function BreweryForm({ brewery }: { brewery?: BreweryResponse }) {
+type BreweryFormProps = {
+  brewery?: BreweryResponse;
+  // 있으면 저장 성공 때 부르고, 저장 완료 표시는 하지 않는다.
+  onSaved?: (saved: BreweryResponse) => void;
+};
+
+export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
   const [values, setValues] = useState(() => initial(brewery));
   const [savedId, setSavedId] = useState<number | null>(brewery?.id ?? null);
   const [nameError, setNameError] = useState(false);
@@ -56,7 +62,12 @@ export function BreweryForm({ brewery }: { brewery?: BreweryResponse }) {
         otherSns: orNull(values.otherSns),
       },
       // 새로 만든 뒤 다시 저장하면 중복 생성이 아니라 수정이 된다.
-      { onSuccess: (saved) => setSavedId(saved.id) },
+      {
+        onSuccess: (saved) => {
+          setSavedId(saved.id);
+          onSaved?.(saved);
+        },
+      },
     );
   };
 
@@ -91,7 +102,7 @@ export function BreweryForm({ brewery }: { brewery?: BreweryResponse }) {
           {apiError ? apiError.message : "저장하지 못했습니다."}
         </p>
       )}
-      {save.isSuccess && (
+      {save.isSuccess && !onSaved && (
         <p role="status" className="text-sm text-green-800">
           저장했습니다. 다음 게시물부터 이 정보가 쓰입니다.
         </p>

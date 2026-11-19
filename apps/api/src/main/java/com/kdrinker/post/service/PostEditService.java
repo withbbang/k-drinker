@@ -5,7 +5,6 @@ import com.kdrinker.analysis.label.LabelResult;
 import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.entity.BrewerySource;
 import com.kdrinker.brewery.repository.BreweryRepository;
-import com.kdrinker.brewery.service.BreweryService;
 import com.kdrinker.caption.CaptionAssembler;
 import com.kdrinker.caption.CaptionInput;
 import com.kdrinker.caption.CaptionParts;
@@ -65,7 +64,6 @@ public class PostEditService {
 	private final PostPhotoRepository postPhotoRepository;
 	private final DrinkRepository drinkRepository;
 	private final BreweryRepository breweryRepository;
-	private final BreweryService breweryService;
 	private final CaptionService captionService;
 	private final PhotoService photoService;
 	private final PhotoStorage photoStorage;
@@ -76,7 +74,7 @@ public class PostEditService {
 	private final TransactionTemplate tx;
 
 	public PostEditService(PostRepository postRepository, PostPhotoRepository postPhotoRepository,
-			DrinkRepository drinkRepository, BreweryRepository breweryRepository, BreweryService breweryService,
+			DrinkRepository drinkRepository, BreweryRepository breweryRepository,
 			CaptionService captionService, PhotoService photoService, PhotoStorage photoStorage,
 			PhotoStager photoStager, PostQueryService postQueryService, ApplicationEventPublisher events, Clock clock,
 			PlatformTransactionManager transactionManager) {
@@ -84,7 +82,6 @@ public class PostEditService {
 		this.postPhotoRepository = postPhotoRepository;
 		this.drinkRepository = drinkRepository;
 		this.breweryRepository = breweryRepository;
-		this.breweryService = breweryService;
 		this.captionService = captionService;
 		this.photoService = photoService;
 		this.photoStorage = photoStorage;
@@ -196,27 +193,16 @@ public class PostEditService {
 			targetBrewery = currentBrewery;
 		}
 		Long targetBreweryId = targetBrewery == null ? null : targetBrewery.getId();
-		if (req.breweryEdit() != null && targetBrewery == null) {
-			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-		}
-		if (req.breweryId() == null && req.breweryEdit() != null
-				&& !targetBrewery.getName().strip().equals(req.breweryEdit().name().strip())) {
-			// 술을 바꾸면 양조장도 그 술의 양조장이 된다. 이전 양조장 이름으로 고친 값을 다른 양조장에 덮어쓰지 않는다.
-			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-		}
 
-		// 캡션 블록에 쓸 저장하지 않는 사본. breweryEdit를 미리 적용해 검증도 여기서 끝낸다(4단계가 같은 값을 레코드에 넣는다).
+		// 캡션 블록에 쓸 저장하지 않는 사본.
 		Brewery captionBrewery = targetBrewery == null ? null : copyOf(targetBrewery);
-		if (req.breweryEdit() != null) {
-			breweryService.applyEdit(captionBrewery, req.breweryEdit());
-		}
 		LabelResult label = new LabelResult(drinkName, targetDrink == null ? null : targetDrink.getCategory(),
 				targetDrink == null ? null : targetDrink.getAbv(), targetDrink == null ? null : targetDrink.getVolumeMl(),
 				captionBrewery == null ? null : captionBrewery.getName(), req.rating(), post.getTasteNotes(),
 				post.getPairing(), List.of());
 		boolean identityChanged = req.newDrinkName() != null
 				|| !Objects.equals(targetDrink == null ? null : targetDrink.getId(), currentDrinkId)
-				|| !Objects.equals(targetBreweryId, currentBreweryId) || req.breweryEdit() != null;
+				|| !Objects.equals(targetBreweryId, currentBreweryId);
 		return new Snapshot(post.getStatus(), post.getVersion(), post.getChannel(), CaptionParts.split(post.getCaption()),
 				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId, post.getRating(),
 				post.getCaption() == null || post.getCaption().isBlank());
@@ -287,13 +273,6 @@ public class PostEditService {
 		Drink drink = resolveDrink(post, req, snapshot);
 		if (req.breweryId() != null && drink != null) {
 			drink.changeBrewery(findBrewery(req.breweryId()));
-		}
-		if (req.breweryEdit() != null) {
-			Brewery brewery = drink == null ? null : drink.getBrewery();
-			if (brewery == null) {
-				throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
-			}
-			breweryService.applyEdit(brewery, req.breweryEdit());
 		}
 		post.assignDrink(drink);
 		post.recordRating(req.rating());

@@ -36,6 +36,11 @@ export function useSaveBrewery(id: number | null) {
           body: JSON.stringify(body),
         },
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["breweries"] }),
+    // 양조장 정보는 게시물 상세(양조장·캡션)에도 들어 있다.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["breweries"] }),
+        queryClient.invalidateQueries({ queryKey: ["posts"] }),
+      ]),
   });
 }
