@@ -44,6 +44,9 @@ export function BreweryPicker({
         onQueryChange={setQ}
         selectedLabel={brewery?.name ?? null}
         onClear={clearable ? () => onPick(null) : undefined}
+        emptyText={
+          search.isSuccess ? `‘${q.trim()}’에 대한 양조장이 없어요.` : undefined
+        }
       />
       {brewery && (
         <button

@@ -27,6 +27,8 @@ type SearchComboboxProps<T> = {
   onClear?: () => void;
   // 포커스가 이 컴포넌트 밖으로 나갔을 때.
   onBlurField?: () => void;
+  // 검색을 마쳤는데 결과가 없을 때 목록 자리에 띄울 문구. 검색 중이면 넘기지 않는다.
+  emptyText?: string;
 };
 
 // 검색 입력 + 결과 목록. 폼 안에 있어도 Enter가 폼을 제출하지 않고 항목을 고른다.
@@ -42,6 +44,7 @@ export function SearchCombobox<T>({
   selectedLabel,
   onClear,
   onBlurField,
+  emptyText,
 }: SearchComboboxProps<T>) {
   const id = useId();
   const listId = `${id}-list`;
@@ -56,6 +59,12 @@ export function SearchCombobox<T>({
   const [dismissed, setDismissed] = useState(false);
   const open = !dismissed && query.trim() !== "" && items.length > 0;
   const showChip = selectedLabel !== null && !editing;
+  const showEmpty =
+    emptyText !== undefined &&
+    !dismissed &&
+    !showChip &&
+    query.trim() !== "" &&
+    items.length === 0;
   // 고르면 검색칸이 칩으로 바뀌어 포커스가 사라지므로 칩으로 옮긴다.
   const focusChip = useRef(false);
 
@@ -174,6 +183,14 @@ export function SearchCombobox<T>({
             className="min-h-11 w-full rounded-field border border-line bg-surface px-3 text-text placeholder:text-muted focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40"
           />
         </>
+      )}
+      {showEmpty && (
+        <p
+          role="status"
+          className="absolute top-full z-20 mt-1 w-full rounded-field border border-line bg-surface px-3 py-2.5 text-sm text-muted"
+        >
+          {emptyText}
+        </p>
       )}
       {open && !showChip && (
         <ul

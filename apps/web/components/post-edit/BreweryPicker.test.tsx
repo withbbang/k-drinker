@@ -87,6 +87,59 @@ describe("BreweryPicker", () => {
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
   });
 
+  it("says so when no brewery matches the search", async () => {
+    // given
+    setup();
+    apiFetchMock.mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+    });
+
+    // when
+    await userEvent.type(search(), "없는양조장");
+
+    // then
+    expect(
+      await screen.findByText("‘없는양조장’에 대한 양조장이 없어요."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("hides the no-match notice while the search is still loading", async () => {
+    // given
+    setup();
+    apiFetchMock.mockReturnValue(new Promise(() => {}));
+
+    // when
+    await userEvent.type(search(), "국");
+
+    // then
+    expect(screen.queryByText(/에 대한 양조장이 없어요/)).toBeNull();
+  });
+
+  it("hides the no-match notice after Escape clears the search", async () => {
+    // given
+    setup();
+    apiFetchMock.mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
+    });
+    await userEvent.type(search(), "없는양조장");
+    await screen.findByText("‘없는양조장’에 대한 양조장이 없어요.");
+
+    // when
+    await userEvent.keyboard("{Escape}");
+
+    // then
+    expect(screen.queryByText(/에 대한 양조장이 없어요/)).toBeNull();
+  });
+
   it("clears the query and closes the list after a click", async () => {
     setup();
     await userEvent.type(search(), "배");
