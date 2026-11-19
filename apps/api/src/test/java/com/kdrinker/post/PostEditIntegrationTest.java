@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.kdrinker.caption.BreweryBlock;
+import com.kdrinker.drink.entity.Drink;
+import com.kdrinker.drink.repository.DrinkRepository;
 import com.kdrinker.media.PhotoStorage;
 import com.kdrinker.post.dto.PostUpdateRequest;
 import com.kdrinker.post.dto.PostUpdateRequest.PhotoEdit;
@@ -18,6 +21,7 @@ import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
 import com.kdrinker.post.service.PhotoInput;
+import com.kdrinker.post.dto.PostDetailResponse;
 import com.kdrinker.post.service.PostEditService;
 import com.kdrinker.telegram.PostNotifier;
 import java.awt.image.BufferedImage;
@@ -66,6 +70,9 @@ class PostEditIntegrationTest {
 	private PostPhotoRepository postPhotoRepository;
 
 	@Autowired
+	private DrinkRepository drinkRepository;
+
+	@Autowired
 	private JdbcTemplate jdbc;
 
 	@MockitoBean
@@ -84,6 +91,7 @@ class PostEditIntegrationTest {
 	void clean() {
 		jdbc.update("DELETE FROM post_photo");
 		jdbc.update("DELETE FROM post");
+		jdbc.update("DELETE FROM drink");
 	}
 
 	private record Saved(Long postId, int version, List<PostPhoto> photos) {
@@ -264,5 +272,29 @@ class PostEditIntegrationTest {
 		assertThat(countFiles("original/" + saved.postId())).isEqualTo(originalsBefore);
 		assertThat(countFiles("rendered")).isEqualTo(renderedBefore);
 		assertThat(countFiles("tmp")).isZero();
+	}
+
+	@Test
+	void 술을_바꿔_저장하면_틀은_그대로고_채운_글에_새_술_이름이_나온다() throws IOException {
+		// given
+		Saved saved = savePost();
+		Drink oldDrink = drinkRepository.saveAndFlush(Drink.of("옛술", "옛술", null));
+		Drink newDrink = drinkRepository.saveAndFlush(Drink.of("새술", "새술", null));
+		String template = "훅 {술이름}\n\n" + BreweryBlock.TEMPLATE + "\n\n#태그";
+		Post post = postRepository.findById(saved.postId()).orElseThrow();
+		post.assignDrink(oldDrink);
+		post.writeCaption(template, "#태그", null, null);
+		postRepository.saveAndFlush(post);
+		int version = postRepository.findById(saved.postId()).orElseThrow().getVersion();
+		List<PhotoEdit> keep = saved.photos().stream().map(p -> new PhotoEdit(p.getId(), null, FitMode.CROP)).toList();
+		PostUpdateRequest req = new PostUpdateRequest(version, newDrink.getId(), null, null, null, "메모", "훅 {술이름}",
+				"#태그", keep);
+
+		// when
+		PostDetailResponse detail = postEditService.update(saved.postId(), req, List.of());
+
+		// then
+		assertThat(postRepository.findById(saved.postId()).orElseThrow().getCaption()).isEqualTo(template);
+		assertThat(detail.publishCaption()).contains("새술").doesNotContain("옛술").doesNotContain("{술이름}");
 	}
 }
