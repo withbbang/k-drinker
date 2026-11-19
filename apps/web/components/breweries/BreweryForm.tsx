@@ -18,7 +18,7 @@ const FIELDS: [FieldName, string][] = [
 ];
 
 const INPUT =
-  "rounded-md border border-neutral-300 bg-white px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900";
+  "rounded-field border border-line bg-surface px-3 py-2.5 text-text placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function initial(brewery?: BreweryResponse): Record<FieldName, string> {
   return {
@@ -93,17 +93,17 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
               aria-invalid={reason ? true : undefined}
               className={INPUT}
             />
-            {reason && <span className="text-sm text-red-700">{reason}</span>}
+            {reason && <span className="text-sm text-danger">{reason}</span>}
           </label>
         );
       })}
       {save.isError && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {apiError ? apiError.message : "저장하지 못했습니다."}
         </p>
       )}
       {save.isSuccess && !onSaved && (
-        <p role="status" className="text-sm text-green-800">
+        <p role="status" className="text-sm text-accent">
           저장했습니다. 다음 게시물부터 이 정보가 쓰입니다.
         </p>
       )}

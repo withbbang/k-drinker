@@ -748,6 +748,41 @@ describe("PostEditForm", () => {
     expect((await putBodies())[0].breweryId).toBeNull();
   });
 
+  it("같은_술을_다시_골라도_되돌리기_단계가_생기지_않는다", async () => {
+    // given
+    setupSearch(post({ drinkId: 11, drinkName: "청주" }));
+    await userEvent.click(await screen.findByRole("button", { name: "청주" }));
+
+    // when
+    await userEvent.type(screen.getByLabelText("술 검색"), "청");
+    await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
+
+    // then
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
+  });
+
+  it("기본_양조장_칩에는_x가_없고_고른_양조장만_지운다", async () => {
+    // given — 술의 기본 양조장만 보인다
+    setupSearch(post());
+    await screen.findByRole("button", { name: "국순당" });
+    expect(screen.queryByRole("button", { name: "국순당 지우기" })).toBeNull();
+
+    // when — 다른 양조장을 골랐다가 지운다
+    await userEvent.click(screen.getByRole("button", { name: "국순당" }));
+    await userEvent.type(screen.getByLabelText("양조장 검색"), "배");
+    await userEvent.click(
+      await screen.findByRole("option", { name: "배상면주가" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "배상면주가 지우기" }),
+    );
+    await userEvent.click(screen.getByRole("textbox", { name: "메모" }));
+
+    // then — 기본 양조장으로 돌아간다
+    expect(screen.getByRole("button", { name: "국순당" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "국순당 지우기" })).toBeNull();
+  });
+
   it("썸네일을_눌러_여백을_넣는다", async () => {
     // given
     setup(post());

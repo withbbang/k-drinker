@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -91,5 +91,17 @@ describe("CaptionEditor", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "미리보기를 불러오지 못했어요",
     );
+  });
+
+  it("미리보기를_다녀와도_마지막_커서_자리에_넣는다", async () => {
+    const props = setup({ head: "좋은 술" });
+    const head = screen.getByRole("textbox", { name: "인스타그램 글 앞부분" });
+    await userEvent.click(head);
+    (head as HTMLTextAreaElement).setSelectionRange(3, 3);
+    fireEvent.select(head);
+    await userEvent.click(screen.getByRole("tab", { name: "미리보기" }));
+    await userEvent.click(screen.getByRole("tab", { name: "편집" }));
+    await userEvent.click(screen.getByRole("button", { name: "술이름 넣기" }));
+    expect(props.onHeadChange).toHaveBeenCalledWith("좋은 {술이름}술");
   });
 });

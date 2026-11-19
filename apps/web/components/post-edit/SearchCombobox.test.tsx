@@ -241,4 +241,43 @@ describe("SearchCombobox", () => {
       screen.getByRole("button", { name: "서울장수" }),
     ).toBeInTheDocument();
   });
+
+  it("고른_뒤_칩_버튼에_포커스가_간다", async () => {
+    function Picking() {
+      const [query, setQuery] = useState("");
+      const [picked, setPicked] = useState<Item | null>(null);
+      return (
+        <SearchCombobox
+          label="술"
+          items={MANY}
+          getKey={(item) => item.id}
+          renderItem={(item) => item.name}
+          selectedKey={picked?.id ?? null}
+          onPick={setPicked}
+          query={query}
+          onQueryChange={setQuery}
+          selectedLabel={picked?.name ?? null}
+          onClear={() => setPicked(null)}
+        />
+      );
+    }
+    render(<Picking />);
+    await userEvent.type(screen.getByRole("combobox", { name: "술" }), "술");
+    await userEvent.keyboard("{ArrowDown}{Enter}");
+    expect(screen.getByRole("button", { name: "막걸리" })).toHaveFocus();
+  });
+
+  it("탭으로_나가면_목록을_닫는다", async () => {
+    render(
+      <>
+        <Harness items={MANY} onPick={vi.fn()} />
+        <button type="button">다음</button>
+      </>,
+    );
+    await userEvent.type(screen.getByRole("combobox", { name: "술" }), "술");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: "다음" })).toHaveFocus();
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
 });

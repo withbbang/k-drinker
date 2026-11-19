@@ -29,7 +29,7 @@ export function BreweryList() {
           name="q"
           defaultValue={q}
           aria-label="양조장 검색"
-          className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2.5"
+          className="min-w-0 flex-1 rounded-field border border-line bg-surface px-3 py-2.5 text-text placeholder:text-muted"
         />
         <button
           type="submit"
@@ -45,10 +45,10 @@ export function BreweryList() {
         새 양조장
       </Link>
       {breweries.isPending && (
-        <p className="text-sm text-neutral-700">불러오는 중…</p>
+        <p className="text-sm text-muted">불러오는 중…</p>
       )}
       {breweries.isError && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {breweries.error instanceof ApiError
             ? breweries.error.message
             : "양조장을 불러오지 못했습니다."}
@@ -57,20 +57,20 @@ export function BreweryList() {
       {breweries.data && (
         <>
           {breweries.data.items.length === 0 ? (
-            <p className="text-sm text-neutral-700">양조장이 없습니다.</p>
+            <p className="text-sm text-muted">양조장이 없습니다.</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {breweries.data.items.map((brewery) => (
                 <li key={brewery.id}>
                   <Link
                     href={`/breweries/${brewery.id}`}
-                    className="flex flex-col gap-1 rounded-lg bg-white p-3 shadow-sm"
+                    className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-3 text-text"
                   >
                     <span className="font-medium">{brewery.name}</span>
-                    <span className="text-sm text-neutral-700">
+                    <span className="text-sm text-muted">
                       {brewery.address ?? "주소 없음"}
                     </span>
-                    <span className="text-xs text-neutral-700">
+                    <span className="text-xs text-muted">
                       {brewery.verified ? "검증됨" : "미검증"}
                     </span>
                   </Link>

@@ -10,6 +10,8 @@ import type { BreweryResponse } from "@/types/api/brewery";
 type BreweryPickerProps = {
   disabled: boolean;
   brewery: BreweryResponse | null;
+  // 따로 고른 양조장이면 true. 술의 기본 양조장은 지울 게 없으므로 × 를 숨긴다.
+  clearable: boolean;
   // null이면 고른 양조장을 비워 술의 기본 양조장으로 돌아간다.
   onPick: (brewery: BreweryResponse | null) => void;
 };
@@ -17,6 +19,7 @@ type BreweryPickerProps = {
 export function BreweryPicker({
   disabled,
   brewery,
+  clearable,
   onPick,
 }: BreweryPickerProps) {
   const [q, setQ] = useState("");
@@ -40,7 +43,7 @@ export function BreweryPicker({
         query={q}
         onQueryChange={setQ}
         selectedLabel={brewery?.name ?? null}
-        onClear={() => onPick(null)}
+        onClear={clearable ? () => onPick(null) : undefined}
       />
       {brewery && (
         <button

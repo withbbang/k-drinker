@@ -23,8 +23,8 @@ type SearchComboboxProps<T> = {
   onQueryChange: (query: string) => void;
   // 지금 고른 값의 이름. 있고 편집 중이 아니면 검색칸 자리에 칩으로 보인다.
   selectedLabel: string | null;
-  // 칩의 × 를 눌렀을 때. 호출한 뒤 검색칸으로 바뀌고 포커스가 간다.
-  onClear: () => void;
+  // 칩의 × 를 눌렀을 때. 호출한 뒤 검색칸으로 바뀌고 포커스가 간다. 없으면 칩에 × 가 없다.
+  onClear?: () => void;
   // 포커스가 이 컴포넌트 밖으로 나갔을 때.
   onBlurField?: () => void;
 };
@@ -56,10 +56,18 @@ export function SearchCombobox<T>({
   const [dismissed, setDismissed] = useState(false);
   const open = !dismissed && query.trim() !== "" && items.length > 0;
   const showChip = selectedLabel !== null && !editing;
+  // 고르면 검색칸이 칩으로 바뀌어 포커스가 사라지므로 칩으로 옮긴다.
+  const focusChip = useRef(false);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
+
+  useEffect(() => {
+    if (!showChip || !focusChip.current) return;
+    focusChip.current = false;
+    wrapperRef.current?.querySelector("button")?.focus();
+  }, [showChip]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +81,7 @@ export function SearchCombobox<T>({
   }, [open]);
 
   const pick = (item: T) => {
+    focusChip.current = true;
     onPick(item);
     onQueryChange("");
     setActive(-1);
@@ -112,6 +121,7 @@ export function SearchCombobox<T>({
       className="relative flex flex-col gap-1"
       onBlur={(event) => {
         if (wrapperRef.current?.contains(event.relatedTarget)) return;
+        setDismissed(true);
         setEditing(false);
         if (selectedLabel !== null) onQueryChange("");
         setActive(-1);
@@ -123,10 +133,13 @@ export function SearchCombobox<T>({
           <Chip
             label={selectedLabel}
             onActivate={() => setEditing(true)}
-            onClear={() => {
-              onClear();
-              setEditing(true);
-            }}
+            onClear={
+              onClear &&
+              (() => {
+                onClear();
+                setEditing(true);
+              })
+            }
           />
         </div>
       ) : (

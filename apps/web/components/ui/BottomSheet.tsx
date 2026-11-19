@@ -16,6 +16,8 @@ export function BottomSheet({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  // 누르기가 배경(<dialog> 자체)에서 시작됐는지. 패널에서 글을 끌어 선택하다 배경에서 놓아도 닫지 않는다.
+  const pressedBackdrop = useRef(false);
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -36,9 +38,14 @@ export function BottomSheet({
         event.preventDefault();
         onClose();
       }}
-      // 패딩은 안쪽 래퍼에 둔다. <dialog> 자체를 누른 클릭만 배경이다.
+      // 패딩은 안쪽 래퍼에 둔다. <dialog> 자체에서 누르고 놓은 클릭만 배경이다.
+      onPointerDown={(event) => {
+        pressedBackdrop.current = event.target === event.currentTarget;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        const fromBackdrop = pressedBackdrop.current;
+        pressedBackdrop.current = false;
+        if (fromBackdrop && event.target === event.currentTarget) onClose();
       }}
       onSubmit={(event) => event.stopPropagation()}
       className="fixed inset-x-0 bottom-0 m-0 max-h-[90vh] w-full max-w-none overflow-y-auto rounded-t-2xl border-t border-line bg-surface text-text backdrop:bg-black/60 motion-safe:animate-[sheet-up_200ms_ease-out]"

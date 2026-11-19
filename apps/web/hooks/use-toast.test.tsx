@@ -39,7 +39,7 @@ describe("useToast + Toast", () => {
     expect(screen.getByRole("status")).toHaveTextContent("사진을 뺐어요");
     await user.click(screen.getByRole("button", { name: "실행 취소" }));
     expect(onAction).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("TOAST_MS 뒤 저절로 사라지고 새 show는 이전 것을 바꾼다", async () => {
@@ -51,6 +51,16 @@ describe("useToast + Toast", () => {
     act(() => {
       vi.advanceTimersByTime(TOAST_MS);
     });
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it("알림_영역은_뜨기_전부터_있고_글만_바뀐다", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<Harness />);
+    const status = screen.getByRole("status");
+    expect(status).toBeEmptyDOMElement();
+    await user.click(screen.getByRole("button", { name: "열기" }));
+    expect(screen.getByRole("status")).toBe(status);
+    expect(status).toHaveTextContent("사진을 뺐어요");
   });
 });

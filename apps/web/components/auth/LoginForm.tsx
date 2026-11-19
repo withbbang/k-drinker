@@ -47,7 +47,7 @@ export function LoginForm() {
           onChange={(event) =>
             setCode(event.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))
           }
-          className="rounded-md border border-neutral-300 bg-white px-3 py-2.5 text-center text-2xl font-semibold tracking-[0.5em] tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
+          className="rounded-field border border-line bg-surface px-3 py-2.5 text-text placeholder:text-muted text-center text-2xl font-semibold tracking-[0.5em] tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         />
       </label>
       <button
@@ -58,7 +58,7 @@ export function LoginForm() {
         로그인
       </button>
       {login.isError && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-danger">
           {login.error instanceof ApiError
             ? login.error.message
             : FALLBACK_ERROR}

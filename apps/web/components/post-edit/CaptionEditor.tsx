@@ -54,6 +54,16 @@ export function CaptionEditor({
   const tailRef = useRef<HTMLTextAreaElement>(null);
   const lastField = useRef<Field | null>(null);
   const pendingCursor = useRef<{ field: Field; pos: number } | null>(null);
+  // 칸마다 마지막 선택 범위. 미리보기에 다녀오면 칸이 새로 그려져 커서가 사라지므로 기억해 둔다.
+  const selection = useRef<
+    Record<Field, { start: number; end: number } | null>
+  >({ head: null, tail: null });
+  const remember = (field: Field, el: HTMLTextAreaElement) => {
+    selection.current[field] = {
+      start: el.selectionStart,
+      end: el.selectionEnd,
+    };
+  };
   const over = preview.length > MAX_CAPTION_LENGTH;
 
   // 부모가 새 값을 내려준 뒤에 커서를 넣은 글 뒤로 옮긴다.
@@ -63,6 +73,10 @@ export function CaptionEditor({
     pendingCursor.current = null;
     const el = (pending.field === "head" ? headRef : tailRef).current;
     el?.setSelectionRange(pending.pos, pending.pos);
+    selection.current[pending.field] = {
+      start: pending.pos,
+      end: pending.pos,
+    };
   }, [head, tail]);
 
   const insert = (name: string) => {
@@ -71,10 +85,19 @@ export function CaptionEditor({
     const untouched = lastField.current === null;
     const el = (field === "head" ? headRef : tailRef).current;
     const value = field === "head" ? head : tail;
+    const saved = selection.current[field];
+    // 칸에 포커스가 있으면 지금 선택을, 아니면 기억해 둔 선택을 쓴다.
+    const live = el !== null && document.activeElement === el;
     const start = untouched
       ? value.length
-      : (el?.selectionStart ?? value.length);
-    const end = untouched ? value.length : (el?.selectionEnd ?? value.length);
+      : live
+        ? el.selectionStart
+        : Math.min(saved?.start ?? value.length, value.length);
+    const end = untouched
+      ? value.length
+      : live
+        ? el.selectionEnd
+        : Math.min(saved?.end ?? value.length, value.length);
     const next = value.slice(0, start) + name + value.slice(end);
     pendingCursor.current = { field, pos: start + name.length };
     (field === "head" ? onHeadChange : onTailChange)(next);
@@ -114,7 +137,12 @@ export function CaptionEditor({
               value={head}
               disabled={disabled}
               onFocus={() => (lastField.current = "head")}
-              onBlur={onFieldBlur}
+              onSelect={(event) => remember("head", event.currentTarget)}
+              onKeyUp={(event) => remember("head", event.currentTarget)}
+              onBlur={(event) => {
+                remember("head", event.currentTarget);
+                onFieldBlur();
+              }}
               onChange={(event) => onHeadChange(event.target.value)}
               className={BARE}
             />
@@ -127,7 +155,12 @@ export function CaptionEditor({
               value={tail}
               disabled={disabled}
               onFocus={() => (lastField.current = "tail")}
-              onBlur={onFieldBlur}
+              onSelect={(event) => remember("tail", event.currentTarget)}
+              onKeyUp={(event) => remember("tail", event.currentTarget)}
+              onBlur={(event) => {
+                remember("tail", event.currentTarget);
+                onFieldBlur();
+              }}
               onChange={(event) => onTailChange(event.target.value)}
               className={BARE}
             />

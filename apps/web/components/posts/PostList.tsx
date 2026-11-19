@@ -19,7 +19,8 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELED: "취소됨",
 };
 
-const ROW = "flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm";
+const ROW =
+  "flex items-center gap-3 rounded-lg border border-line bg-surface p-3 text-text";
 
 function pageOf(value: string | null): number {
   const n = Number(value);
@@ -37,16 +38,16 @@ function PostRow({ post }: { post: PostSummaryResponse }) {
           className="size-16 shrink-0 rounded-md object-cover"
         />
       ) : (
-        <span className="size-16 shrink-0 rounded-md bg-neutral-200" />
+        <span className="size-16 shrink-0 rounded-thumb bg-line" />
       )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate font-medium">
           {post.drinkName ?? "이름 미확인"}
         </span>
-        <span className="text-sm text-neutral-700">
+        <span className="text-sm text-muted">
           {post.rating !== null ? `★ ${post.rating.toFixed(1)}` : "별점 없음"}
         </span>
-        <span className="flex gap-2 text-xs text-neutral-700">
+        <span className="flex gap-2 text-xs text-muted">
           <span>{STATUS_LABELS[post.status] ?? post.status}</span>
           <span>{formatDate(post.createdAt)}</span>
         </span>
@@ -66,11 +67,11 @@ export function PostList() {
   const posts = usePosts(page);
 
   if (posts.isPending) {
-    return <p className="text-sm text-neutral-700">불러오는 중…</p>;
+    return <p className="text-sm text-muted">불러오는 중…</p>;
   }
   if (posts.isError) {
     return (
-      <p role="alert" className="text-sm text-red-700">
+      <p role="alert" className="text-sm text-danger">
         {posts.error instanceof ApiError
           ? posts.error.message
           : "기록을 불러오지 못했습니다."}
@@ -81,7 +82,7 @@ export function PostList() {
   return (
     <div className="flex flex-col gap-4">
       {items.length === 0 ? (
-        <p className="text-sm text-neutral-700">아직 기록이 없습니다.</p>
+        <p className="text-sm text-muted">아직 기록이 없습니다.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((post) => (

@@ -30,4 +30,30 @@ describe("BottomSheet", () => {
     fireEvent.submit(screen.getByRole("form", { name: "안쪽" }));
     expect(outer).not.toHaveBeenCalled();
   });
+
+  it("패널_안에서_누른_채_배경에서_놓으면_닫지_않는다", () => {
+    const onClose = vi.fn();
+    render(
+      <BottomSheet title="양조장" onClose={onClose}>
+        <p>내용</p>
+      </BottomSheet>,
+    );
+    const dialog = screen.getByRole("dialog", { name: "양조장" });
+    fireEvent.pointerDown(screen.getByText("내용"));
+    fireEvent.click(dialog);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("배경에서_누르고_놓으면_닫는다", () => {
+    const onClose = vi.fn();
+    render(
+      <BottomSheet title="양조장" onClose={onClose}>
+        <p>내용</p>
+      </BottomSheet>,
+    );
+    const dialog = screen.getByRole("dialog", { name: "양조장" });
+    fireEvent.pointerDown(dialog);
+    fireEvent.click(dialog);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

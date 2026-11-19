@@ -149,4 +149,10 @@ describe("LoginForm", () => {
     await userEvent.type(input, "6");
     expect(submit).toBeEnabled();
   });
+
+  it("코드_입력칸은_어두운_토큰_색을_쓴다", () => {
+    const { input } = renderForm();
+    expect(input).not.toHaveClass("bg-white");
+    expect(input).toHaveClass("bg-surface", "text-text");
+  });
 });

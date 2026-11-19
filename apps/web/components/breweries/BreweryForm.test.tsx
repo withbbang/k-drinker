@@ -159,4 +159,12 @@ describe("BreweryForm", () => {
       screen.queryByText("저장했습니다. 다음 게시물부터 이 정보가 쓰입니다."),
     ).toBeNull();
   });
+
+  it("입력칸은_어두운_토큰_색을_쓴다", () => {
+    setup();
+    for (const input of screen.getAllByRole("textbox")) {
+      expect(input).not.toHaveClass("bg-white");
+      expect(input).toHaveClass("bg-surface", "text-text");
+    }
+  });
 });

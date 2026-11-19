@@ -178,6 +178,13 @@ function Editor({ post, onSave }: EditorProps) {
     }));
 
   const handleDrinkChange = (next: DrinkChoice) => {
+    // 같은 술을 다시 고르면 바뀐 게 없으므로 되돌리기 단계를 만들지 않는다.
+    if (
+      next.drinkId === drink.drinkId &&
+      next.newDrinkName === drink.newDrinkName
+    ) {
+      return;
+    }
     // 새 이름 칸에 글자만 친 경우는 글자 입력으로 묶는다.
     const typingName =
       next.drinkId === drink.drinkId &&
@@ -307,6 +314,7 @@ function Editor({ post, onSave }: EditorProps) {
         <BreweryPicker
           disabled={!hasDrink}
           brewery={base}
+          clearable={picked !== null}
           onPick={(next) => change((prev) => ({ ...prev, picked: next }))}
         />
         <RatingInput

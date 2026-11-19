@@ -43,6 +43,7 @@ function Harness({ initial = null }: { initial?: BreweryResponse | null }) {
       <BreweryPicker
         disabled={false}
         brewery={brewery}
+        clearable={brewery !== null}
         onPick={(next) => {
           onPick(next);
           setBrewery(next);
