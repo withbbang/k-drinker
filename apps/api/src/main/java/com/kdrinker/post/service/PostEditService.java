@@ -29,6 +29,7 @@ import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostStatus;
+import com.kdrinker.post.event.DrinkBreweryChangedEvent;
 import com.kdrinker.post.event.PostHandedOverEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
@@ -126,11 +127,15 @@ public class PostEditService {
 			NewCaption caption = decideCaption(id, req, snapshot);
 			tx.executeWithoutResult(status -> {
 				photoStager.registerRollbackCleanup(written);
-				save(id, req, snapshot, caption, staged, written);
+				Long breweryChangedDrinkId = save(id, req, snapshot, caption, staged, written);
 				if (postRepository.transition(id, snapshot.status(), PostStatus.PENDING_REVIEW, snapshot.version(),
 						clock.instant()) == 0) {
 					status.setRollbackOnly();
 					throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
+				}
+				if (breweryChangedDrinkId != null) {
+					// 전이(영속성 컨텍스트 비움) 뒤에 낸다. 같은 술을 쓰는 다른 게시물은 BreweryCaptionSync가 처리한다.
+					events.publishEvent(new DrinkBreweryChangedEvent(breweryChangedDrinkId, req.breweryId(), id));
 				}
 				if (snapshot.channel() == PostChannel.TELEGRAM) {
 					events.publishEvent(new PostHandedOverEvent(id));
@@ -229,7 +234,9 @@ public class PostEditService {
 			Target target = resolveTarget(post, req.drinkId(), req.newDrinkName(), req.breweryId());
 			CaptionParts parts = new CaptionParts(req.captionHead().strip(), req.captionTail().strip());
 			boolean templated = Placeholders.isTemplate(post.getCaption());
-			String stored = templated ? parts.joinTemplate() : parts.join(target.brewery());
+			String stored = templated ? parts.joinTemplate()
+					: legacyParts(parts, CaptionParts.split(post.getCaption()), post.getRating(), req.rating())
+							.join(target.brewery());
 			CaptionValues values = CaptionValues.of(target.drinkName(), target.drink(), target.brewery(), req.rating());
 			return new CaptionPreviewResponse(CaptionAssembler.render(stored, values),
 					CaptionAssembler.length(stored, values), templated);
@@ -289,20 +296,35 @@ public class PostEditService {
 		if (snapshot.template()) {
 			return new NewCaption(edited.joinTemplate(), edited.tail(), textEdited);
 		}
-		CaptionParts parts = editedNow ? edited : edited.withRating(snapshot.rating(), req.rating());
+		CaptionParts parts = legacyParts(edited, snapshot.parts(), snapshot.rating(), req.rating());
 		return new NewCaption(parts.join(snapshot.captionBrewery()), parts.tail(), textEdited);
 	}
 
-	/** 4단계: 전이 전에 고칠 필드를 모두 고친다. 예외가 나면 템플릿이 롤백하고 파일은 그대로다. */
-	private void save(Long id, PostUpdateRequest req, Snapshot snapshot, NewCaption caption,
+	/** 이름표 없는 캡션: 이번에 문장을 고치지 않았으면(저장된 것과 같으면) 머리 끝 별점 블록을 새 별점으로 맞춘다. 저장·미리보기가 같이 쓴다. */
+	private static CaptionParts legacyParts(CaptionParts edited, CaptionParts stored, BigDecimal before,
+			BigDecimal after) {
+		return edited.equals(stored) ? edited.withRating(before, after) : edited;
+	}
+
+	/**
+	 * 4단계: 전이 전에 고칠 필드를 모두 고친다. 예외가 나면 템플릿이 롤백하고 파일은 그대로다.
+	 *
+	 * @return 이번 저장으로 양조장이 바뀐 술의 id. 바뀌지 않았으면 null.
+	 */
+	private Long save(Long id, PostUpdateRequest req, Snapshot snapshot, NewCaption caption,
 			Map<Integer, PhotoStager.Staged> staged, List<String> written) {
 		Post post = postRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.COMMON_NOT_FOUND));
 		if (post.getStatus() != snapshot.status() || post.getVersion() != snapshot.version()) {
 			throw new BusinessException(ErrorCode.POST_VERSION_CONFLICT);
 		}
 		Drink drink = resolveDrink(post, req, snapshot);
+		Long breweryChangedDrinkId = null;
 		if (req.breweryId() != null && drink != null) {
+			Long before = drink.getBrewery() == null ? null : drink.getBrewery().getId();
 			drink.changeBrewery(findBrewery(req.breweryId()));
+			if (!req.breweryId().equals(before)) {
+				breweryChangedDrinkId = drink.getId();
+			}
 		}
 		post.assignDrink(drink);
 		post.recordRating(req.rating());
@@ -315,6 +337,7 @@ public class PostEditService {
 		post.clearFailure();
 		// 웹에서 저장한 순간부터 웹 담당이다. 텔레그램 개요 버튼은 커밋 뒤 리스너가 지운다.
 		post.moveToWeb();
+		return breweryChangedDrinkId;
 	}
 
 	private Drink resolveDrink(Post post, PostUpdateRequest req, Snapshot snapshot) {

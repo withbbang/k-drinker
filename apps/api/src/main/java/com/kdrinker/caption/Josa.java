@@ -7,6 +7,8 @@ public final class Josa {
 	private static final int HANGUL_END = 0xD7A3;
 	private static final int JONG_RIEUL = 8;
 	private static final String BATCHIM_DIGITS = "013678";
+	/** 일·칠·팔은 ㄹ 받침이다. */
+	private static final String RIEUL_DIGITS = "178";
 
 	private Josa() {
 	}
@@ -39,7 +41,7 @@ public final class Josa {
 			return jong == JONG_RIEUL ? Batchim.RIEUL : Batchim.OTHER;
 		}
 		if (cp < 128 && BATCHIM_DIGITS.indexOf(cp) >= 0) {
-			return Batchim.OTHER;
+			return RIEUL_DIGITS.indexOf(cp) >= 0 ? Batchim.RIEUL : Batchim.OTHER;
 		}
 		return Batchim.NONE;
 	}

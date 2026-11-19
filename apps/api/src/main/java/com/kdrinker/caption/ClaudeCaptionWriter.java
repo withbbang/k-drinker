@@ -78,10 +78,11 @@ public class ClaudeCaptionWriter implements CaptionWriter {
 	private static String labelLines(LabelResult l) {
 		List<String> lines = new ArrayList<>();
 		if (l != null) {
-			line(lines, "술 이름", l.drinkName());
-			line(lines, "종류", l.category());
-			line(lines, "도수", l.abv() == null ? null : abv(l.abv()) + "%");
-			line(lines, "용량", l.volumeMl() == null ? null : l.volumeMl() + "ml");
+			// 이름표로 채울 값은 비어도 '없음'으로 넘겨 그 이름표를 쓰지 않게 한다.
+			lineOrNone(lines, "술 이름", l.drinkName());
+			lineOrNone(lines, "종류", l.category());
+			lineOrNone(lines, "도수", l.abv() == null ? null : abv(l.abv()) + "%");
+			lineOrNone(lines, "용량", l.volumeMl() == null ? null : l.volumeMl() + "ml");
 			line(lines, "맛 노트", l.tasteNotes());
 			line(lines, "페어링", l.pairing());
 		}
@@ -105,6 +106,10 @@ public class ClaudeCaptionWriter implements CaptionWriter {
 		line(lines, "홈페이지", b.getHomepage());
 		line(lines, "인스타그램", b.getInstagramHandle());
 		return String.join("\n", lines) + "\n";
+	}
+
+	private static void lineOrNone(List<String> lines, String key, String value) {
+		lines.add(key + ": " + (value == null || value.isBlank() ? "없음" : neutral(value)));
 	}
 
 	private static void line(List<String> lines, String key, String value) {

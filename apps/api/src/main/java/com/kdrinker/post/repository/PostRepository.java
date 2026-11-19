@@ -55,6 +55,16 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 			""")
 	List<Long> findEditableIdsByBreweryId(@Param("breweryId") Long breweryId);
 
+	/** 술의 양조장이 바뀌면 캡션에 반영돼야 하는 게시물 id. 조건은 {@link #findEditableIdsByBreweryId}와 같다. */
+	@Query("""
+			select p.id from Post p
+			 where p.drink.id = :drinkId and p.caption is not null
+			   and (p.status = com.kdrinker.post.entity.PostStatus.PENDING_REVIEW
+			        or (p.status = com.kdrinker.post.entity.PostStatus.FAILED and p.igContainerId is null))
+			 order by p.id
+			""")
+	List<Long> findEditableIdsByDrinkId(@Param("drinkId") Long drinkId);
+
 	@EntityGraph(attributePaths = { "drink", "drink.brewery" })
 	Page<Post> findAllByOrderByIdDesc(Pageable pageable);
 

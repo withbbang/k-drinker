@@ -8,18 +8,20 @@ import com.kdrinker.caption.Placeholders;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostStatus;
+import com.kdrinker.post.event.DrinkBreweryChangedEvent;
 import com.kdrinker.post.event.PostHandedOverEvent;
 import com.kdrinker.post.repository.PostRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * 양조장이 수정되면 대기 중인 게시물의 캡션 양조장 블록을 새 값으로 바꾼다(이름표 캡션은 문자열을 두고 버전·담당만 처리). 양조장 수정 트랜잭션 안에서 동기로 돈다.
- * 텔레그램 담당 게시물은 웹 담당으로 넘기고 {@link PostHandedOverEvent} 를 발행한다.
+ * 양조장이 수정되거나 웹 수정 저장이 술의 양조장을 바꾸면 대기 중인 게시물의 캡션 양조장 블록을 새 값으로 바꾼다(이름표 캡션은 문자열을 두고
+ * 버전·담당만 처리). 그 수정 트랜잭션 안에서 동기로 돈다. 텔레그램 담당 게시물은 웹 담당으로 넘기고 {@link PostHandedOverEvent} 를 발행한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -36,7 +38,23 @@ public class BreweryCaptionSync {
 		if (brewery == null) {
 			return;
 		}
-		for (Long id : postRepository.findEditableIdsByBreweryId(event.breweryId())) {
+		sync(postRepository.findEditableIdsByBreweryId(event.breweryId()), brewery);
+	}
+
+	/** 술의 양조장이 바뀌면 그 술을 쓰는 다른 대기 게시물의 채운 캡션이 바뀐다. 저장한 게시물은 저장이 이미 처리했으므로 뺀다. */
+	@EventListener
+	public void onDrinkBreweryChanged(DrinkBreweryChangedEvent event) {
+		Brewery brewery = breweryRepository.findById(event.breweryId()).orElse(null);
+		if (brewery == null) {
+			return;
+		}
+		sync(postRepository.findEditableIdsByDrinkId(event.drinkId()).stream()
+				.filter(id -> !id.equals(event.savedPostId()))
+				.toList(), brewery);
+	}
+
+	private void sync(List<Long> ids, Brewery brewery) {
+		for (Long id : ids) {
 			Post post = postRepository.findById(id).orElse(null);
 			if (post == null || !CaptionParts.hasBreweryBlock(post.getCaption())) {
 				continue;

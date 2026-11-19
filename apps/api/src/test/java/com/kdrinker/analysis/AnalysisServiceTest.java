@@ -23,6 +23,8 @@ import com.kdrinker.brewery.entity.BrewerySource;
 import com.kdrinker.brewery.repository.BreweryRepository;
 import com.kdrinker.caption.BreweryBlock;
 import com.kdrinker.caption.CaptionDraft;
+import com.kdrinker.caption.CaptionInput;
+import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.caption.CaptionWriter;
 import com.kdrinker.caption.DraftTag;
 import com.kdrinker.caption.Hashtags;
@@ -49,6 +51,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.AfterEach;
@@ -439,6 +442,71 @@ class AnalysisServiceTest {
 		// then
 		Long breweryId = tx.execute(s -> drinkRepository.findById(drinkId).orElseThrow().getBrewery().getId());
 		assertThat(breweryId).isEqualTo(old.getId());
+	}
+
+	/** 캡션 작성(Claude 입력·글자 수)에 넘긴 값이 게시물에 이은 술로 채울 값과 같은지. */
+	private CaptionInput composedInputMatchesLinkedDrink(Long postId) {
+		ArgumentCaptor<CaptionInput> input = ArgumentCaptor.forClass(CaptionInput.class);
+		verify(captionWriter).write(input.capture());
+		CaptionInput in = input.getValue();
+		Map<String, String> filled = tx.execute(s -> {
+			Post post = postRepository.findById(postId).orElseThrow();
+			return CaptionValues.of(post.getDrink(), post.getRating()).asMap();
+		});
+		assertThat(CaptionValues.of(in.label(), in.brewery(), in.rating()).asMap()).isEqualTo(filled);
+		return in;
+	}
+
+	@Test
+	void 기존_술이면_캡션은_그_술의_값과_양조장으로_만든다() {
+		// given: 도수·종류·용량이 비어 있고 다른 양조장에 이어진 기존 술
+		Brewery old = breweryRepository.save(Brewery.of("옛양조장", "옛양조장", BrewerySource.PUBLIC_DATA));
+		drinkRepository.save(Drink.of("새술", "새술", old));
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", new BigDecimal("4.5")));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		CaptionInput in = composedInputMatchesLinkedDrink(f.postId());
+		assertThat(in.label().abv()).isNull();
+		assertThat(in.label().category()).isNull();
+		assertThat(in.label().volumeMl()).isNull();
+		assertThat(in.label().tasteNotes()).isEqualTo("달콤함");
+		assertThat(in.brewery().getName()).isEqualTo("옛양조장");
+	}
+
+	@Test
+	void 양조장이_없던_기존_술이면_캡션은_이번에_찾은_양조장으로_만든다() {
+		// given
+		Drink existing = Drink.of("새술", "새술", null);
+		existing.updateSpec("약주", new BigDecimal("13.0"), 375, null);
+		drinkRepository.save(existing);
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		CaptionInput in = composedInputMatchesLinkedDrink(f.postId());
+		assertThat(in.label().abv()).isEqualByComparingTo("13.0");
+		assertThat(in.brewery().getName()).isEqualTo("새술양조장");
+	}
+
+	@Test
+	void 새_술이면_캡션은_라벨_값으로_만든다() {
+		// given
+		Fixture f = post(PostStatus.RECEIVED, null);
+		givenPortsSucceed(label("새술", null));
+
+		// when
+		analysisService.analyze(f.postId(), PostStatus.RECEIVED);
+
+		// then
+		CaptionInput in = composedInputMatchesLinkedDrink(f.postId());
+		assertThat(in.label().abv()).isEqualByComparingTo("6.0");
 	}
 
 	@Test

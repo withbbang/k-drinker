@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -213,7 +214,10 @@ public class AnalysisService {
 		}
 		Brewery brewery = breweryMatcher.match(label).orElse(null);
 		BigDecimal rating = snapshot.rating() != null ? snapshot.rating() : label.rating();
-		ComposedCaption composed = captionService.compose(new CaptionInput(label, rating, brewery, snapshot.memo()));
+		// 캡션은 게시물에 이을 술(기존 술이면 그 값과 양조장)로 만든다. 채울 때도 그 술의 값을 쓰기 때문이다.
+		Resolved resolved = tx.execute(status -> resolve(label, brewery));
+		ComposedCaption composed = captionService.compose(new CaptionInput(resolved.captionLabel(), rating,
+				resolved.captionBrewery(), snapshot.memo()));
 		AtomicBoolean committed = new AtomicBoolean();
 		try {
 			tx.executeWithoutResult(status -> {
@@ -224,7 +228,7 @@ public class AnalysisService {
 						committed.set(true);
 					}
 				});
-				save(postId, snapshot, label, brewery, rating, composed);
+				save(postId, snapshot, label, brewery, rating, composed, resolved.drinkId());
 			});
 		} catch (RuntimeException e) {
 			if (!committed.get()) {
@@ -256,12 +260,30 @@ public class AnalysisService {
 		return raw.sanitized(images.size());
 	}
 
-	/** 6단계: 술 연결·별점·캡션·상자 렌더링을 고친 뒤 ANALYZING → PENDING_REVIEW. */
-	private void save(Long postId, Snapshot snapshot, LabelResult label, Brewery brewery, BigDecimal rating,
-			ComposedCaption composed) {
-		Post post = postRepository.findById(postId).orElseThrow();
+	/**
+	 * 게시물에 이을 기존 술을 찾고, 캡션 작성에 넘길 값을 그 술로 맞춘다. 기존 술이면 이름·종류·도수·용량은 그 술의 값(빈 값은 비운 채),
+	 * 양조장은 그 술의 양조장(없으면 이번에 찾은 양조장, 저장 때 이어진다)이다. 새 술이면 라벨 값과 찾은 양조장 그대로다.
+	 */
+	private Resolved resolve(LabelResult label, Brewery matched) {
 		Optional<Drink> existing = breweryLookup.findDrink(label.drinkName())
 				.or(() -> lowestIdOfSameName(label.drinkName()));
+		if (existing.isEmpty()) {
+			return new Resolved(null, label, matched);
+		}
+		Drink drink = existing.get();
+		LabelResult captionLabel = new LabelResult(drink.getName(), drink.getCategory(), drink.getAbv(),
+				drink.getVolumeMl(), label.breweryName(), label.rating(), label.tasteNotes(), label.pairing(),
+				label.boxes());
+		// 트랜잭션 밖(Claude 호출)에서 읽으므로 지연 로딩 프록시가 아닌 실제 엔티티를 넘긴다.
+		Brewery captionBrewery = drink.getBrewery() == null ? matched : (Brewery) Hibernate.unproxy(drink.getBrewery());
+		return new Resolved(drink.getId(), captionLabel, captionBrewery);
+	}
+
+	/** 6단계: 술 연결·별점·캡션·상자 렌더링을 고친 뒤 ANALYZING → PENDING_REVIEW. drinkId는 캡션을 맞춘 기존 술(없으면 null). */
+	private void save(Long postId, Snapshot snapshot, LabelResult label, Brewery brewery, BigDecimal rating,
+			ComposedCaption composed, Long drinkId) {
+		Post post = postRepository.findById(postId).orElseThrow();
+		Optional<Drink> existing = drinkId == null ? Optional.empty() : drinkRepository.findById(drinkId);
 		Drink drink = existing.orElseGet(() -> createDrink(label, brewery));
 		if (existing.isPresent() && brewery != null) {
 			drink.linkBreweryIfMissing(breweryRepository.getReferenceById(brewery.getId()));
@@ -326,6 +348,10 @@ public class AnalysisService {
 	}
 
 	private record PhotoRef(Long id, String originalPath) {
+	}
+
+	/** 이을 기존 술 id(새 술이면 null)와 캡션 작성에 넘길 값. */
+	private record Resolved(Long drinkId, LabelResult captionLabel, Brewery captionBrewery) {
 	}
 
 	private record Snapshot(String memo, BigDecimal rating, List<PhotoRef> photos) {

@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -42,6 +43,7 @@ import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostPhoto;
 import com.kdrinker.post.entity.PostSource;
 import com.kdrinker.post.entity.PostStatus;
+import com.kdrinker.post.event.DrinkBreweryChangedEvent;
 import com.kdrinker.post.event.PostHandedOverEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
@@ -56,6 +58,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -367,6 +370,39 @@ class PostEditServiceTest {
 	}
 
 	@Test
+	void 양조장을_바꾸면_같은_술을_쓰는_다른_게시물_동기화_이벤트를_전이_뒤에_낸다() {
+		// when
+		service.update(POST_ID, request(11L, "훅\n\n★4.0", keepPhotos()), List.of());
+
+		// then
+		InOrder order = inOrder(postRepository, events);
+		order.verify(postRepository).transition(eq(POST_ID), any(), eq(PostStatus.PENDING_REVIEW), eq(VERSION), any());
+		order.verify(events).publishEvent(new DrinkBreweryChangedEvent(20L, 11L, POST_ID));
+	}
+
+	@Test
+	void 양조장이_그대로면_동기화_이벤트를_내지_않는다() {
+		// when
+		service.update(POST_ID, request(10L, "훅\n\n★4.0", keepPhotos()), List.of());
+
+		// then
+		verify(events, never()).publishEvent(any(DrinkBreweryChangedEvent.class));
+	}
+
+	@Test
+	void 전이가_충돌하면_동기화_이벤트를_내지_않는다() {
+		// given
+		when(postRepository.transition(eq(POST_ID), any(), eq(PostStatus.PENDING_REVIEW), eq(VERSION), any()))
+				.thenReturn(0);
+
+		// when
+		errorOf(() -> service.update(POST_ID, request(11L, "훅\n\n★4.0", keepPhotos()), List.of()));
+
+		// then
+		verify(events, never()).publishEvent(any(DrinkBreweryChangedEvent.class));
+	}
+
+	@Test
 	void drinkChange_doesNotCallClaude() {
 		// given: 이름표 캡션 + 술 변경 + 문장 그대로
 		String template = "훅 {술이름}\n\n{별점}\n\n" + BreweryBlock.TEMPLATE + "\n\n#막걸리";
@@ -673,6 +709,35 @@ class PostEditServiceTest {
 		verifyNoInteractions(captionService);
 		verify(postRepository, never()).save(any());
 		verify(postRepository, never()).transition(any(), any(), any(), anyInt(), any());
+	}
+
+	@Test
+	void preview_legacyCaption_followsRatingLikeSave() {
+		// given: 이름표 없는 캡션(★4.0)에서 별점만 5.0으로 바꾼다
+		CaptionPreviewRequest req = new CaptionPreviewRequest(null, null, null, new BigDecimal("5.0"), "훅\n\n★4.0",
+				"#막걸리");
+
+		// when
+		CaptionPreviewResponse res = service.preview(POST_ID, req);
+		service.update(POST_ID, ratingChange(new BigDecimal("5.0"), "훅\n\n★4.0"), List.of());
+
+		// then
+		assertThat(res.templated()).isFalse();
+		assertThat(res.caption()).contains("★5.0").doesNotContain("★4.0");
+		assertThat(res.caption()).isEqualTo(CaptionAssembler.render(post.getCaption(), CaptionValues.EMPTY));
+	}
+
+	@Test
+	void preview_legacyCaption_editedText_keepsRatingLine() {
+		// given: 문장을 고친 경우 저장처럼 별점 줄을 그대로 둔다
+		CaptionPreviewRequest req = new CaptionPreviewRequest(null, null, null, new BigDecimal("5.0"),
+				"내가 고친 훅\n\n★4.0", "#막걸리");
+
+		// when
+		CaptionPreviewResponse res = service.preview(POST_ID, req);
+
+		// then
+		assertThat(res.caption()).contains("★4.0").doesNotContain("★5.0");
 	}
 
 	@Test

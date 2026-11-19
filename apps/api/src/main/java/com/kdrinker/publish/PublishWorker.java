@@ -2,6 +2,7 @@ package com.kdrinker.publish;
 
 import com.kdrinker.caption.CaptionAssembler;
 import com.kdrinker.caption.CaptionValues;
+import com.kdrinker.caption.Placeholders;
 import com.kdrinker.instagram.InstagramApiException;
 import com.kdrinker.instagram.InstagramClient;
 import com.kdrinker.instagram.InstagramClient.ContainerStatus;
@@ -155,9 +156,12 @@ public class PublishWorker {
 		for (PostPhoto photo : photos) {
 			urls.add(photoService.publicUrl(photo));
 		}
-		String caption = post.getCaption() == null ? "" : CaptionAssembler.render(post.getCaption(),
-				CaptionValues.of(post.getDrink(), post.getRating()));
-		return new Snapshot(caption, post.getIgContainerId(), urls);
+		// 이름표를 채운 글(마커는 둔다). 컨테이너를 만들 때 이 글로 캡션을 고정해 이후 술·양조장 수정이 게시된 글을 바꾸지 않게 한다.
+		CaptionValues values = CaptionValues.of(post.getDrink(), post.getRating());
+		String filled = post.getCaption() == null ? null : Placeholders.fill(post.getCaption(), values);
+		String filledHashtags = post.getHashtags() == null ? null : Placeholders.fill(post.getHashtags(), values);
+		String caption = filled == null ? "" : CaptionAssembler.stripMarkers(filled);
+		return new Snapshot(caption, filled, filledHashtags, post.getIgContainerId(), urls);
 	}
 
 	private void run(Long postId, Snapshot snapshot) throws InterruptedException {
@@ -217,7 +221,14 @@ public class PublishWorker {
 		}
 		// publish 전에 커밋한다. 이후 어디서 죽어도 재시도가 이 컨테이너의 상태를 확인할 수 있다.
 		String saved = containerId;
-		tx.executeWithoutResult(status -> postRepository.findById(postId).orElseThrow().recordContainer(saved));
+		// 보낸 캡션을 같은 트랜잭션에서 고정한다(이름표를 채운 글로 바꾼다).
+		tx.executeWithoutResult(status -> {
+			Post post = postRepository.findById(postId).orElseThrow();
+			post.recordContainer(saved);
+			if (snapshot.filledCaption() != null) {
+				post.replaceCaption(snapshot.filledCaption(), snapshot.filledHashtags(), post.isCaptionEdited());
+			}
+		});
 		return containerId;
 	}
 
@@ -298,7 +309,9 @@ public class PublishWorker {
 		return PublishFailure.UNKNOWN;
 	}
 
-	private record Snapshot(String caption, String containerId, List<String> imageUrls) {
+	/** caption은 보낼 글(마커 없음), filledCaption·filledHashtags는 고정해 저장할 글(마커 있음). */
+	private record Snapshot(String caption, String filledCaption, String filledHashtags, String containerId,
+			List<String> imageUrls) {
 	}
 
 	/** 사유가 정해진 실패. 스택트레이스가 필요 없다. */

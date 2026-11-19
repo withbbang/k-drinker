@@ -18,4 +18,15 @@ class JosaTest {
 		assertThat(Josa.pick("약주7", "이(가)")).isEqualTo("이");
 		assertThat(Josa.pick("ABC", "은(는)")).isEqualTo("는");
 	}
+
+	@Test
+	void 숫자_1_7_8은_ㄹ_받침이라_으로로에서_로를_고른다() {
+		assertThat(Josa.pick("막걸리1", "으로(로)")).isEqualTo("로");
+		assertThat(Josa.pick("8", "으로(로)")).isEqualTo("로");
+		assertThat(Josa.pick("7", "으로(로)")).isEqualTo("로");
+		assertThat(Josa.pick("3", "으로(로)")).isEqualTo("으로");
+		assertThat(Josa.pick("0", "으로(로)")).isEqualTo("으로");
+		assertThat(Josa.pick("6", "으로(로)")).isEqualTo("으로");
+		assertThat(Josa.pick("1", "은(는)")).isEqualTo("은");
+	}
 }

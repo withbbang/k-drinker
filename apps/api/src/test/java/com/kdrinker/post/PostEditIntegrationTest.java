@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.kdrinker.brewery.entity.Brewery;
+import com.kdrinker.brewery.entity.BrewerySource;
+import com.kdrinker.brewery.repository.BreweryRepository;
 import com.kdrinker.caption.BreweryBlock;
 import com.kdrinker.drink.entity.Drink;
 import com.kdrinker.drink.repository.DrinkRepository;
@@ -73,6 +76,9 @@ class PostEditIntegrationTest {
 	private DrinkRepository drinkRepository;
 
 	@Autowired
+	private BreweryRepository breweryRepository;
+
+	@Autowired
 	private JdbcTemplate jdbc;
 
 	@MockitoBean
@@ -92,6 +98,8 @@ class PostEditIntegrationTest {
 		jdbc.update("DELETE FROM post_photo");
 		jdbc.update("DELETE FROM post");
 		jdbc.update("DELETE FROM drink");
+		jdbc.update("DELETE FROM brewery_alias");
+		jdbc.update("DELETE FROM brewery");
 	}
 
 	private record Saved(Long postId, int version, List<PostPhoto> photos) {
@@ -296,5 +304,51 @@ class PostEditIntegrationTest {
 		// then
 		assertThat(postRepository.findById(saved.postId()).orElseThrow().getCaption()).isEqualTo(template);
 		assertThat(detail.publishCaption()).contains("새술").doesNotContain("옛술").doesNotContain("{술이름}");
+	}
+
+	@Test
+	void 양조장을_바꿔_저장하면_같은_술을_쓰는_다른_대기_게시물은_웹_담당이_되고_버전이_오른다() throws IOException {
+		// given: A와 B가 같은 술을 쓴다. B는 텔레그램 담당 이름표 캡션, C는 이름표 없는 캡션이다
+		Brewery oldBrewery = breweryRepository.saveAndFlush(Brewery.of("옛양조장", "옛양조장", BrewerySource.MANUAL));
+		Brewery newBrewery = breweryRepository.saveAndFlush(Brewery.of("새양조장", "새양조장", BrewerySource.MANUAL));
+		Drink shared = drinkRepository.saveAndFlush(Drink.of("같은술", "같은술", oldBrewery));
+		Saved a = savePost();
+		Post postA = postRepository.findById(a.postId()).orElseThrow();
+		postA.assignDrink(shared);
+		postA.writeCaption("훅\n\n" + BreweryBlock.TEMPLATE, "", null, null);
+		postRepository.saveAndFlush(postA);
+		int versionA = postRepository.findById(a.postId()).orElseThrow().getVersion();
+		Long b = otherPost(shared, "훅 {술이름}\n\n" + BreweryBlock.TEMPLATE + "\n\n#태그");
+		Long c = otherPost(shared, "훅\n\n" + BreweryBlock.render(oldBrewery) + "\n\n#태그");
+		int versionB = postRepository.findById(b).orElseThrow().getVersion();
+		int versionC = postRepository.findById(c).orElseThrow().getVersion();
+		List<PhotoEdit> keep = a.photos().stream().map(p -> new PhotoEdit(p.getId(), null, FitMode.CROP)).toList();
+		PostUpdateRequest req = new PostUpdateRequest(versionA, null, null, newBrewery.getId(), null, "메모", "훅", "",
+				keep);
+
+		// when
+		postEditService.update(a.postId(), req, List.of());
+
+		// then
+		Post afterA = postRepository.findById(a.postId()).orElseThrow();
+		assertThat(afterA.getVersion()).isEqualTo(versionA + 1);
+		Post afterB = postRepository.findById(b).orElseThrow();
+		assertThat(afterB.getVersion()).isEqualTo(versionB + 1);
+		assertThat(afterB.getChannel()).isEqualTo(PostChannel.WEB);
+		assertThat(afterB.getCaption()).isEqualTo("훅 {술이름}\n\n" + BreweryBlock.TEMPLATE + "\n\n#태그");
+		verify(postNotifier).handOverToWeb(b);
+		verify(postNotifier, never()).handOverToWeb(a.postId());
+		Post afterC = postRepository.findById(c).orElseThrow();
+		assertThat(afterC.getVersion()).isEqualTo(versionC + 1);
+		assertThat(afterC.getCaption()).contains("새양조장").doesNotContain("옛양조장");
+	}
+
+	/** 같은 술을 쓰는 텔레그램 담당 검토 대기 게시물(사진 없음). */
+	private Long otherPost(Drink drink, String caption) {
+		Post post = Post.receive(PostSource.TELEGRAM, "메모", null, CLOCK);
+		ReflectionTestUtils.setField(post, "status", PostStatus.PENDING_REVIEW);
+		post.assignDrink(drink);
+		post.writeCaption(caption, "#태그", null, null);
+		return postRepository.saveAndFlush(post).getId();
 	}
 }

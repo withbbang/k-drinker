@@ -13,6 +13,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kdrinker.drink.entity.Drink;
+import com.kdrinker.drink.repository.DrinkRepository;
 import com.kdrinker.instagram.InstagramApiException;
 import com.kdrinker.instagram.InstagramClient;
 import com.kdrinker.instagram.InstagramClient.ContainerStatus;
@@ -26,6 +28,7 @@ import com.kdrinker.post.entity.PostStatus;
 import com.kdrinker.post.event.PostPublishFinishedEvent;
 import com.kdrinker.post.repository.PostPhotoRepository;
 import com.kdrinker.post.repository.PostRepository;
+import com.kdrinker.post.service.PostQueryService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -63,6 +66,12 @@ class PublishWorkerTest {
 	private PostPhotoRepository photoRepository;
 
 	@Autowired
+	private DrinkRepository drinkRepository;
+
+	@Autowired
+	private PostQueryService postQueryService;
+
+	@Autowired
 	private JdbcTemplate jdbc;
 
 	@Autowired
@@ -84,6 +93,7 @@ class PublishWorkerTest {
 	void setUp() {
 		jdbc.update("DELETE FROM post_photo");
 		jdbc.update("DELETE FROM post");
+		jdbc.update("DELETE FROM drink");
 		when(tokenService.currentToken()).thenReturn(TOKEN);
 		when(photoService.publicUrl(any())).thenAnswer(inv -> "https://img/" + ((PostPhoto) inv.getArgument(0)).getPosition());
 	}
@@ -92,6 +102,7 @@ class PublishWorkerTest {
 	void tearDown() {
 		jdbc.update("DELETE FROM post_photo");
 		jdbc.update("DELETE FROM post");
+		jdbc.update("DELETE FROM drink");
 	}
 
 	private Long post(int photos, String containerId) {
@@ -166,6 +177,35 @@ class PublishWorkerTest {
 		ArgumentCaptor<String> caption = ArgumentCaptor.forClass(String.class);
 		verify(client).createImageContainer(eq(TOKEN), eq("https://img/0"), eq(false), caption.capture());
 		assertThat(caption.getValue()).isEqualTo("본문 ★4.0\n\n#태그").doesNotContain("{");
+	}
+
+	@Test
+	void 게시하면_채운_캡션을_저장해_이후_술_수정이_게시된_캡션을_바꾸지_않는다() {
+		// given
+		Drink drink = drinkRepository.saveAndFlush(Drink.of("옛술", "옛술", null));
+		Long id = post(1, null, "{술이름} 본문\n\n<!--brewery-->\n<!--brewery-->\n\n#{술이름태그}", null);
+		Post post = reload(id);
+		post.assignDrink(drink);
+		post.writeCaption(post.getCaption(), "#{술이름태그}", null, null);
+		postRepository.saveAndFlush(post);
+		when(client.createImageContainer(eq(TOKEN), eq("https://img/0"), eq(false), anyString())).thenReturn("c1");
+		when(client.containerStatus(TOKEN, "c1")).thenReturn(ContainerStatus.FINISHED);
+		when(client.publish(TOKEN, "c1")).thenReturn("m1");
+		when(client.permalink(TOKEN, "m1")).thenReturn(Optional.empty());
+
+		// when
+		worker.publish(id);
+		jdbc.update("UPDATE drink SET name = '새술' WHERE id = ?", drink.getId());
+
+		// then
+		ArgumentCaptor<String> caption = ArgumentCaptor.forClass(String.class);
+		verify(client).createImageContainer(eq(TOKEN), eq("https://img/0"), eq(false), caption.capture());
+		assertThat(caption.getValue()).isEqualTo("옛술 본문\n\n#옛술");
+		Post after = reload(id);
+		assertThat(after.getStatus()).isEqualTo(PostStatus.PUBLISHED);
+		assertThat(after.getCaption()).isEqualTo("옛술 본문\n\n<!--brewery-->\n<!--brewery-->\n\n#옛술");
+		assertThat(after.getHashtags()).isEqualTo("#옛술");
+		assertThat(postQueryService.detail(id).publishCaption()).isEqualTo(caption.getValue());
 	}
 
 	@Test

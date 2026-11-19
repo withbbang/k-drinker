@@ -98,6 +98,20 @@ class ClaudeCaptionWriterTest {
 		assertThat(requestText("6.5")).contains("도수: 6.5%");
 		assertThat(requestText("6.50")).contains("도수: 6.5%");
 		assertThat(requestText("40")).contains("도수: 40%").doesNotContain("4E+1");
-		assertThat(requestText(null)).doesNotContain("도수:");
+		assertThat(requestText(null)).contains("도수: 없음");
+	}
+
+	@Test
+	void 비는_술_값은_없음으로_넘긴다() {
+		// given
+		LabelResult l = new LabelResult("화요41", null, null, null, null, null, null, null, List.of());
+
+		// when
+		String text = body(writer.request(new CaptionInput(l, null, null, "m"), null, 0).build()).get("messages")
+				.toString();
+
+		// then
+		assertThat(text).contains("술 이름: 화요41").contains("종류: 없음").contains("도수: 없음").contains("용량: 없음")
+				.doesNotContain("맛 노트").doesNotContain("페어링");
 	}
 }
