@@ -6,11 +6,14 @@ import { BreweryForm } from "@/components/breweries/BreweryForm";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { ApiError } from "@/lib/api";
 
-const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
+const { apiFetchMock, replaceMock } = vi.hoisted(() => ({
+  apiFetchMock: vi.fn(),
+  replaceMock: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/breweries/new",
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: replaceMock }),
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/api", async (importOriginal) => ({
@@ -26,9 +29,22 @@ function setup() {
   );
 }
 
+const BREWERY = {
+  id: 3,
+  name: "국순당",
+  address: null,
+  phone: null,
+  homepage: null,
+  instagramHandle: null,
+  otherSns: null,
+  source: "MANUAL",
+  verified: false,
+};
+
 describe("BreweryForm", () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
+    replaceMock.mockReset();
   });
 
   it("requires a name", async () => {
@@ -80,9 +96,7 @@ describe("BreweryForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
     expect(
-      await screen.findByText(
-        "저장했습니다. 다음 게시물부터 이 정보가 쓰입니다.",
-      ),
+      await screen.findByText("저장했어요. 다음 게시물부터 이 정보가 쓰여요."),
     ).toBeInTheDocument();
     const [path, init] = apiFetchMock.mock.calls[0];
     expect(path).toBe("/api/v1/breweries");
@@ -114,9 +128,7 @@ describe("BreweryForm", () => {
 
     await userEvent.type(screen.getByLabelText("이름"), "국순당");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
-    await screen.findByText(
-      "저장했습니다. 다음 게시물부터 이 정보가 쓰입니다.",
-    );
+    await screen.findByText("저장했어요. 다음 게시물부터 이 정보가 쓰여요.");
     await userEvent.type(screen.getByLabelText("전화"), "02-123");
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
 
@@ -156,7 +168,7 @@ describe("BreweryForm", () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved));
     expect(
-      screen.queryByText("저장했습니다. 다음 게시물부터 이 정보가 쓰입니다."),
+      screen.queryByText("저장했어요. 다음 게시물부터 이 정보가 쓰여요."),
     ).toBeNull();
   });
 
@@ -166,5 +178,42 @@ describe("BreweryForm", () => {
       expect(input).not.toHaveClass("bg-white");
       expect(input).toHaveClass("bg-surface", "text-text");
     }
+  });
+
+  it("칸마다_맞는_키보드", () => {
+    setup();
+    expect(screen.getByLabelText("전화")).toHaveAttribute("type", "tel");
+    expect(screen.getByLabelText("홈페이지")).toHaveAttribute("type", "url");
+    expect(screen.getByLabelText("인스타그램")).toHaveAttribute(
+      "placeholder",
+      "@ 없이 아이디만",
+    );
+  });
+
+  it("새로_만들면_상세_주소로_옮긴다", async () => {
+    apiFetchMock.mockResolvedValue({ ...BREWERY, id: 7 });
+    setup();
+
+    await userEvent.type(screen.getByLabelText("이름"), "국순당");
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1));
+    expect(replaceMock).toHaveBeenCalledWith("/breweries/7");
+  });
+
+  it("있는_양조장을_저장하면_머문다", async () => {
+    apiFetchMock.mockResolvedValue(BREWERY);
+    render(
+      <QueryProvider>
+        <BreweryForm brewery={BREWERY} />
+      </QueryProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    expect(
+      await screen.findByText("저장했어요. 다음 게시물부터 이 정보가 쓰여요."),
+    ).toBeInTheDocument();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 });

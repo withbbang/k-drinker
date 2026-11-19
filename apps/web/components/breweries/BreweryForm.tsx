@@ -1,20 +1,52 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import {
+  useState,
+  type FormEvent,
+  type HTMLInputTypeAttribute,
+  type HTMLInputAutoCompleteAttribute,
+} from "react";
 
+import { buttonClass } from "@/components/ui/button";
 import { useSaveBrewery } from "@/hooks/use-breweries";
 import { ApiError } from "@/lib/api";
 import type { BreweryRequest, BreweryResponse } from "@/types/api/brewery";
 
 type FieldName = keyof BreweryRequest;
 
-const FIELDS: [FieldName, string][] = [
-  ["name", "이름"],
-  ["address", "주소"],
-  ["phone", "전화"],
-  ["homepage", "홈페이지"],
-  ["instagramHandle", "인스타그램"],
-  ["otherSns", "기타 SNS"],
+type FieldDef = {
+  name: FieldName;
+  label: string;
+  type?: HTMLInputTypeAttribute;
+  inputMode?: "tel" | "url";
+  autoComplete?: HTMLInputAutoCompleteAttribute;
+  placeholder?: string;
+};
+
+const FIELDS: FieldDef[] = [
+  { name: "name", label: "이름" },
+  { name: "address", label: "주소" },
+  {
+    name: "phone",
+    label: "전화",
+    type: "tel",
+    inputMode: "tel",
+    autoComplete: "tel",
+  },
+  {
+    name: "homepage",
+    label: "홈페이지",
+    type: "url",
+    inputMode: "url",
+    autoComplete: "url",
+  },
+  {
+    name: "instagramHandle",
+    label: "인스타그램",
+    placeholder: "@ 없이 아이디만",
+  },
+  { name: "otherSns", label: "기타 SNS" },
 ];
 
 const INPUT =
@@ -42,6 +74,7 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
   const [savedId, setSavedId] = useState<number | null>(brewery?.id ?? null);
   const [nameError, setNameError] = useState(false);
   const save = useSaveBrewery(savedId);
+  const router = useRouter();
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -66,6 +99,8 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
         onSuccess: (saved) => {
           setSavedId(saved.id);
           onSaved?.(saved);
+          // 새로 만든 양조장은 상세 화면으로 옮긴다(시트·수정에서는 머문다).
+          if (!brewery && !onSaved) router.replace(`/breweries/${saved.id}`);
         },
       },
     );
@@ -77,14 +112,14 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-      {FIELDS.map(([name, label]) => {
+      {FIELDS.map(({ name, label, ...inputProps }) => {
         const reason =
           name === "name" && nameError
             ? "이름을 입력해 주세요."
             : fieldReason(name);
         return (
           <label key={name} className="flex flex-col gap-1">
-            <span className="text-sm">{label}</span>
+            <span className="text-sm text-muted">{label}</span>
             <input
               value={values[name]}
               onChange={(event) =>
@@ -92,6 +127,7 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
               }
               aria-invalid={reason ? true : undefined}
               className={INPUT}
+              {...inputProps}
             />
             {reason && <span className="text-sm text-danger">{reason}</span>}
           </label>
@@ -99,21 +135,23 @@ export function BreweryForm({ brewery, onSaved }: BreweryFormProps) {
       })}
       {save.isError && (
         <p role="alert" className="text-sm text-danger">
-          {apiError ? apiError.message : "저장하지 못했습니다."}
+          {apiError ? apiError.message : "저장하지 못했어요."}
         </p>
       )}
       {save.isSuccess && !onSaved && (
         <p role="status" className="text-sm text-accent">
-          저장했습니다. 다음 게시물부터 이 정보가 쓰입니다.
+          저장했어요. 다음 게시물부터 이 정보가 쓰여요.
         </p>
       )}
-      <button
-        type="submit"
-        disabled={save.isPending}
-        className="rounded-md bg-neutral-900 px-4 py-3 text-white disabled:opacity-40"
-      >
-        저장
-      </button>
+      <div className="sticky bottom-0 bg-inherit pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <button
+          type="submit"
+          disabled={save.isPending}
+          className={buttonClass("primary", "w-full")}
+        >
+          저장
+        </button>
+      </div>
     </form>
   );
 }
