@@ -233,6 +233,7 @@ export function PostEditForm({ id }: { id: string }) {
     );
   }
 
-  // 저장 뒤 새 버전이 오면 폼 상태를 서버 값으로 다시 채운다.
-  return <Editor key={post.data.version} post={post.data} onSave={update} />;
+  // 게시물 id로만 키를 둔다. 양조장 시트 저장 등으로 다시 불러와 version이 바뀌어도 입력이 남는다.
+  // 저장 요청의 version과 양조장 블록은 Editor가 받은 최신 post에서 읽는다.
+  return <Editor key={post.data.id} post={post.data} onSave={update} />;
 }

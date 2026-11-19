@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -85,7 +86,9 @@ function setup(detail: PostDetailResponse) {
 
 function putCalls(): FormData[] {
   return apiFetchMock.mock.calls
-    .filter(([, init]) => init?.method === "PUT")
+    .filter(
+      ([path, init]) => path === "/api/v1/posts/7" && init?.method === "PUT",
+    )
     .map(([, init]) => init.body as FormData);
 }
 
@@ -268,6 +271,11 @@ describe("PostEditForm", () => {
     let detail = initial;
     apiFetchMock.mockImplementation(
       async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/breweries/6" && init?.method === "PUT") {
+          // 양조장을 고치면 서버가 대기 게시물 캡션을 갱신하며 version을 올린다.
+          detail = { ...detail, version: detail.version + 1 };
+          return other;
+        }
         if (path === "/api/v1/breweries/6") return other;
         if (path?.startsWith("/api/v1/breweries?")) {
           return {
@@ -356,6 +364,40 @@ describe("PostEditForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "저장" }));
     await waitFor(() => expect(putCalls()).toHaveLength(1));
     const body = (await putBodies())[0];
+    expect(body.drinkId).toBe(11);
+    expect(body.memo).toBe("새 메모");
+  });
+
+  it("keeps unsaved input and uses the new version after a sheet save refetches the post", async () => {
+    setupSearch(post());
+    await userEvent.type(await screen.findByLabelText("술 검색"), "청");
+    await userEvent.click(await screen.findByRole("option", { name: /청주/ }));
+    await screen.findByText("선택한 양조장: 배상면주가");
+    await userEvent.clear(screen.getByLabelText("메모"));
+    await userEvent.type(screen.getByLabelText("메모"), "새 메모");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "양조장 정보 고치기" }),
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "저장" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // 시트 저장 뒤 다시 불러온 게시물(version 5)이 반영될 때까지 기다린다.
+    await waitFor(() =>
+      expect(
+        apiFetchMock.mock.calls.filter(([path]) => path === "/api/v1/posts/7")
+          .length,
+      ).toBeGreaterThan(1),
+    );
+
+    expect(screen.getByLabelText("메모")).toHaveValue("새 메모");
+    expect(screen.getByLabelText("술 검색")).toBeInTheDocument();
+    expect(screen.getByText("선택한 양조장: 배상면주가")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    const body = (await putBodies())[0];
+    expect(body.version).toBe(5);
     expect(body.drinkId).toBe(11);
     expect(body.memo).toBe("새 메모");
   });
