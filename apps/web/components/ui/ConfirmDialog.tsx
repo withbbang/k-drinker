@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
+import { buttonClass } from "@/components/ui/button";
+
 type ConfirmDialogProps = {
   title: string;
   confirmLabel: string;
@@ -40,7 +42,7 @@ export function ConfirmDialog({
         if (event.target === event.currentTarget && !pending) onClose();
       }}
       aria-labelledby={titleId}
-      className="m-auto w-[min(90vw,24rem)] rounded-lg backdrop:bg-black/40"
+      className="m-auto w-[min(90vw,24rem)] rounded-2xl border border-line bg-surface text-text backdrop:bg-black/60"
     >
       <div className="p-5">
         <h2 id={titleId} className="mb-3 font-semibold">
@@ -52,7 +54,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onClose}
             disabled={pending}
-            className="flex-1 rounded-md border border-neutral-300 px-4 py-2.5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+            className={buttonClass("secondary", "flex-1")}
           >
             {cancelLabel}
           </button>
@@ -60,7 +62,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={pending}
-            className="flex-1 rounded-md bg-neutral-900 px-4 py-2.5 font-semibold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+            className={buttonClass("primary", "flex-1")}
           >
             {confirmLabel}
           </button>
