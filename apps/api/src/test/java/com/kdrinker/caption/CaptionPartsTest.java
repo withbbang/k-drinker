@@ -62,4 +62,11 @@ class CaptionPartsTest {
 		// then
 		assertThat(joined).isEqualTo(stored);
 	}
+
+	@Test
+	void joinTemplate_머리_틀_꼬리를_빈_줄로_잇는다() {
+		assertThat(new CaptionParts("훅", "#막걸리").joinTemplate())
+				.isEqualTo("훅\n\n" + BreweryBlock.TEMPLATE + "\n\n#막걸리");
+		assertThat(new CaptionParts("", "").joinTemplate()).isEqualTo(BreweryBlock.TEMPLATE);
+	}
 }

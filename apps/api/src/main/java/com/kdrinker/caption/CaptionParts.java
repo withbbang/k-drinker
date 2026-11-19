@@ -72,4 +72,17 @@ public record CaptionParts(String head, String tail) {
 		}
 		return String.join("\n\n", blocks);
 	}
+
+	/** 머리, 이름표 양조장 블록({@link BreweryBlock#TEMPLATE}), 꼬리를 빈 줄로 잇는다. 빈 조각은 뺀다. */
+	public String joinTemplate() {
+		List<String> blocks = new ArrayList<>();
+		if (!head.isEmpty()) {
+			blocks.add(head);
+		}
+		blocks.add(BreweryBlock.TEMPLATE);
+		if (!tail.isEmpty()) {
+			blocks.add(tail);
+		}
+		return String.join("\n\n", blocks);
+	}
 }

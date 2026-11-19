@@ -4,6 +4,7 @@ import com.kdrinker.brewery.entity.Brewery;
 import com.kdrinker.brewery.event.BreweryUpdatedEvent;
 import com.kdrinker.brewery.repository.BreweryRepository;
 import com.kdrinker.caption.CaptionParts;
+import com.kdrinker.caption.Placeholders;
 import com.kdrinker.post.entity.Post;
 import com.kdrinker.post.entity.PostChannel;
 import com.kdrinker.post.entity.PostStatus;
@@ -17,7 +18,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * 양조장이 수정되면 대기 중인 게시물의 캡션 양조장 블록을 새 값으로 바꾼다. 양조장 수정 트랜잭션 안에서 동기로 돈다.
+ * 양조장이 수정되면 대기 중인 게시물의 캡션 양조장 블록을 새 값으로 바꾼다(이름표 캡션은 문자열을 두고 버전·담당만 처리). 양조장 수정 트랜잭션 안에서 동기로 돈다.
  * 텔레그램 담당 게시물은 웹 담당으로 넘기고 {@link PostHandedOverEvent} 를 발행한다.
  */
 @Component
@@ -40,8 +41,10 @@ public class BreweryCaptionSync {
 			if (post == null || !CaptionParts.hasBreweryBlock(post.getCaption())) {
 				continue;
 			}
-			String caption = CaptionParts.split(post.getCaption()).join(brewery);
-			if (caption.equals(post.getCaption())) {
+			// 이름표 캡션은 문자열을 그대로 둔다. 채운 글이 양조장 값에 따라 바뀌므로 버전·담당 처리는 한다.
+			boolean template = Placeholders.isTemplate(post.getCaption());
+			String caption = template ? post.getCaption() : CaptionParts.split(post.getCaption()).join(brewery);
+			if (!template && caption.equals(post.getCaption())) {
 				continue;
 			}
 			PostStatus status = post.getStatus();

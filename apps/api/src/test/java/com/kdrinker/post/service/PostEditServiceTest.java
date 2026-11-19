@@ -356,39 +356,59 @@ class PostEditServiceTest {
 	}
 
 	@Test
-	void 캡션을_안_고치고_양조장을_바꾸면_다시_생성한다() {
-		// given
-		String regenerated = "새 훅\n\n" + BreweryBlock.render(hwayo) + "\n\n#화요";
-		when(captionService.compose(any())).thenReturn(new ComposedCaption(regenerated, "#화요"));
-
+	void 캡션을_안_고치고_양조장을_바꿔도_Claude를_부르지_않는다() {
 		// when
 		service.update(POST_ID, request(11L, "훅\n\n★4.0", keepPhotos()), List.of());
 
 		// then
-		ArgumentCaptor<CaptionInput> input = ArgumentCaptor.forClass(CaptionInput.class);
-		verify(captionService).compose(input.capture());
-		assertThat(input.getValue().label().drinkName()).isEqualTo("막걸리");
-		assertThat(input.getValue().label().breweryName()).isEqualTo("화요");
-		assertThat(input.getValue().label().tasteNotes()).isEqualTo("달다");
-		assertThat(input.getValue().label().boxes()).isEmpty();
-		assertThat(input.getValue().brewery().getName()).isEqualTo("화요");
-		assertThat(post.getCaption()).isEqualTo(regenerated);
-		assertThat(post.getHashtags()).isEqualTo("#화요");
+		verifyNoInteractions(captionService);
+		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅\n\n★4.0", "#막걸리").join(hwayo));
 		assertThat(post.isCaptionEdited()).isFalse();
 	}
 
 	@Test
-	void 재생성이_실패하면_양조장_블록만_바꿔_저장한다() {
-		// given
-		when(captionService.compose(any())).thenThrow(new ClaudeUnavailableException("down"));
+	void drinkChange_doesNotCallClaude() {
+		// given: 이름표 캡션 + 술 변경 + 문장 그대로
+		String template = "훅 {술이름}\n\n{별점}\n\n" + BreweryBlock.TEMPLATE + "\n\n#막걸리";
+		post.writeCaption(template, "#막걸리", "달다", "전");
+		drinkOf(hwayo);
 
 		// when
-		service.update(POST_ID, request(11L, "훅\n\n★4.0", keepPhotos()), List.of());
+		service.update(POST_ID, drinkChange(21L, "훅 {술이름}\n\n{별점}"), List.of());
 
 		// then
-		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅\n\n★4.0", "#막걸리").join(hwayo));
+		verifyNoInteractions(captionService);
+		assertThat(post.getCaption()).isEqualTo(template);
+		assertThat(post.getDrink().getName()).isEqualTo("화요25");
 		assertThat(post.isCaptionEdited()).isFalse();
-		verify(events, never()).publishEvent(any(PostHandedOverEvent.class));
+	}
+
+	@Test
+	void drinkChange_legacyCaption_keepsText() {
+		// given
+		drinkOf(hwayo);
+
+		// when
+		service.update(POST_ID, drinkChange(21L), List.of());
+
+		// then
+		verifyNoInteractions(captionService);
+		assertThat(post.getCaption()).isEqualTo(new CaptionParts("훅\n\n★4.0", "#막걸리").join(hwayo));
+	}
+
+	@Test
+	void missingCaption_stillGenerates() {
+		// given
+		post = uncaptionedFailedPost();
+		String composed = "새 훅\n\n" + BreweryBlock.TEMPLATE + "\n\n#막걸리";
+		when(captionService.compose(any())).thenReturn(new ComposedCaption(composed, "#막걸리"));
+
+		// when
+		service.update(POST_ID, captionless(""), List.of());
+
+		// then
+		verify(captionService, times(1)).compose(any());
+		assertThat(post.getCaption()).isEqualTo(composed);
 	}
 
 	@Test
@@ -538,7 +558,6 @@ class PostEditServiceTest {
 		// given
 		when(drinkRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 		when(breweryRepository.getReferenceById(10L)).thenReturn(kooksoondang);
-		when(captionService.compose(any())).thenReturn(new ComposedCaption("새 캡션", ""));
 		PostUpdateRequest req = new PostUpdateRequest(VERSION, null, " 생막걸리 ", null, new BigDecimal("4.0"),
 				"메모", "훅\n\n★4.0", "#막걸리", keepPhotos());
 
@@ -549,7 +568,7 @@ class PostEditServiceTest {
 		assertThat(post.getDrink().getName()).isEqualTo("생막걸리");
 		assertThat(post.getDrink().getNormalizedName()).isEqualTo("생막걸리");
 		assertThat(post.getDrink().getBrewery()).isSameAs(kooksoondang);
-		verify(captionService).compose(any());
+		verifyNoInteractions(captionService);
 	}
 
 	@Test
@@ -592,7 +611,11 @@ class PostEditServiceTest {
 	}
 
 	private PostUpdateRequest drinkChange(Long drinkId) {
-		return new PostUpdateRequest(VERSION, drinkId, null, null, new BigDecimal("4.0"), "메모", "훅\n\n★4.0",
+		return drinkChange(drinkId, "훅\n\n★4.0");
+	}
+
+	private PostUpdateRequest drinkChange(Long drinkId, String head) {
+		return new PostUpdateRequest(VERSION, drinkId, null, null, new BigDecimal("4.0"), "메모", head,
 				"#막걸리", keepPhotos());
 	}
 
@@ -611,7 +634,6 @@ class PostEditServiceTest {
 	void 술을_바꿔_저장해도_양조장_레코드는_바뀌지_않는다() {
 		// given
 		drinkOf(hwayo);
-		when(captionService.compose(any())).thenReturn(new ComposedCaption("새 캡션", ""));
 
 		// when
 		service.update(POST_ID, drinkChange(21L), List.of());

@@ -137,6 +137,22 @@ class BreweryCaptionSyncTest {
 	}
 
 	@Test
+	void templateCaption_notRewritten() {
+		Brewery brewery = saveBrewery("옛 주소");
+		String template = "훅\n\n" + BreweryBlock.TEMPLATE + "\n\n#태그";
+		Post saved = savePost(brewery, PostStatus.PENDING_REVIEW, PostSource.TELEGRAM, template);
+		int version = saved.getVersion();
+
+		changeAddress(brewery, "새 주소");
+
+		Post after = postRepository.findById(saved.getId()).orElseThrow();
+		assertThat(after.getCaption()).isEqualTo(template);
+		assertThat(after.getVersion()).isEqualTo(version + 1);
+		assertThat(after.getChannel()).isEqualTo(PostChannel.WEB);
+		assertThat(applicationEvents.stream(PostHandedOverEvent.class)).containsExactly(new PostHandedOverEvent(saved.getId()));
+	}
+
+	@Test
 	void skipsCaptionWithBrokenMarkers() {
 		Brewery brewery = saveBrewery("옛 주소");
 		String broken = "훅\n\n" + BreweryBlock.MARKER + "\n📍 옛 주소\n\n#태그";

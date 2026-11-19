@@ -11,6 +11,7 @@ import com.kdrinker.caption.CaptionParts;
 import com.kdrinker.caption.CaptionService;
 import com.kdrinker.caption.CaptionValues;
 import com.kdrinker.caption.ComposedCaption;
+import com.kdrinker.caption.Placeholders;
 import com.kdrinker.common.BusinessException;
 import com.kdrinker.common.ErrorCode;
 import com.kdrinker.common.Names;
@@ -163,9 +164,7 @@ public class PostEditService {
 		}
 
 		Drink currentDrink = post.getDrink();
-		Long currentDrinkId = currentDrink == null ? null : currentDrink.getId();
 		Brewery currentBrewery = currentDrink == null ? null : currentDrink.getBrewery();
-		Long currentBreweryId = currentBrewery == null ? null : currentBrewery.getId();
 
 		Drink targetDrink;
 		String drinkName;
@@ -201,11 +200,8 @@ public class PostEditService {
 				targetDrink == null ? null : targetDrink.getAbv(), targetDrink == null ? null : targetDrink.getVolumeMl(),
 				captionBrewery == null ? null : captionBrewery.getName(), req.rating(), post.getTasteNotes(),
 				post.getPairing(), List.of());
-		boolean identityChanged = req.newDrinkName() != null
-				|| !Objects.equals(targetDrink == null ? null : targetDrink.getId(), currentDrinkId)
-				|| !Objects.equals(targetBreweryId, currentBreweryId);
 		return new Snapshot(post.getStatus(), post.getVersion(), post.getChannel(), CaptionParts.split(post.getCaption()),
-				post.isCaptionEdited(), identityChanged, label, captionBrewery, targetBreweryId, post.getRating(),
+				post.isCaptionEdited(), Placeholders.isTemplate(post.getCaption()), label, captionBrewery, targetBreweryId, post.getRating(),
 				post.getCaption() == null || post.getCaption().isBlank());
 	}
 
@@ -238,29 +234,31 @@ public class PostEditService {
 	}
 
 	/**
-	 * 2·3단계: 직접 고친 캡션이거나 술·양조장이 그대로면 양조장 블록만 바꾼다. 아니면 트랜잭션 밖에서 다시 만든다.
-	 * 이번 요청에서 캡션 문장을 고치지 않았으면 머리 끝의 별점 블록도 새 별점으로 맞춘다.
-	 * 캡션이 없는 게시물(분석 단계 실패)은 사용자가 문장을 쓰지 않았으면 새로 만들고, 만들지 못하면 저장하지 않는다.
+	 * 2·3단계: Claude는 캡션이 없는 게시물(분석 단계 실패)에 사용자가 문장을 쓰지 않았을 때만 부르고(트랜잭션 밖),
+	 * 만들지 못하면 저장하지 않는다. 그 밖에는 문장을 다시 쓰지 않는다. 이름표 캡션이면 이름표 틀 그대로 두고,
+	 * 이름표 없는 기존 캡션이면 양조장 블록만 바꾸고 이번 요청에서 문장을 고치지 않았으면 머리 끝 별점 블록도 맞춘다.
 	 */
 	private NewCaption decideCaption(Long id, PostUpdateRequest req, Snapshot snapshot) {
 		CaptionParts edited = new CaptionParts(req.captionHead().strip(), req.captionTail().strip());
 		boolean editedNow = !edited.equals(snapshot.parts());
 		boolean textEdited = snapshot.captionEdited() || editedNow;
-		boolean generate = snapshot.captionMissing() ? !editedNow : snapshot.identityChanged() && !textEdited;
-		if (generate) {
+		if (snapshot.captionMissing() && !editedNow) {
 			try {
 				ComposedCaption composed = captionService.compose(new CaptionInput(snapshot.label(), req.rating(),
 						snapshot.captionBrewery(), req.memo()));
 				return new NewCaption(composed.caption(), composed.hashtags(), false);
 			} catch (ClaudeUnavailableException e) {
-				log.warn("캡션 재생성에 실패해 양조장 블록만 바꿉니다. postId={} cause={}", id, e.toString());
+				log.warn("캡션 생성에 실패했습니다. postId={} cause={}", id, e.toString());
 			}
 		}
-		CaptionParts parts = editedNow ? edited : edited.withRating(snapshot.rating(), req.rating());
 		if (snapshot.captionMissing() && edited.head().isEmpty()) {
 			// 본문 없는 캡션으로 검토 대기에 두면 [확인] 한 번에 빈 캡션이 게시된다.
 			throw new BusinessException(ErrorCode.COMMON_VALIDATION_FAILED);
 		}
+		if (snapshot.template()) {
+			return new NewCaption(edited.joinTemplate(), edited.tail(), textEdited);
+		}
+		CaptionParts parts = editedNow ? edited : edited.withRating(snapshot.rating(), req.rating());
 		return new NewCaption(parts.join(snapshot.captionBrewery()), parts.tail(), textEdited);
 	}
 
@@ -393,7 +391,7 @@ public class PostEditService {
 	}
 
 	private record Snapshot(PostStatus status, int version, PostChannel channel, CaptionParts parts, boolean captionEdited,
-			boolean identityChanged, LabelResult label, Brewery captionBrewery, Long targetBreweryId,
+			boolean template, LabelResult label, Brewery captionBrewery, Long targetBreweryId,
 			BigDecimal rating, boolean captionMissing) {
 	}
 
