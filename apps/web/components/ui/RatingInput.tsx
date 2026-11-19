@@ -11,7 +11,7 @@ type RatingInputProps = {
 export function RatingInput({ value, onChange, disabled }: RatingInputProps) {
   return (
     <label className="flex flex-col gap-2">
-      <span className="text-sm font-medium">별점</span>
+      <span className="text-sm font-medium text-text">별점</span>
       <select
         value={value === null ? "" : value.toFixed(1)}
         onChange={(event) =>
@@ -20,7 +20,7 @@ export function RatingInput({ value, onChange, disabled }: RatingInputProps) {
           )
         }
         disabled={disabled}
-        className="rounded-md border border-neutral-300 bg-white px-3 py-2.5 disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
+        className="rounded-field border border-line bg-surface px-3 py-2.5 text-text focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40"
       >
         <option value="">별점 없음</option>
         {STEPS.map((step) => (

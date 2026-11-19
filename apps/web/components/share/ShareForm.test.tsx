@@ -52,11 +52,29 @@ async function submit() {
   await userEvent.click(within(dialog).getByRole("button", { name: "보내기" }));
 }
 
-// 사진 N의 [빼기] → 확인 모달의 [빼기]
+// 사진 N의 [빼기]. 확인창 없이 바로 빠지고 토스트가 뜬다.
 async function removePhoto(n: number) {
-  await userEvent.click(screen.getByRole("button", { name: `사진 ${n} 빼기` }));
-  const dialog = await screen.findByRole("dialog");
-  await userEvent.click(within(dialog).getByRole("button", { name: "빼기" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: `${n}번째 사진 빼기` }),
+  );
+}
+
+// dnd-kit의 읽기용 live region도 role=status라 토스트 문구로 찾는다.
+function removedToast() {
+  return (
+    screen
+      .queryAllByRole("status")
+      .find((el) => el.textContent?.includes("사진을 뺐어요")) ?? null
+  );
+}
+
+// 보내기 안내 등 일반 알림은 문구로 찾는다.
+function noticeWith(text: string) {
+  return (
+    screen
+      .queryAllByRole("status")
+      .find((el) => el.textContent?.includes(text)) ?? null
+  );
 }
 
 function postCalls() {
@@ -307,13 +325,12 @@ describe("ShareForm", () => {
     renderForm();
 
     // then
-    const blocked = await screen.findByRole("button", {
-      name: "사진을 10장 이하로 줄여 주세요 (지금 11장)",
-    });
-    expect(blocked).toBeDisabled();
+    expect(
+      await screen.findByText("사진을 10장 이하로 줄여 주세요 (지금 11장)"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "보내기" })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: "메모" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "별점" })).toBeDisabled();
-    expect(screen.queryByText(/1장 이상 10장 이하/)).toBeNull();
 
     // when
     await removePhoto(1);
@@ -322,6 +339,7 @@ describe("ShareForm", () => {
     expect(screen.getByRole("button", { name: "보내기" })).toBeEnabled();
     expect(screen.getByRole("textbox", { name: "메모" })).toBeEnabled();
     expect(screen.getByRole("combobox", { name: "별점" })).toBeEnabled();
+    expect(screen.queryByText(/줄여 주세요/)).toBeNull();
   });
 
   it("disables remove on the last photo", async () => {
@@ -333,7 +351,7 @@ describe("ShareForm", () => {
 
     // then
     await screen.findAllByRole("img");
-    expect(screen.getByRole("button", { name: /빼기/ })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /빼기/ })).toBeNull();
   });
 
   it("does not send removed photos", async () => {
@@ -354,27 +372,85 @@ describe("ShareForm", () => {
     expect(names).toEqual(["p1.jpg", "p2.jpg"]);
   });
 
-  it("removes a photo only after confirmation", async () => {
+  it("사진을_빼면_토스트가_뜨고_실행_취소로_돌아온다", async () => {
     // given
     readMock.mockResolvedValue(photos(3));
     renderForm();
     await screen.findAllByRole("img");
 
-    // when — 취소
-    await userEvent.click(screen.getByRole("button", { name: "사진 2 빼기" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("이 사진을 뺄까요?");
-    await userEvent.click(within(dialog).getByRole("button", { name: "취소" }));
-
-    // then
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getAllByRole("img")).toHaveLength(3);
-
-    // when — 확인
+    // when
     await removePhoto(2);
 
     // then
     expect(screen.getAllByRole("img")).toHaveLength(2);
+    expect(removedToast()).not.toBeNull();
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "실행 취소" }));
+
+    // then
+    expect(screen.getAllByRole("img")).toHaveLength(3);
+    expect(removedToast()).toBeNull();
+  });
+
+  it("보내기_확인창의_메모가_줄바꿈을_지킨다", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "메모" }),
+      "a{Enter}b",
+    );
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "보내기" }));
+
+    // then
+    const dialog = await screen.findByRole("dialog");
+    const memo = within(dialog).getByText(
+      (_, el) => el?.textContent === "a\nb" && el.tagName === "DD",
+    );
+    expect(memo).toHaveClass("whitespace-pre-wrap");
+  });
+
+  it("메모도_되돌린다", async () => {
+    // given
+    readMock.mockResolvedValue(photos(1));
+    renderForm();
+    await screen.findAllByRole("img");
+    const memo = screen.getByRole("textbox", { name: "메모" });
+    await userEvent.type(memo, "좋음");
+
+    // when
+    await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
+
+    // then
+    expect(memo).toHaveValue("");
+  });
+
+  it("보내는_중엔_토스트의_실행_취소가_사진을_되돌리지_않는다", async () => {
+    // given — 전송 요청이 끝나지 않는다
+    apiFetchMock.mockImplementation((path: string) =>
+      path === "/api/v1/posts"
+        ? new Promise(() => undefined)
+        : Promise.resolve(undefined),
+    );
+    readMock.mockResolvedValue(photos(3));
+    renderForm();
+    await screen.findAllByRole("img");
+    await removePhoto(2);
+    const undoInToast = screen.getByRole("button", { name: "실행 취소" });
+
+    // when — 사진을 뺀 채 보내기를 시작하고 실행 취소를 누른다
+    await submit();
+    await waitFor(() => expect(postCalls()).toHaveLength(1));
+    if (undoInToast.isConnected) await userEvent.click(undoInToast);
+
+    // then — 보낸 요청과 화면이 같다
+    expect(removedToast()).toBeNull();
+    expect(screen.getAllByRole("img")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
   });
 
   it("restores a removed photo to its place on undo and redo", async () => {
@@ -419,19 +495,6 @@ describe("ShareForm", () => {
     expect(screen.getByRole("combobox", { name: "별점" })).toHaveValue("");
   });
 
-  it("does not record memo changes for undo", async () => {
-    // given
-    readMock.mockResolvedValue(photos(1));
-    renderForm();
-    await screen.findAllByRole("img");
-
-    // when
-    await userEvent.type(screen.getByRole("textbox", { name: "메모" }), "좋음");
-
-    // then
-    expect(screen.getByRole("button", { name: "되돌리기" })).toBeDisabled();
-  });
-
   it("appends added photos and notes the overflow", async () => {
     // given
     readMock.mockResolvedValue(photos(9));
@@ -449,16 +512,16 @@ describe("ShareForm", () => {
 
     // then
     expect(screen.getAllByRole("img")).toHaveLength(10);
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "사진은 10장까지 넣을 수 있어 2장은 넣지 않았습니다.",
-    );
+    expect(
+      noticeWith("사진은 10장까지 넣을 수 있어 2장은 넣지 않았습니다."),
+    ).not.toBeNull();
     expect(screen.queryByRole("button", { name: "사진 추가" })).toBeNull();
 
     // when — 다음 조작에서 안내가 사라진다
     await userEvent.click(screen.getByRole("button", { name: "되돌리기" }));
 
     // then
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(noticeWith("넣지 않았습니다")).toBeNull();
   });
 
   it("sends added photos in order after the shared ones", async () => {
