@@ -69,6 +69,21 @@ function setup(initial: BreweryResponse | null = null) {
   );
 }
 
+function renderPicker(items = [make(5, "국순당")]) {
+  apiFetchMock.mockResolvedValue({
+    items,
+    page: 0,
+    size: 20,
+    totalElements: items.length,
+    totalPages: items.length ? 1 : 0,
+  });
+  return render(
+    <QueryProvider>
+      <Harness />
+    </QueryProvider>,
+  );
+}
+
 const search = () => screen.getByRole("combobox", { name: "양조장 검색" });
 
 describe("BreweryPicker", () => {
@@ -107,6 +122,31 @@ describe("BreweryPicker", () => {
       await screen.findByText("‘없는양조장’에 대한 양조장이 없어요."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("keeps empty live regions in place before any search so readers announce later notices", () => {
+    // given / when
+    const { container } = renderPicker();
+
+    // then: 스크린리더는 내용이 든 채로 새로 붙은 라이브 영역을 읽지 않는 경우가 많다.
+    const polite = container.querySelector('[aria-live="polite"]');
+    const assertive = container.querySelector('[aria-live="assertive"]');
+    expect(polite).toBeEmptyDOMElement();
+    expect(assertive).toBeEmptyDOMElement();
+  });
+
+  it("writes the no-match notice into the polite live region", async () => {
+    // given
+    const { container } = renderPicker([]);
+
+    // when
+    await userEvent.type(search(), "없는양조장");
+
+    // then
+    await screen.findByText("‘없는양조장’에 대한 양조장이 없어요.");
+    expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      "‘없는양조장’에 대한 양조장이 없어요.",
+    );
   });
 
   it("hides the no-match notice while the search is still loading", async () => {
@@ -158,9 +198,11 @@ describe("BreweryPicker", () => {
       await vi.advanceTimersByTimeAsync(10_000);
 
       // then
-      expect(await screen.findByRole("alert")).toHaveTextContent(
-        "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      expect(
+        await screen.findByText(
+          "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        ),
+      ).toHaveAttribute("aria-live", "assertive");
       expect(screen.queryByText(/에 대한 양조장이 없어요/)).toBeNull();
     } finally {
       vi.useRealTimers();

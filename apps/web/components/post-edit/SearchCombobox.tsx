@@ -11,6 +11,10 @@ import {
 
 import { Chip } from "@/components/ui/Chip";
 
+// 결과 없음·오류 문구 상자. 목록과 같은 자리에 뜬다.
+const NOTICE_BOX =
+  "absolute top-full z-20 mt-1 w-full rounded-field border border-line bg-surface px-3 py-2.5 text-sm";
+
 type SearchComboboxProps<T> = {
   label: string;
   items: T[];
@@ -186,22 +190,21 @@ export function SearchCombobox<T>({
           />
         </>
       )}
-      {showError && (
-        <p
-          role="alert"
-          className="absolute top-full z-20 mt-1 w-full rounded-field border border-line bg-surface px-3 py-2.5 text-sm text-danger"
-        >
-          {errorText}
-        </p>
-      )}
-      {showEmpty && (
-        <p
-          role="status"
-          className="absolute top-full z-20 mt-1 w-full rounded-field border border-line bg-surface px-3 py-2.5 text-sm text-muted"
-        >
-          {emptyText}
-        </p>
-      )}
+      {/* 라이브 영역은 비워 둔 채 늘 두고 글자만 바꾼다.
+          내용이 든 채로 새로 붙으면 스크린리더가 읽지 않는 경우가 많다.
+          role 대신 aria-live만 둬서 폼의 다른 alert·status와 겹치지 않게 한다. */}
+      <p
+        aria-live="assertive"
+        className={showError ? `${NOTICE_BOX} text-danger` : "sr-only"}
+      >
+        {showError ? errorText : ""}
+      </p>
+      <p
+        aria-live="polite"
+        className={showEmpty ? `${NOTICE_BOX} text-muted` : "sr-only"}
+      >
+        {showEmpty ? emptyText : ""}
+      </p>
       {open && !showChip && (
         <ul
           id={listId}
